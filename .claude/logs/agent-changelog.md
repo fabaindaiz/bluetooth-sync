@@ -7,6 +7,82 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-26 · s-7c8794-77b101 — Opciones A (Bumble) y C (nRF5340) investigadas en profundidad
+
+**Qué.**
+- Se escribieron `docs/research/05-opcion-a-bumble.md` y
+  `docs/research/06-opcion-c-nrf5340.md`, a partir de la lectura del código de
+  Bumble, Zephyr y sdk-nrf en commits fijos.
+- Se agregó al índice de la investigación la comparación entre A y C, con la
+  opción combinada (Bumble con un nRF por `hci_uart`) y un orden sugerido.
+- Se actualizaron las opciones de compra de E1 en el roadmap y el mapa de
+  `CLAUDE.md`.
+
+**Archivos.** `docs/research/05-opcion-a-bumble.md`,
+`docs/research/06-opcion-c-nrf5340.md`, `docs/research/README.md`,
+`docs/roadmap.md`, `CLAUDE.md`.
+
+**Por qué.** El usuario eligió las opciones A y C para seguir explorándolas.
+
+**Arquitectura.** ✅ Cumple. Solo documentación.
+
+**Qué salió mal en el camino.** La línea A sugirió que `hci_usb` de Zephyr podía
+servir como controlador ISO para Bumble. La línea C mostró que no: Zephyr manda a
+ACL todo lo que llega por USB bulk (issue #44013). Se corrigió en 05 §1. Dos
+agentes que leen el mismo código desde lados distintos se corrigen entre sí; uno
+solo no lo habría notado.
+
+**Qué quedó pendiente.**
+- El harvest de `.agents/` sigue a la espera: el usuario lo dejó para después.
+- Las dos sesiones del 2026-09-25/26 (implementaciones, y opciones A y C) van en
+  un solo commit de investigación, porque comparten archivos (índice, roadmap,
+  `CLAUDE.md`) y son un mismo tema.
+- Sigue pendiente el inventario del chip (i-7c8794-d9c834).
+
+**No verificado.**
+- Los agentes leyeron el código en copias temporales del scratchpad. Los números
+  de línea corresponden a los commits citados en cada documento.
+- Los precios de DigiKey son del 2026-09-25.
+
+---
+
+## 2026-09-25 · s-7c8794-ed065e — Investigación de implementaciones y stacks; preguntas previas del harvest
+
+**Qué.**
+- Cuarta línea de investigación: las implementaciones abiertas por capa, con su
+  lenguaje, licencia y actividad revisados en cada repositorio; proyectos de
+  ingeniería inversa de JBL; las cuatro opciones de stack para el prototipo.
+- Se corrigieron dos datos del documento 02 (el nodo por BIS de PipeWire queda en
+  disputa; el ESP32 queda descartado como emisor).
+- Se actualizaron el índice de la investigación, `CLAUDE.md`, las referencias y
+  E2 y E3 del roadmap.
+- Se preparó el harvest del problema de `.agents/` y se le hicieron al usuario las
+  preguntas previas. Todavía no se escribió nada en `tracking/`.
+
+**Archivos.** `docs/research/04-implementaciones-y-stacks.md`,
+`docs/research/02-le-audio-auracast-linux.md`, `docs/research/README.md`,
+`docs/references.md`, `docs/roadmap.md`, `CLAUDE.md`.
+
+**Por qué.** El usuario preguntó qué implementaciones existen, en qué lenguajes y
+qué stack usan, y quiere resolver el problema del paquete `.agents/`.
+
+**Arquitectura.** ✅ Cumple. Solo documentación; no hay código.
+
+**Qué salió mal en el camino.** La línea 02 marcó como VERIFICADO, por los
+comentarios del código de PipeWire, que se crea un nodo por BIS. La línea 04 no
+pudo confirmarlo. Un comentario de código no basta para marcar algo VERIFICADO si
+se refiere a un comportamiento en ejecución.
+
+**Qué quedó pendiente.**
+- El harvest espera la respuesta del usuario a las preguntas previas.
+- El chipset de los JBL: el sitio de la FCC bloqueó el acceso.
+- chicco-carone/sync-test sin revisar.
+
+**No verificado.** Las fuentes las reunió un agente de investigación; esta sesión
+no volvió a abrir cada repositorio.
+
+---
+
 ## 2026-09-25 · s-7c8794-88a0f6 — Repositorio preparado para la fase de investigación
 
 **Qué.**

@@ -66,6 +66,8 @@ Nada de esto se ha medido todavía con los parlantes propios.
   permite rutear L y R, o más canales, a nodos BIS distintos. VERIFICADO en los
   comentarios del código fuente. Que funcione de punta a punta para un canal por
   parlante es INFERIDO: no encontré ninguna demostración.
+  **En disputa:** la línea [04](04-implementaciones-y-stacks.md) no pudo confirmar
+  si PipeWire crea un nodo por BIS o un nodo multicanal. Se resuelve en E5.
 
 ### Configuración de referencia que funciona (Collabora, mayo 2026)
 - Hardware y software: Genio 700 con **MediaTek MT7921**, kernel 6.18.5, BlueZ
@@ -145,6 +147,9 @@ Sus límites:
   https://docs.zephyrproject.org/latest/samples/bluetooth/audio/bap_broadcast_source/README.html
 - **ESP32 `sskoog/ble_audio`**: un emisor BIG/BIS al que se le pasa LC3 por USB
   serial. REPORTADO: https://github.com/sskoog/ble_audio
+  **Corregido por [04](04-implementaciones-y-stacks.md) §4:** el proyecto pasó a
+  ESP-NOW porque C6 y S3 no tienen BIG/BIS. El ESP32 queda descartado como emisor,
+  salvo H4 y S31, que están en preview.
 
 ## 4. Multicanal por Auracast
 

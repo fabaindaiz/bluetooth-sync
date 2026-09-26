@@ -84,6 +84,9 @@ es lo único que avisa a la siguiente.
 | ¿Qué soportan los JBL? | `docs/research/01-parlantes-jbl.md` |
 | ¿Cómo se transmite Auracast desde Linux y con qué hardware? | `docs/research/02-le-audio-auracast-linux.md` |
 | ¿Qué se puede hacer con A2DP y sincronización por software? | `docs/research/03-bluetooth-clasico-y-sync-por-software.md` |
+| ¿Qué implementaciones existen, en qué lenguaje, y qué stack conviene? | `docs/research/04-implementaciones-y-stacks.md` |
+| ¿Cómo se hace con Bumble (opción A)? | `docs/research/05-opcion-a-bumble.md` |
+| ¿Cómo se hace con un nRF5340 (opción C)? | `docs/research/06-opcion-c-nrf5340.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |

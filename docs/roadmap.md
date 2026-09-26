@@ -35,6 +35,12 @@ corresponde.
 - 3× JBL Go 4 y 1× JBL Charge 6.
 - Un equipo con Linux cuyo chip Bluetooth aún no está identificado (i-7c8794-d9c834).
 
+**Stack en estudio (2026-09-26):** el usuario eligió explorar las opciones **A**
+(Python + Bumble en el PC) y **C** (nRF5340 como emisor dedicado), además de la
+**combinada** (Bumble con un nRF por `hci_uart`). La comparación y el orden sugerido
+están en [research/README.md](research/README.md) §"Opciones A y C comparadas":
+primero A con el chip interno; si no sirve, la combinada o C.
+
 **Siguiente paso:** Fase 1, empezando por el inventario del equipo.
 
 Etapas del plan:
@@ -89,11 +95,20 @@ configuración del sistema. Hay que anotar cómo revertirlo antes de tocar
 **Qué la favorece:** MT7921 e Intel BE200 están reportados como compatibles. El
 AX210 solo soporta CIS según reportes. Realtek RTL8852BE falla.
 
-**Qué hay que decidir antes:** **si el chip no sirve, qué comprar.** Hay tres
-opciones:
-1. una tarjeta M.2 con MT7921 o BE200, si el equipo tiene ranura;
-2. un nRF5340 DK, que sirve como controlador HCI o como emisor independiente;
-3. esperar hasta encontrar un dongle USB confirmado.
+**Cómo probarlo con Bumble:** `bumble-controller-info hci-socket:0`, con BlueZ
+detenido ([05](research/05-opcion-a-bumble.md) §7). No requiere hardware nuevo.
+
+**Qué hay que decidir antes:** **si el chip no sirve, qué comprar.** Las opciones,
+comparadas en [research/README.md](research/README.md) §"Opciones A y C
+comparadas":
+1. un **dongle nRF52840 (US$11.69) con `hci_uart`** como controlador para Bumble.
+   Es la opción combinada: la más barata, pero sin reportes con un JBL;
+2. un **nRF5340 Audio DK (US$172.57) con `nrf_auraconfig`** como emisor dedicado.
+   Es el camino más confiable a la prueba decisiva
+   ([06](research/06-opcion-c-nrf5340.md) §10);
+3. una tarjeta M.2 con MT7921 o BE200, si el equipo tiene ranura.
+
+`hci_usb` de Zephyr **no** sirve como controlador, porque no transporta ISO.
 
 Es una decisión con costo en dinero, así que es tuya.
 
@@ -110,7 +125,9 @@ escanear anuncios periódicos.
 **Con qué choca:** con nada.
 
 **Qué la favorece:** el comando `bumble-auracast scan` ya decodificó un Go 4
-([01](research/01-parlantes-jbl.md) §3).
+([01](research/01-parlantes-jbl.md) §3). También existen `auracast-hackers-toolkit`
+(dongle nRF52840) para capturar BIS, y openjbl para leer el PID y el firmware de
+cada parlante ([04](research/04-implementaciones-y-stacks.md) §6).
 
 **Qué hay que decidir antes:** nada. Es el experimento más barato con más
 información: dice cómo transporta L/R el propio JBL, y eso es lo que hay que imitar.
@@ -129,7 +146,11 @@ Hay que probar con 40 y 80 ms de presentation delay.
 **Qué hay que decidir antes:** si el prototipo se basa en **Bumble** (Python, usa
 el controlador directamente sin BlueZ) o en **PipeWire** (integrado al audio del
 sistema). E3 debe probar los dos si el controlador lo permite, y anotar cuál fue
-menos frágil.
+menos frágil. Las cuatro opciones de stack, con sus costos, están en
+[04](research/04-implementaciones-y-stacks.md). Si se elige Bumble, hay que saber
+que para 4 canales `auracast.py` necesita un parche (índices de BIS por subgrupo y
+fuentes mono fijas en FRONT_LEFT). Si se elige PipeWire, los datos de fabricante
+se ponen desde BlueZ, porque PipeWire no tiene una clave para eso.
 
 ### E4: estéreo en 2 BIS y selección de canal (la prueba decisiva) · i-7c8794-eeac13
 **Estado:** Planificado. Depende de E3.

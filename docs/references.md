@@ -46,6 +46,22 @@ no.
 
   **No aplicado todavía:** el USB-C del Charge 6 como canal cableado.
 
+- **Proyectos de ingeniería inversa de JBL
+  ([openjbl](https://github.com/NiceDayZc/openjbl),
+  [jbl-aura-play-together](https://github.com/SongJunguo/jbl-aura-play-together))**
+  - openjbl lee el protocolo GATT/SPP de JBL Portable; el Charge 6 está confirmado
+    en hardware.
+  - jbl-aura-play-together documenta `SET_AURACAST_BROADCAST` y el servicio
+    `DFFD`, que coincide con el sufijo de los datos de fabricante.
+
+  **No aplicado todavía:** leer el firmware en cada medición (openjbl) y poner los
+  parlantes en modo receptor por comando (E2).
+
+- **[auracast-hackers-toolkit](https://github.com/auracast-research/auracast-hackers-toolkit)**
+  Captura BIS con un nRF52840.
+
+  **No aplicado todavía:** ver qué transmite un par estéreo JBL (E2).
+
 ## LE Audio y Auracast en Linux
 
 - **[Collabora: Auracast con BlueZ en Genio 700 (2026-05)](https://www.collabora.com/news-and-blog/blog/2026/05/05/bluez-powered-auracast-broadcasting-on-genio-700/)**
@@ -91,6 +107,14 @@ no.
 
   **No aplicado todavía:** son la alternativa si ningún controlador del PC tiene
   `iso-broadcaster`.
+
+- **[apps/auracast.py de Bumble](https://github.com/google/bumble/blob/main/apps/auracast.py)**
+  Junta todas las fuentes en un BIG. Los índices de BIS empiezan de nuevo en 1 en
+  cada subgrupo, y las fuentes mono quedan fijas en FRONT_LEFT.
+
+  **Qué confirma:** Bumble respeta d-7c8794-203de2 (un solo BIG).
+
+  **No aplicado todavía:** el parche para 4 canales, si se elige Bumble.
 
 ## Bluetooth clásico y sincronización por software
 
