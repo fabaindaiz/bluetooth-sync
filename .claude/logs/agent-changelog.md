@@ -14,6 +14,9 @@ mal y lo que quedó pendiente.
   a la tabla de hardware de 06 §1, con sus diferencias frente al dongle nRF52840.
 - Se revisaron la wiki del vendedor de la SuperMini y su footprint KiCad. Ninguno
   dice si lleva cristal de 32 kHz: el footprint trae solo pads.
+- Se configuró `origin` (GitHub, privado) y se hizo el primer push, forzado a
+  pedido del usuario: reemplazó un "Initial commit" que traía solo un README de
+  una línea.
 - El usuario compró 5 SuperMini. Quedó registrada la decisión d-7c8794-b82ee9, y
   el roadmap (hardware, E1 y E2) y el README (opción combinada) se actualizaron.
 

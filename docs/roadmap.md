@@ -376,8 +376,13 @@ variable) alcanza para el uso que se quiere.
 `carrier.toml`), `docs/`, `CLAUDE.md`, `probes/`, `scripts/check.sh` y
 `.claude/logs/`. `scripts/check.sh` pasó antes del commit.
 
-**Qué falta:** no hay remoto. Queda por decidir si habrá uno y dónde. **Si alguna vez
-se publica**, antes hay que limpiar los datos crudos de los dispositivos
+**Remoto (2026-09-26):** `origin` =
+`git@github.com:fabaindaiz/bluetooth-sync.git`, **privado** (la API pública de
+GitHub responde 404 sin autenticación). El primer push fue forzado, a pedido del
+usuario, y reemplazó el "Initial commit" con un README de una línea que GitHub
+había creado.
+
+**Qué falta:** **si alguna vez se hace público**, antes hay que limpiar los datos crudos de los dispositivos
 (d-7c8794-8374e1): direcciones y nombres en `docs/research/experimentos/datos/` y
 en los documentos 00 y 01.
 
