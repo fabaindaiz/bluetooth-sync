@@ -7,6 +7,35 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-26 · s-7c8794-00d464 — Datos crudos guardados sin máscara (continúa s-7c8794-1a0f01)
+
+**Qué.**
+- A pedido del usuario, se guardaron los datos que se habían enmascarado:
+  - los 6 escaneos crudos en `docs/research/experimentos/datos/01/`;
+  - `system_profiler SPBluetoothDataType` completo y `sw_vers` en
+    `docs/research/experimentos/datos/00/`;
+  - en los documentos 00 y 01, los bytes completos, las direcciones de los JBL y
+    del Mac, y el nombre personalizado del Go 4.
+- Se agregaron el histograma de company IDs del escaneo sin filtro y los JBL Tune
+  770NC-LE como posible receptor LE Audio de prueba.
+- Se registró la decisión d-7c8794-8374e1: estos datos se guardan mientras el
+  repositorio sea privado y se limpian antes de publicarlo.
+
+**Por qué.** El usuario dijo que no hay problema en guardarlos, porque el
+repositorio no se publicará por ahora.
+
+**Qué quedó pendiente.**
+- Los nombres de dispositivos de terceros del escaneo sin filtro no se guardaron:
+  no son del usuario y no aportan a la investigación.
+- La salida de ese escaneo nunca se guardó en un archivo; solo queda el
+  histograma.
+
+**Medido.** Con los bytes completos se ve que los bytes 4–7 del Charge 6
+(`ed 0e 88 3f`) son iguales en reposo y transmitiendo, así que son estables por
+unidad.
+
+---
+
 ## 2026-09-26 · s-7c8794-1a0f01 — E2 parcial en el Mac: anuncios de los JBL leídos con CoreBluetooth
 
 **Qué.**

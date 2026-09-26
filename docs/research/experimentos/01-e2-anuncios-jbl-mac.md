@@ -20,9 +20,17 @@ el BIGInfo.
 python probes/e2-scan-mac/scan.py <segundos>
 ```
 El probe primero dice cuántos dispositivos vio en total y después los que traen
-datos de Harman (0x0057) o un nombre JBL. En el documento, **los bytes propios de
-cada parlante están enmascarados (`xx`)**, porque podrían identificar al
-dispositivo concreto.
+datos de Harman (0x0057) o un nombre JBL.
+
+**Datos crudos:** la salida de cada escaneo, sin editar, está en
+[datos/01/](datos/01/). Los valores van completos, con permiso del usuario, porque
+el repositorio es privado (d-7c8794-8374e1).
+
+**Escaneo sin filtro** (25 s, con los parlantes en reposo; la salida no se guardó
+en un archivo): 54 dispositivos. Los company IDs más frecuentes fueron Apple
+(0x004C) ×19 y Samsung (0x0075) ×7, y Harman (0x0057) ×2. Los nombres de
+dispositivos de terceros que aparecieron no se registran, porque no son del
+usuario y no aportan a la investigación.
 
 ## Resultado 1: parlantes en reposo (encendidos, sin conexión) — MEDIDO
 
@@ -39,7 +47,7 @@ frecuencia o con más variación de alcance: en el escaneo de 30 s su RSSI fue d
 | | JBL Go 4 | JBL Charge 6 |
 |---|---|---|
 | Nombre anunciado | `JBL Go 4 Bl` | `JBL Charge6` |
-| Datos de fabricante 0x0057 (10 bytes) | `e4 20 01 38 xx xx xx xx 09 00` | `e3 20 14 38 xx xx xx xx 09 00` |
+| Datos de fabricante 0x0057 (10 bytes) | `e4 20 01 38 30 2c f1 33 09 00` | `e3 20 14 38 ed 0e 88 3f 09 00` |
 | Service data 0xFDDF | presente, vacío | presente, vacío |
 | Service data 0xFE2C (Google Fast Pair) | — | `81 4c 5f` |
 
@@ -52,11 +60,15 @@ frecuencia o con más variación de alcance: en el escaneo de 30 s su RSSI fue d
 - **Byte 2:** `01` en el Go 4 negro y `14` en el Charge 6 morado. **Hipótesis:
   codifica el color** (INFERIDO). El resultado 4 la refuerza: Go 4 rojo = `02`,
   azul = `03`. Lo apoya que el Go 4 se anuncie en reposo como
-  `JBL Go 4 Bl` ("Bl" = black). Se puede comprobar con los otros dos Go 4: si son
-  de otro color y el byte 2 cambia, se confirma. Si son negros, deberían dar `01`.
+  `JBL Go 4 Bl` ("Bl" = black). Ya se comprobó con otros dos Go 4 (resultado 4):
+  rojo `02` y azul `03`.
 - **Byte 3:** `38` en los dos.
-- **Bytes 4–7:** distintos en cada parlante. Probablemente sean un identificador
-  propio de cada dispositivo (INFERIDO). No coinciden con su dirección Bluetooth.
+- **Bytes 4–7:** distintos en cada parlante (Go 4 negro `30 2c f1 33`, Charge 6
+  `ed 0e 88 3f`). No coinciden con la dirección Bluetooth: el Charge 6 es
+  `78:66:F3:93:1D:B7`. **En el Charge 6 se mantuvieron iguales en reposo y
+  transmitiendo** (resultado 3), así que son estables por unidad, al menos entre
+  modos (MEDIDO). Podrían ser un identificador de dispositivo o parte de un hash
+  (INFERIDO).
 - **Bytes 8–9:** `09 00` en los dos. Podría ser un campo de estado (INFERIDO); a
   confirmar comparando con el modo transmisor.
 - **El UUID 0xFDDF escrito en little-endian es `df fd`**, justo el sufijo del valor
@@ -79,7 +91,7 @@ dispositivos vistos, 1 con datos Harman o nombre JBL.
 
 | Campo | Valor |
 |---|---|
-| Nombre anunciado | El nombre que el usuario le puso al parlante (no el nombre de modelo). Omitido aquí por privacidad |
+| Nombre anunciado | `JBL Go 4 de Fabi`, el nombre que el usuario le puso al parlante (no el nombre de modelo). Coincide con el emparejamiento en macOS, dirección `90:F2:60:DA:66:6D` ([00](00-inventario-mac.md)) |
 | Datos de fabricante 0x0057 (18 bytes) | **`00000000000000000000000000000000dffd`** |
 | Service data **0x1852** (Broadcast Audio Announcement) | `05 81 00` → **Broadcast_ID 0x008105** (3 bytes, little-endian) |
 | Anuncio en reposo (0x0057 de 10 bytes + 0xFDDF) | **No apareció** mientras transmitía |
@@ -103,6 +115,9 @@ dispositivos vistos, 1 con datos Harman o nombre JBL.
 - `bleak` no expone el AD type Broadcast Name (0x30). Si JBL lo usa, no se vio.
 - El Broadcast_ID puede ser aleatorio en cada transmisión o fijo por parlante. Se
   sabrá repitiendo la transmisión.
+- **Supuesto:** el Go 4 que transmitió es el mismo Go 4 negro del resultado 1 (el
+  usuario indicó que se probó el negro). En reposo se anunció como `JBL Go 4 Bl`;
+  transmitiendo, con su nombre personalizado.
 
 ## Resultado 3: Charge 6 transmitiendo Auracast — MEDIDO
 
@@ -121,7 +136,7 @@ dispositivos vistos, 2 anuncios con datos Harman, ambos del Charge 6.
 ### Anuncio de reposo, que sigue presente mientras transmite
 | | En reposo (resultado 1) | Transmitiendo |
 |---|---|---|
-| Datos de fabricante 0x0057 | `e3 20 14 38 xx xx xx xx 09 00` | `e3 20 14 **39** xx xx xx xx **0b** 00` |
+| Datos de fabricante 0x0057 | `e3 20 14 38 ed 0e 88 3f 09 00` | `e3 20 14 **39** ed 0e 88 3f **0b** 00` |
 | Service data 0xFDDF | vacío | vacío |
 
 ### Lectura
@@ -158,9 +173,9 @@ Harman y los mismos valores.
 
 | Anuncio | Byte 0–1 | Byte 2 | Byte 3 | Bytes 4–7 | Bytes 8–9 | 0xFDDF |
 |---|---|---|---|---|---|---|
-| Go 4 **negro**, solo en reposo (resultado 1, anunciado como `JBL Go 4 Bl`) | `e4 20` | `01` | `38` | `xx xx xx xx` | `09 00` | vacío |
-| Go 4 **rojo**, en estéreo (`JBL Go 4 Re`) | `e4 20` | **`02`** | `d4` | `ed 0e xx xx` | `09` **`60`** | vacío |
-| Go 4 **azul**, en estéreo (`JBL Go 4 Bl`) | `e4 20` | **`03`** | `f8` | `00 00 xx xx` | `09` **`60`** | vacío |
+| Go 4 **negro**, solo en reposo (resultado 1, anunciado como `JBL Go 4 Bl`) | `e4 20` | `01` | `38` | `30 2c f1 33` | `09 00` | vacío |
+| Go 4 **rojo**, en estéreo (`JBL Go 4 Re`) | `e4 20` | **`02`** | `d4` | `ed 0e 5d 9e` | `09` **`60`** | vacío |
+| Go 4 **azul**, en estéreo (`JBL Go 4 Bl`) | `e4 20` | **`03`** | `f8` | `00 00 09 51` | `09` **`60`** | vacío |
 
 Los colores los informó el usuario. **El Go 4 azul y el negro se anuncian con el
 mismo nombre abreviado (`Bl`)**, así que el nombre no sirve para distinguirlos.

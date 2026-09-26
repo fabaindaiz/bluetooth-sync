@@ -10,6 +10,9 @@ Auracast, y Bumble puede llegar a él?
 - No hay adaptadores Bluetooth USB conectados.
 - El equipo Linux es otro, y su inventario sigue pendiente.
 
+**Datos crudos:** [datos/00/](datos/00/) contiene la salida completa de
+`system_profiler SPBluetoothDataType`, con direcciones, y de `sw_vers`.
+
 **Qué se ejecutó** (solo lectura; no se instaló ni se cambió nada):
 ```bash
 sw_vers; uname -m
@@ -36,8 +39,15 @@ Además, se leyó la documentación de Bumble para macOS
 ### Parlantes emparejados con este Mac: MEDIDO
 | Parlante | Product ID | Vendor ID (Device ID) | "Firmware" que reporta macOS |
 |---|---|---|---|
-| JBL Charge 6 | **0x20E3** | 0x0ECB | 1.0.0 |
-| JBL Go 4 | (no lo reporta) | (no lo reporta) | (no lo reporta) |
+| JBL Charge 6 (`78:66:F3:93:1D:B7`) | **0x20E3** | 0x0ECB | 1.0.0 |
+| JBL Go 4 "de Fabi" (`90:F2:60:DA:66:6D`) | (no lo reporta) | (no lo reporta) | (no lo reporta) |
+| **JBL Tune 770NC-LE** (audífonos, `88:92:CC:68:91:C0`) | 0x20B7 | 0x0ECB | 1.0.0 |
+
+- La dirección del controlador del Mac es `5C:13:AC:0E:7D:17`.
+- **Los JBL Tune 770NC-LE podrían servir como receptor de prueba.** El sufijo "LE"
+  sugiere soporte LE Audio (INFERIDO). Si reciben Auracast estándar, sirven para
+  validar un emisor propio (Bumble o nRF) antes de probar con los parlantes, que
+  además exigen los datos de fabricante de JBL. No se verificó.
 
 - El PID **0x20E3 del Charge 6 coincide** con el que documenta openjbl
   ([04](../04-implementaciones-y-stacks.md) §6). Eso confirma que openjbl se refiere

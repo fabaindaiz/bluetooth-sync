@@ -365,7 +365,10 @@ variable) alcanza para el uso que se quiere.
 `carrier.toml`), `docs/`, `CLAUDE.md`, `probes/`, `scripts/check.sh` y
 `.claude/logs/`. `scripts/check.sh` pasó antes del commit.
 
-**Qué falta:** no hay remoto. Queda por decidir si habrá uno y dónde.
+**Qué falta:** no hay remoto. Queda por decidir si habrá uno y dónde. **Si alguna vez
+se publica**, antes hay que limpiar los datos crudos de los dispositivos
+(d-7c8794-8374e1): direcciones y nombres en `docs/research/experimentos/datos/` y
+en los documentos 00 y 01.
 
 ## Cerrado por medición
 

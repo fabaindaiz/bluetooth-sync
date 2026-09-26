@@ -1,0 +1,7 @@
+scanned 20.0s: 50 advertisers seen, 1 with Harman data or a JBL name
+
+[device 1]
+  mfr      0x0057 e4200138302cf1330900
+  name     JBL Go 4 Bl 
+  svc-data 0000fddf-0000-1000-8000-00805f9b34fb 
+  rssi     -64..-40
