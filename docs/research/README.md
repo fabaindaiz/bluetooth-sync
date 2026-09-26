@@ -148,7 +148,14 @@ Pasos, de menor a mayor costo (el detalle está en cada documento):
 ## Qué queda abierto en toda la investigación
 
 - Si los JBL respetan Sink Audio Locations o BASS `BIS_Sync`.
-- Si el Charge 6 acepta los mismos datos de fabricante que el Go 4.
+- ~~Si el Charge 6 acepta los mismos datos de fabricante que el Go 4.~~ Transmite
+  los mismos 18 bytes que el Go 4 (MEDIDO,
+  [experimentos/01](experimentos/01-e2-anuncios-jbl-mac.md)). Que los acepte como
+  receptor sigue pendiente (E3).
+- Cómo transporta L/R el estéreo propio de JBL. Mientras reproduce en estéreo no
+  expone una transmisión Auracast visible ([experimentos/01](experimentos/01-e2-anuncios-jbl-mac.md), resultado 4). Se puede
+  probar escaneando durante el emparejamiento estéreo, o con un sniffer de anuncios
+  periódicos.
 - Un dongle USB con LE Audio confirmado que funcione.
 - Cifras medidas de latencia o drift de estos parlantes.
 - Los QDID del Bluetooth SIG de los parlantes.

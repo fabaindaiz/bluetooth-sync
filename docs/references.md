@@ -20,8 +20,9 @@ no.
 
   **Qué confirma:** los JBL pueden ser receptores de un emisor propio.
 
-  **No aplicado todavía:** el sufijo `dffd` puede cambiar en otros modelos; falta
-  verificarlo en el Charge 6.
+  **Qué confirma (MEDIDO):** el Go 4 y el Charge 6 transmiten exactamente
+  `87:…dffd` ([experimentos/01](research/experimentos/01-e2-anuncios-jbl-mac.md)).
+  Un solo valor sirve para los dos.
 
 - **[Discusión de Bumble #894](https://github.com/google/bumble/discussions/894)**
   El parlante JBL transmite o recibe según haya o no una conexión clásica activa.

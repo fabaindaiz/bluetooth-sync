@@ -74,9 +74,18 @@ Parlantes disponibles: **3× JBL Go 4 y 1× JBL Charge 6.**
 ### Detalles del protocolo
 - **Cómo viaja L/R por el aire:** desconocido. No hay información sobre si usa BIS
   separados o asignación de canal.
+  **Actualización ([experimentos/01](experimentos/01-e2-anuncios-jbl-mac.md), resultado 4):** con dos Go 4 sincronizados en estéreo y
+  reproduciendo, **no se ve ninguna transmisión Auracast (0x1852)** desde
+  CoreBluetooth, en 30 ni en 45 s. En modo fiesta sí se ve. Hipótesis (INFERIDO): el
+  transmisor apaga el anuncio extendido cuando el secundario ya se sincronizó.
+  Otra posibilidad es que el estéreo use otro mecanismo. En su anuncio de reposo,
+  el modo estéreo se nota como `09 60` en los bytes 8–9.
 - **Cifrado:** no se sabe si JBL cifra con un Broadcast Code. El comando `receive`
   de Bumble logró decodificar una transmisión de un Go 4 [5]. Eso sugiere que no
   va cifrada o que usa un código conocido, pero no está confirmado.
+  **Actualización ([experimentos/01](experimentos/01-e2-anuncios-jbl-mac.md)):** el Charge 6 anuncia PBP con el byte `04`, que indica
+  **sin cifrar** (el valor es MEDIDO; su lectura según la especificación es
+  INFERIDA). Del Go 4 sigue sin saberse, porque no anuncia PBP.
 - **Máximo de parlantes:** JBL no da cifra. La prensa dice "ilimitados"
   (REPORTADO [9]).
 - **PartyBoost:** Auracast lo reemplaza y **no son compatibles entre sí**. El
@@ -93,7 +102,9 @@ Parlantes disponibles: **3× JBL Go 4 y 1× JBL Charge 6.**
   bumble-auracast transmit --manufacturer-data 87:00000000000000000000000000000000dffd ...
   ```
   La documentación aclara que el valor "dffd" **puede cambiar en otros modelos**.
-  Por eso hay que verificar el Charge 6. REPORTADO y documentado.
+  **Actualización ([experimentos/01](experimentos/01-e2-anuncios-jbl-mac.md)):** el Go 4 y el Charge 6 transmiten **exactamente** estos
+  18 bytes. MEDIDO. `df fd` es el UUID de servicio de JBL 0xFDDF en
+  little-endian, el mismo que anuncian los dos en reposo.
 - **Por lo tanto, un Linux o un macOS con Bumble y un controlador USB compatible
   con LE Audio puede transmitir LC3 a parlantes JBL.**
 - **Detalle del Clip 5:** un usuario vio que el Clip 5 se colgaba hasta que subió
@@ -166,7 +177,8 @@ de resultados de búsqueda, y las fechas parecen mal extraídas (REPORTADO):
   de canal).
 - **Si un receptor JBL elige un BIS o canal concreto dentro de una transmisión con
   varios BIS.** Es crítico para el surround y hay que probarlo con Bumble.
-- Si el Charge 6 acepta los mismos datos de fabricante que el Go 4.
+- ~~Si el Charge 6 acepta los mismos datos de fabricante que el Go 4.~~ **Transmite
+  los mismos** ([experimentos/01](experimentos/01-e2-anuncios-jbl-mac.md)). Que también los acepte como receptor es INFERIDO; falta E3.
 - Máximo de parlantes y latencia medida.
 
 ## Experimentos que esto sugiere (sin ejecutar)

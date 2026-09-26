@@ -63,7 +63,13 @@ equipo, las versiones (kernel, BlueZ, PipeWire, Bumble y el firmware de los JBL)
 la fecha.
 
 ### Inventario del equipo Linux · i-7c8794-d9c834
-**Estado:** Planificado.
+**Estado:** A medias.
+- **Hecha la mitad del Mac** (2026-09-26, en
+  [experimentos/00-inventario-mac.md](research/experimentos/00-inventario-mac.md)):
+  el chip es un MediaTek MT7932 por PCIe con LE Audio, pero Bumble no puede llegar
+  a él en macOS. El Mac sirve como estación de desarrollo para A y C.
+- **Falta el equipo Linux.** Es la mitad que decide si A se prueba sin comprar
+  nada.
 
 **Qué es:** identificar qué tiene el equipo, con estos comandos:
 - el chip Bluetooth: `lspci -nn`, `lsusb`, `dmesg | grep -i bluetooth`;
@@ -79,7 +85,7 @@ la fecha.
 
 **Qué hay que decidir antes:** nada.
 
-**El resultado va a:** `docs/research/experimentos/00-inventario.md`.
+**El resultado va a:** `docs/research/experimentos/00-inventario-linux.md`.
 
 ### E1: ¿el controlador puede transmitir por ISO? · i-7c8794-3f730a
 **Estado:** Planificado. Depende del inventario.
@@ -113,8 +119,22 @@ comparadas":
 Es una decisión con costo en dinero, así que es tuya.
 
 ### E2: leer el anuncio y la BASE de los propios JBL · i-7c8794-a999d3
-**Estado:** Planificado. Depende de E1, o por lo menos de un controlador que pueda
-escanear anuncios periódicos.
+**Estado:** A medias.
+- **Hecho desde el Mac con CoreBluetooth** (2026-09-26,
+  [experimentos/01](research/experimentos/01-e2-anuncios-jbl-mac.md)): los datos de
+  fabricante son iguales para el Go 4 y el Charge 6 (`87:…dffd`). La transmisión
+  del Charge 6 va sin cifrar (PBP `04`).
+- **Par estéreo de Go 4 (rojo y azul), reproduciendo:** no se ve ningún 0x1852 en
+  30 s ni en 45 s. En reposo, el byte 2 parece indicar el color y el `60` del
+  byte 9, el modo estéreo.
+- **Siguiente paso barato, desde el Mac:** escanear 60 s *mientras* se forma el par
+  estéreo, por si el anuncio aparece solo en ese momento.
+- **Falta** la BASE y el BIGInfo, que requieren sincronizarse a los anuncios
+  periódicos (Bumble `scan` con un controlador accesible, o
+  `auracast-hackers-toolkit`).
+
+Depende de E1, o por lo menos de un controlador que pueda escanear anuncios
+periódicos.
 
 **Qué es:** escanear un Go 4 en modo transmisor, un par estéreo de Go 4 y el Charge
 6, para anotar:

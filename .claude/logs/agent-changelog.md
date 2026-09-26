@@ -7,6 +7,91 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-26 · s-7c8794-1a0f01 — E2 parcial en el Mac: anuncios de los JBL leídos con CoreBluetooth
+
+**Qué.**
+- Se instaló `bleak` 3.0.2 en un entorno virtual del scratchpad, fuera del
+  repositorio, con permiso del usuario.
+- Se escribió el probe `probes/e2-scan-mac/scan.py`.
+- Con el usuario manejando los parlantes, se escaneó en tres estados: en reposo,
+  con el Go 4 transmitiendo Auracast y con el Charge 6 transmitiendo Auracast.
+- El resultado quedó en `docs/research/experimentos/01-e2-anuncios-jbl-mac.md`, y
+  se actualizaron 01, el índice, las referencias y E2 en el roadmap ("A medias").
+
+**Archivos.** `probes/e2-scan-mac/scan.py`,
+`docs/research/experimentos/01-e2-anuncios-jbl-mac.md`,
+`docs/research/01-parlantes-jbl.md`, `docs/research/README.md`,
+`docs/references.md`, `docs/roadmap.md`.
+
+**Por qué.** El usuario pidió intentar las pruebas en el Mac y autorizó instalar
+lo necesario.
+
+**Arquitectura.** ✅ Cumple. Es un probe desechable en `probes/`; no hay código de
+producto.
+
+**Qué salió mal en el camino.**
+- El primer escaneo filtrado de 20 s no vio el Charge 6. Un escaneo sin filtro
+  mostró que estaba presente. Se subió la duración a 30 s, y el probe informa
+  primero cuántos dispositivos vio, para que un resultado vacío no se lea como
+  "no anuncia nada".
+- El escaneo sin filtro imprimió en la consola los nombres de dispositivos
+  cercanos de terceros. No se copiaron al repositorio.
+- En el documento se enmascararon los bytes propios de cada parlante y el nombre
+  personal del Go 4.
+
+**Qué quedó pendiente.**
+- Escanear durante el emparejamiento estéreo, por si el anuncio Auracast aparece solo
+  en ese momento. También medir el mismo Go 4 solo y en estéreo.
+- La BASE y el BIGInfo, que necesitan un controlador accesible.
+- Repetir una transmisión para saber si el Broadcast_ID cambia.
+- **El probe se conserva** hasta cerrar E2. Después se borra (d-7c8794-3208b7).
+
+**Medido.**
+- Datos de fabricante de la transmisión: `0x0057 +
+  00000000000000000000000000000000dffd`, idénticos en el Go 4 y el Charge 6.
+- El Charge 6 anuncia PBP `04 00` y el Broadcast_ID 0x112233.
+- El Go 4 anuncia el Broadcast_ID 0x008105 y no anuncia PBP.
+- Dos Go 4 (rojo y azul) sincronizados en estéreo y reproduciendo: **ningún
+  0x1852 en 30 s ni en 45 s**. Su anuncio de reposo tiene `09 60` en los bytes 8–9.
+  El byte 2 vale negro = `01`, rojo = `02`, azul = `03`; la hipótesis es que indica
+  el color.
+- Un primer intento leyó el byte 2 como el rol en el par estéreo, suponiendo que
+  el "Bl" era la misma unidad negra. El usuario aclaró que era un Go 4 azul, y el
+  documento se corrigió.
+
+---
+
+## 2026-09-26 · s-7c8794-84eb42 — Inventario del Mac: Bumble no alcanza el controlador interno
+
+**Qué.**
+- Se hizo el inventario de solo lectura del Mac (`system_profiler`) y se leyó la
+  documentación de Bumble para macOS.
+- Se registró el resultado en `docs/research/experimentos/00-inventario-mac.md`.
+- En el roadmap, el inventario pasó a "A medias".
+
+**Archivos.** `docs/research/experimentos/00-inventario-mac.md`,
+`docs/roadmap.md`.
+
+**Por qué.** El usuario preguntó si las pruebas se pueden hacer en este Mac.
+
+**Arquitectura.** ✅ Cumple. No se instaló ni se cambió nada en el sistema.
+
+**Qué salió mal en el camino.** Nada. Se evitó escribir en el repositorio las
+direcciones Bluetooth y los nombres de los dispositivos emparejados, aunque
+`system_profiler` los muestra.
+
+**Qué quedó pendiente.**
+- El inventario del equipo Linux.
+- El E2 parcial con `bleak` en el Mac: requiere instalar `bleak` en un entorno
+  virtual temporal y que el usuario ponga un JBL a transmitir. Se propuso y no se
+  ejecutó.
+
+**Medido.**
+- El controlador del Mac es MTK_7932, por PCIe, con LEA declarado.
+- El PID del Charge 6 es 0x20E3, igual al que documenta openjbl.
+
+---
+
 ## 2026-09-26 · s-7c8794-77b101 — Opciones A (Bumble) y C (nRF5340) investigadas en profundidad
 
 **Qué.**
