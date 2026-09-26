@@ -104,7 +104,9 @@ Las opciones A (Bumble) y C (nRF5340) se estudiaron en detalle en
 `hci_uart` sobre USB CDC-ACM (el dongle nRF52840 cuesta US$11.69). Tiene la entrada
 flexible de A sin depender del chip del laptop, y con
 `bluekitchen/hci_uart_iso_timesync` se pueden obtener timestamps. Nadie la ha
-probado con un JBL.
+probado con un JBL. **El usuario compró 5 SuperMini nRF52840 para esta opción**
+(2026-09-26, d-7c8794-b82ee9); sirven también el dongle o una XIAO nRF52840
+([06](06-opcion-c-nrf5340.md) §1).
 
 **Orden sugerido:**
 1. **Probar A primero**, porque puede no costar nada.

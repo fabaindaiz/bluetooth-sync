@@ -34,6 +34,10 @@ corresponde.
 **Hardware disponible:**
 - 3× JBL Go 4 y 1× JBL Charge 6.
 - Un equipo con Linux cuyo chip Bluetooth aún no está identificado (i-7c8794-d9c834).
+- **5× SuperMini nRF52840** (clon de nice!nano), compradas el 2026-09-26 y aún no
+  recibidas (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
+  el target `promicro_nrf52840`. En cada medición hay que anotar qué unidad y qué
+  fuente de reloj de 32 kHz se usó ([06](research/06-opcion-c-nrf5340.md) §1).
 
 **Stack en estudio (2026-09-26):** el usuario eligió explorar las opciones **A**
 (Python + Bumble en el PC) y **C** (nRF5340 como emisor dedicado), además de la
@@ -118,6 +122,12 @@ comparadas":
 
 Es una decisión con costo en dinero, así que es tuya.
 
+**Decidido (2026-09-26, d-7c8794-b82ee9):** se compró una variante de la opción 1, **5
+SuperMini nRF52840** en vez del dongle. Con ellas, E1 también se puede hacer desde el
+Mac: flashear `hci_uart` (copiando la configuración del dongle), y luego correr
+`bumble-controller-info serial:/dev/cu.usbmodem…` y crear un BIG de prueba. Las
+opciones 2 y 3 quedan abiertas si esta no alcanza.
+
 ### E2: leer el anuncio y la BASE de los propios JBL · i-7c8794-a999d3
 **Estado:** A medias.
 - **Hecho desde el Mac con CoreBluetooth** (2026-09-26,
@@ -131,7 +141,8 @@ Es una decisión con costo en dinero, así que es tuya.
   estéreo, por si el anuncio aparece solo en ese momento.
 - **Falta** la BASE y el BIGInfo, que requieren sincronizarse a los anuncios
   periódicos (Bumble `scan` con un controlador accesible, o
-  `auracast-hackers-toolkit`).
+  `auracast-hackers-toolkit`). **Con las SuperMini (d-7c8794-b82ee9) se puede hacer desde el
+  Mac** con `bumble-auracast scan` sobre `serial:`, apenas lleguen.
 
 Depende de E1, o por lo menos de un controlador que pueda escanear anuncios
 periódicos.

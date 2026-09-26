@@ -7,6 +7,41 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-26 · s-7c8794-da36f9 — Placas nRF52840 evaluadas; compradas 5 SuperMini
+
+**Qué.**
+- Se agregaron la Seeed XIAO nRF52840 y la SuperMini nRF52840 (clon de nice!nano)
+  a la tabla de hardware de 06 §1, con sus diferencias frente al dongle nRF52840.
+- Se revisaron la wiki del vendedor de la SuperMini y su footprint KiCad. Ninguno
+  dice si lleva cristal de 32 kHz: el footprint trae solo pads.
+- El usuario compró 5 SuperMini. Quedó registrada la decisión d-7c8794-b82ee9, y
+  el roadmap (hardware, E1 y E2) y el README (opción combinada) se actualizaron.
+
+**Archivos.** `docs/research/06-opcion-c-nrf5340.md`, `docs/decisions.md`,
+`docs/roadmap.md`, `docs/research/README.md`.
+
+**Por qué.** El usuario preguntó por un kit Meshtastic (XIAO + Wio-SX1262), luego
+por la SuperMini, y terminó comprando un pack de 5.
+
+**Arquitectura.** ✅ Cumple: solo investigación y compra, sin código.
+
+**Qué quedó pendiente.**
+- Cuando lleguen las placas:
+  - flashear `hci_uart` con `promicro_nrf52840`, copiando `nrf52840dongle_nrf52840.conf`;
+  - revisar si el cristal de 32 kHz arranca, y si no, usar RC;
+  - hacer E1 y E2 desde el Mac por `serial:`.
+- El footprint KiCad (`SuperMini NRF52840.kicad_mod`) ya no está en el
+  repositorio: lo sacó el usuario. Lo que tenía de útil quedó en 06 §1.
+- No se revisó si `auracast-hackers-toolkit` corre en estas placas.
+
+**No verificado.**
+- Los precios son REPORTADOS; no se vieron en una tienda.
+- Que `hci_uart` con ISO funcione en `promicro_nrf52840` o `xiao_ble` es
+  INFERIDO, porque usan el mismo chip que el dongle.
+- Que los 4 pads traseros de la SuperMini sean SWD es INFERIDO.
+
+---
+
 ## 2026-09-26 · s-7c8794-00d464 — Datos crudos guardados sin máscara (continúa s-7c8794-1a0f01)
 
 **Qué.**

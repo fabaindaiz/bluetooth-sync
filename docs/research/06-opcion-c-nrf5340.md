@@ -46,6 +46,8 @@ Los precios son de DigiKey por unidad, vistos el 2026-09-25.
 | **nRF5340 Audio DK** | US$172.57 (VERIFICADO) | SDC, en el núcleo de red | Sí, full-speed | Sí (VERIFICADO, doc de la placa en Zephyr) |
 | nRF5340 DK | US$48.95 (VERIFICADO) | SDC | Sí | Sí |
 | **nRF52840 Dongle** | US$11.69 (VERIFICADO) | SDC; ISO del nRF52840 figura como "Supported" en la tabla de madurez de NCS (VERIFICADO) | Sí; hay una configuración de placa para el sample de Zephyr (VERIFICADO) | No, solo USB DFU |
+| Seeed XIAO nRF52840 (`xiao_ble`) | ~US$10–15 sola (REPORTADO); el kit Meshtastic con Wio-SX1262 cuesta más y la radio LoRa no sirve aquí | El mismo chip que el dongle, así que el mismo controlador (INFERIDO) | USB-C con CDC-ACM (VERIFICADO, doc de la placa en Zephyr) | No: bootloader UF2 de Adafruit; para depurar hace falta un J-Link o Black Magic por los pads SWD (VERIFICADO) |
+| SuperMini nRF52840 (clon de nice!nano, `promicro_nrf52840`) | ~US$3–6 (REPORTADO) | El mismo chip que el dongle (INFERIDO) | Sí, USB-C (VERIFICADO, doc de la placa en Zephyr) | No: bootloader UF2 de Adafruit; tiene pads SWD atrás (VERIFICADO) |
 | nRF54LM20 DK | US$45.00 (VERIFICADO) | SDC | USB (capaz de HS, usado a FS) | J-Link |
 | Raytac MDBT53-DB-40 (nRF5340) | ~US$17.50 (REPORTADO) | SDC | Sí | No (INFERIDO) |
 
@@ -54,7 +56,37 @@ Los precios son de DigiKey por unidad, vistos el 2026-09-25.
 - La configuración del sample de Zephyr para el dongle nRF52840 usa el preset
   16_2_1, mientras que la del nRF5340 DK usa 48_2_1 (VERIFICADO). **Eso sugiere que
   el CPU del nRF52840 queda justo para LC3 a 48 kHz** (INFERIDO).
-- No revisados: Thingy:53, Seeed, Adafruit. El nRF54L15 no tiene USB.
+- **La XIAO nRF52840 reemplaza al dongle** para la opción combinada y para E2
+  (INFERIDO): mismo chip, 256 KiB de RAM, 1 MiB de flash, y Zephyr la soporta
+  como `xiao_ble` (VERIFICADO). Diferencias:
+  - no hay un `boards/xiao_ble.conf` en el sample `hci_uart`; hay que copiar el del
+    dongle (`nrf52840dongle_nrf52840.conf`) (INFERIDO, no revisado archivo por
+    archivo);
+  - se flashea copiando un `.uf2` tras doble toque en reset, sin `nrfutil`
+    (VERIFICADO);
+  - la variante Sense agrega IMU y micrófono PDM, que aquí no aportan.
+- **La SuperMini nRF52840 también sirve como controlador** (INFERIDO), con más
+  riesgo que la XIAO:
+  - es un clon de fabricantes variados, así que la calidad cambia de un lote a
+    otro (REPORTADO);
+  - hay reportes de cristales de 32,768 kHz que fallan; se arregla por firmware
+    usando el oscilador RC (REPORTADO, wiki de joric/nrfmicro). Con RC el
+    controlador anuncia una precisión de reloj peor (hasta 500 ppm), algo legal
+    para un BIG, pero **cualquier medición de sincronía con esta placa tiene que
+    anotar qué fuente de reloj de baja frecuencia usó** (INFERIDO);
+  - Zephyr la cubre con el target genérico `promicro_nrf52840` (VERIFICADO).
+  - la wiki del vendedor (icbbuy) confirma USB-C, bootloader UF2 de nice!nano y
+    antena en la placa, pero **no dice si lleva cristal de 32,768 kHz**; el
+    esquemático es un aporte de la comunidad (VERIFICADO, 2026-09-26);
+  - el footprint KiCad del vendedor (`.kicad_mod`, versión 20221018) trae solo
+    pads: los pines Pro Micro, el USB-C y, atrás, 4 pads SMD en columna a 1,5 mm y
+    2 pads más. **No trae componentes, así que no responde lo del cristal.** Que los
+    4 pads sean SWD es INFERIDO (la doc de Zephyr habla de pads de depuración
+    atrás); no tienen nombre de señal (VERIFICADO, 2026-09-26);
+  - el "Bluetooth 5.0" de la publicidad no descarta Auracast: ISO lo da el
+    firmware del controlador, no el silicio, y el nRF52840 figura con ISO en la
+    tabla de NCS (INFERIDO a partir de la fila del dongle).
+- No revisados: Thingy:53, Adafruit. El nRF54L15 no tiene USB.
 
 ## 2. Entrada de audio desde el PC
 
@@ -318,6 +350,10 @@ a 3 semanas.
 - https://github.com/bluekitchen/hci_uart_iso_timesync
 - https://github.com/sebhuet/nrf5340-audio-4-channels
 - https://www.hackster.io/alexlynd/auraplug-synchronized-le-audio-563657
+- https://docs.zephyrproject.org/latest/boards/seeed/xiao_ble/doc/index.html (XIAO nRF52840: `xiao_ble`, UF2, SWD).
+- https://docs.zephyrproject.org/latest/boards/others/promicro_nrf52840/doc/index.html (SuperMini: `promicro_nrf52840`, UF2, SWD).
+- https://wiki.icbbuy.com/doku.php?id=developmentboard:nrf52840 (wiki del vendedor de la SuperMini).
+- https://github.com/joric/nrfmicro/wiki/ALternatives (reportes sobre el cristal de 32,768 kHz de los clones).
 - https://google.github.io/bumble/hardware/index.html,
   https://google.github.io/bumble/platforms/zephyr.html
 - https://docs.zephyrproject.org/latest/boards/nordic/nrf5340_audio_dk/doc/index.html
