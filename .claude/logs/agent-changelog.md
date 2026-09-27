@@ -7,6 +7,123 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-26 · s-7c8794-f44ace — Software de audio del PC (07) y plan de integración e I+D (08)
+
+**Qué.**
+- **Documento 07 nuevo**, sobre el software del PC:
+  - la captura del audio del sistema en Linux, macOS y Windows;
+  - qué fuentes traen multicanal;
+  - los algoritmos y las herramientas de upmix;
+  - el ruteo de canales;
+  - qué ven las apps con un sink multicanal;
+  - la latencia, el lip-sync y el desfase tolerable entre parlantes;
+  - la entrada de audio de Bumble;
+  - cómo repartir los canales entre los 3 Go 4 y el Charge 6.
+- **Documento 08 nuevo**, sobre la integración:
+  - niveles de huella N0–N4 por mecanismo;
+  - dónde vive el emisor (PC, Pi como tarjeta USB, nRF5340, comercial, red);
+  - el lazo de reloj;
+  - el stack y la arquitectura de una CLI (`jblsync`, nombre provisional);
+  - el plan P1–P3, M0–M5 y Fase 3;
+  - las decisiones que quedan abiertas para el usuario.
+- **Roadmap:**
+  - entradas nuevas P1 (i-7c8794-fd5f03), P2 (i-7c8794-cb208f), P3
+    (i-7c8794-346d45), la herramienta CLI del MVP (i-7c8794-2fe665) y la Fase 3
+    (i-7c8794-80f3ac);
+  - la entrada de upmix (i-7c8794-c7ccb9) quedó corregida;
+  - el diagrama de etapas y la tabla de la invariante quedaron actualizados.
+- **Otros documentos:**
+  - una corrección en 03 §2;
+  - README, `CLAUDE.md` y `references.md` actualizados con 07 y 08.
+
+**Archivos.** `docs/research/07-software-de-audio-en-el-pc.md`,
+`docs/research/08-integracion-y-plan.md`, `docs/research/03-…md`,
+`docs/research/README.md`, `docs/roadmap.md`, `docs/references.md`, `CLAUDE.md`,
+`.agents/tracking/candidates.md`.
+
+**Por qué.** El usuario pidió dos cosas:
+1. investigar el software del PC para surround y canales (fuentes, captura de
+   cualquier audio, compatibilidad);
+2. evaluar cómo integrar audio y Bluetooth en herramientas que modifiquen lo
+   mínimo el sistema, con un plan de I+D.
+
+**Arquitectura.** ✅ Cumple.
+- No hay código de producto. Todo el diseño de 08 está marcado INFERIDO, y las
+  entradas del MVP quedan bloqueadas por la decisión de seguir (d-7c8794-346170).
+- Se aplicaron las tarjetas *cleanup-belongs-to-the-supervisor*,
+  *detect-by-observation-not-build-flag*, *derive-state-from-one-clock*,
+  *close-the-loop-in-the-actuators-frame* y *fail-closed-defaults* (08 §2.4). Sus
+  chequeos quedan como criterios de P1, P2 y M2, porque todavía no hay nada que
+  ejecutar.
+
+**Qué salió mal en el camino.**
+- Dos agentes se contradijeron sobre el upmix por defecto de PipeWire: uno leyó
+  "psd por defecto" en la documentación, el otro "NONE" en el código. Se revisó
+  `audioconvert.c` y `channelmix-ops.c` del tag 1.6.9:
+  - el flag `channelmix.upmix` arranca en true, pero el método arranca en `none`
+    y los cutoffs en 0;
+  - con eso no se genera ningún canal.
+  El 07 se corrigió a "apagado en la práctica". **La documentación de
+  pipewire-props muestra los valores de ejemplo como si fueran los de por
+  defecto**: no hay que fiarse de ella para los valores por defecto.
+- gitlab.freedesktop.org y la ArchWiki bloquearon a los agentes con Anubis, así
+  que usaron el espejo de GitHub y `action=raw`.
+
+**Qué quedó pendiente.**
+- Las decisiones de 08 §8 (sistema de referencia, stack, comprar una Pi Zero 2 W
+  para P3, nombre). **Ninguna está registrada en `decisions.md`.**
+- P1 se puede hacer ya en el Mac, sin hardware.
+- El experimento 1 de 07 (BlackHole o un tap con 6 canales) tampoco necesita
+  parlantes.
+
+**No verificado.**
+- Todo 07 y 08 es investigación documental. Los agentes leyeron las fuentes, y
+  esta sesión solo volvió a abrir el código de upmix de PipeWire.
+- Nada se midió.
+- Las cifras de latencia de extremo a extremo son estimaciones de
+  especificación.
+
+**Pico 2 W (segunda parte de la sesión).** El usuario avisó que ya tiene una
+Raspberry Pi Pico 2 W, y quedó evaluada en 08 §3.1:
+- **su radio CYW43439 no hace advertising extendido**, así que no hay BIG
+  (REPORTADO, con una traza HCI en pico-sdk #2313);
+- **el RP2350 puede ser el cerebro de la Fase 3 (H2b)**: TinyUSB con 4 canales +
+  liblc3 + host BTstack, con una SuperMini por UART. BTstack ya tiene un port
+  oficial casi igual (`rp2040-vela-if820`);
+- **P3 se rehízo para la Pico**, en dos pasos: (a) benchmark de LC3 en el M33;
+  (b) speaker USB de 4 canales. La Pi Zero 2 W queda como alternativa si (a)
+  falla, y no hay que comprar nada por ahora;
+- se sumó a P2 `bluekitchen/hci_uart_iso_timesync` (con el comando `LE Read ISO
+  Clock`) como firmware candidato para las SuperMini;
+- la Pico sirve también de sonda SWD (debugprobe) para recuperar una SuperMini.
+
+**Qué salió mal en el camino (segunda parte).** El script de edición se cortó a
+la mitad porque un bloque de texto no coincidía. Quedaron aplicadas solo las
+primeras ediciones; se detectó por el `AssertionError` y se completó en una
+segunda pasada.
+
+**No verificado (segunda parte).**
+- El costo de liblc3 en el RP2350: no hay cifras publicadas, y la estimación de
+  72–150+ MHz para 4 canales es INFERIDA.
+- Que TinyUSB haga 4 canales con feedback en el RP2xxx.
+- Que `LICENSE.RP` cubra un controlador externo.
+
+**Aprendizajes para el harvest.** Quedaron dos filas en
+`.agents/tracking/candidates.md`:
+- una segunda ocurrencia de "Documented default values drift from the code"
+  (`OPEN.md`): la documentación de PipeWire mostraba valores de ejemplo como si
+  fueran los de por defecto;
+- `check-every-anchor-before-the-first-write`: el script de edición que se cortó
+  a la mitad.
+
+**Commits.** Dos, uno por tema: la investigación del software del PC (07) y el
+plan de integración (08) con la Pico 2 W. Van sin trailer de coautor, por
+preferencia del usuario.
+
+**Medido.** Nada. `scripts/check.sh` pasa.
+
+---
+
 ## 2026-09-26 · s-7c8794-da36f9 — Placas nRF52840 evaluadas; compradas 5 SuperMini
 
 **Qué.**

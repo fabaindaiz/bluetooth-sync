@@ -21,6 +21,7 @@ depender de las limitaciones de la app de JBL.
 | [05-opcion-a-bumble.md](05-opcion-a-bumble.md) | Opción A en profundidad: Bumble por dentro, controladores y transportes, parche para 4 BIS, BASS, sincronización y primeros comandos |
 | [06-opcion-c-nrf5340.md](06-opcion-c-nrf5340.md) | Opción C en profundidad: placas Nordic y precios, entrada USB, varios BIS, datos de fabricante, licencias, timestamps y primeros pasos |
 | [07-software-de-audio-en-el-pc.md](07-software-de-audio-en-el-pc.md) | El software del PC antes del emisor: capturar todo el audio del sistema, qué fuentes traen multicanal, upmix a quad, ruteo de canales, latencia y lip-sync, y cómo se compara Linux, macOS y Windows |
+| [08-integracion-y-plan.md](08-integracion-y-plan.md) | Cómo juntar audio y Bluetooth en una herramienta que toque lo mínimo el sistema: huella por mecanismo, dónde vive el emisor (PC, Pi como tarjeta USB, nRF5340), el reloj, el stack y el plan de I+D (P1–P3, M0–M5, Fase 3) |
 
 **Qué significa cada marca:**
 - **VERIFICADO**: fuente primaria.
@@ -77,6 +78,22 @@ Nada se ha medido todavía con los parlantes propios.
   (~70–120 ms con Auracast) no importa en música, se compensa en video y es un
   problema en juegos.
 - El detalle está en [07](07-software-de-audio-en-el-pc.md).
+
+**¿Cómo se junta todo en una herramienta que toque poco el sistema?**
+- **Una CLI en Python sobre Bumble**, con un núcleo común y backends de captura
+  por sistema. El controlador es la SuperMini por `serial:`, así que BlueZ no se
+  toca y no hay root ni drivers.
+- La captura se hace **sin drivers y desaparece al terminar el proceso**: un sink
+  propio en PipeWire, un process tap en macOS, WASAPI loopback en Windows.
+- Falta un **lazo de reloj** (drift entre el PC y el controlador), porque Bumble
+  no lo trae.
+- **Fase 3:** un emisor dedicado que el PC ve como tarjeta de sonido USB de 4
+  canales. En el PC no se instala nada, y no hay que remuestrear. Puede ser la
+  **Pico 2 W que ya está**, en C con TinyUSB y BTstack, si 4 codificadores LC3
+  caben en su CPU (se mide en P3), o una Pi Zero 2 W con el mismo código Python.
+- **La radio de la Pico 2 W no sirve para Auracast**: no tiene advertising
+  extendido.
+- El plan y las decisiones pendientes están en [08](08-integracion-y-plan.md).
 
 **¿Existen proyectos parecidos?**
 - **Sí, pero ninguno hace exactamente esto.**

@@ -38,6 +38,12 @@ corresponde.
   recibidas (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
   el target `promicro_nrf52840`. En cada medición hay que anotar qué unidad y qué
   fuente de reloj de 32 kHz se usó ([06](research/06-opcion-c-nrf5340.md) §1).
+- **1× Raspberry Pi Pico 2 W** (RP2350 + CYW43439), que el usuario ya tenía
+  (anotada el 2026-09-26). **Su radio no sirve para Auracast**, porque no tiene
+  advertising extendido. **El RP2350 sí puede ser el cerebro de la Fase 3**:
+  tarjeta USB + LC3 + BTstack, con una SuperMini por UART. También sirve de
+  sonda SWD para recuperar una SuperMini (debugprobe). Todo está en
+  [08](research/08-integracion-y-plan.md) §3.1.
 
 **Stack en estudio (2026-09-26):** el usuario eligió explorar las opciones **A**
 (Python + Bumble en el PC) y **C** (nRF5340 como emisor dedicado), además de la
@@ -53,10 +59,16 @@ Etapas del plan:
 Fase 1 · Factibilidad (probes, sin producto)            ← estamos por empezar
   inventario → E1 → E2 → E3 → E4 ──► decisión de seguir o no
                              └─ E6, E7 en paralelo (línea base y USB-C)
-Fase 2 · Prototipo, camino A (Auracast, un BIG)          ← solo si E4 sale bien
-  emisor multicanal → asistente BASS → upmix 4.0 → calibración
+  probes de software en paralelo: P1 (captura) · P2 (drift, tras E1) · P3 (Pico 2 W: LC3 y USB)
+Fase 2 · MVP, camino A (Auracast, un BIG)                ← solo si E4 sale bien
+  herramienta CLI: M0 → M1 emisor → M2 captura → M3 upmix → M4 calibración → M5 BASS
 Camino alternativo · A2DP                                ← solo si E4 sale mal
+  mismo núcleo, otro backend emisor
+Fase 3 · Emisor dedicado (Pico 2 W o Pi como tarjeta USB) ← después de M2 y P3
 ```
+
+El análisis de integración que ordena P1–P3, los hitos del MVP y la Fase 3 está en
+[research/08-integracion-y-plan.md](research/08-integracion-y-plan.md).
 
 ## Fase 1: factibilidad
 
@@ -255,6 +267,82 @@ retardo fijo.
 
 **Qué hay que decidir antes:** nada.
 
+### P1: captura del audio del sistema sin huella en Mac y Linux · i-7c8794-fd5f03
+**Estado:** Planificado. Se puede hacer ya, sin hardware.
+
+**Qué es:** comprobar que la captura del audio del sistema funciona sin instalar
+drivers y sin dejar nada al terminar
+([08](research/08-integracion-y-plan.md) §2):
+- **en el Mac:** un process tap privado (PyObjC o audiotee) que entregue PCM
+  estéreo continuo, y ver si `CATapMuted` silencia los parlantes;
+- **en Linux:**
+  - `pw-record -P '{ media.class=Audio/Sink … }' --raw -` como sink virtual que
+    desaparece al matar el proceso;
+  - la salida por defecto sin persistir (`node.restore-default-targets false`
+    sin `--save`).
+
+**Con qué choca:** con nada. Es solo lectura, salvo el setting de WirePlumber,
+que es solo en tiempo de ejecución.
+
+**Cómo se revierte:** el nodo y el tap mueren con el proceso. Si el setting de
+WirePlumber queda en false tras una caída, se revierte con `wpctl settings
+node.restore-default-targets true`, o reiniciando WirePlumber (`systemctl --user
+restart wireplumber`).
+
+**Criterio de terminado:** tras un `kill -9` en plena captura,
+`~/.local/state/wireplumber/` y la salida por defecto quedan byte a byte como
+estaban (tarjeta *cleanup-belongs-to-the-supervisor*).
+
+**El resultado va a:** `docs/research/experimentos/`.
+
+### P2: drift entre el reloj del PC y el del controlador · i-7c8794-cb208f
+**Estado:** Planificado. Depende de E1.
+
+**Qué es:** medir cuántos ppm hay entre el reloj del PC y el del controlador
+(una SuperMini creando un BIG), leyendo el nivel de la cola de `IsoPacketStream`
+y `HCI_LE_Read_ISO_TX_Sync` si el `hci_uart` lo implementa. Después, probar un
+lazo DLL con `samplerate` de razón variable durante 1 hora
+([08](research/08-integracion-y-plan.md) §4). El firmware candidato para la
+SuperMini es `bluekitchen/hci_uart_iso_timesync`, que agrega el comando `LE Read
+ISO Clock` para leer el reloj ISO del controlador.
+
+**Con qué choca:** con nada.
+
+**Qué decide:** si el remuestreo en Python alcanza, o si el backend de Linux tiene
+que ser un driver del grafo de PipeWire en Rust o C.
+
+**Criterio de terminado:** el drift medido en ppm, con la unidad de SuperMini y la
+fuente de 32 kHz anotadas, y el lazo sin cortes ni crecimiento de la latencia
+durante 1 hora.
+
+### P3: Raspberry Pi como tarjeta de sonido USB de 4 canales (gadget UAC2) · i-7c8794-346d45
+**Estado:** Planificado. **Se puede hacer ya con la Pico 2 W**, sin comprar nada
+(2026-09-26).
+
+**Qué es:** probar el lado USB del emisor dedicado
+([08](research/08-integracion-y-plan.md) §3.1), en dos pasos:
+- **(a) benchmark de liblc3 en el Cortex-M33 del RP2350:** 4 canales, 48 kHz,
+  tramas de 10 ms y 100–120 B, contando ciclos con DWT CYCCNT. Dura horas y
+  decide si la Pico sirve;
+- **(b) speaker TinyUSB de 4 canales con feedback asíncrono** (TinyUSB master;
+  UAC1 en full-speed y UAC2 como alternativa): ver si enumera sin driver en
+  macOS, Linux y **Windows 11**, y registrar el nivel de FIFO durante horas.
+
+Si (a) muestra que no caben 4 codificadores, **la alternativa es una Pi Zero 2 W
+(~US$15, hay que preguntar antes de comprarla)** con un gadget `f_uac2`
+(`c_chmask=0x33`, `c_sync=async`, `Capture Pitch 1000000`).
+
+**Con qué choca:** con nada en el PC, que no se modifica. El título dice
+"Raspberry Pi" porque el id se generó antes de saber de la Pico.
+
+**Qué la favorece:**
+- el port oficial `rp2040-vela-if820` de BTstack ya junta un controlador externo
+  por UART y una tarjeta de sonido TinyUSB en un RP2040;
+- CamillaDSP usa el gadget `f_uac2` con 2 y 8 canales.
+
+**El resultado va a:** `docs/research/experimentos/`, y decide si la Fase 3 es
+viable.
+
 ### Decisión de seguir o no · i-7c8794-0d129c
 **Estado:** Planificado. Depende de E4, y además de E5 y E6 si se sigue.
 
@@ -288,6 +376,41 @@ reproductor ──► sink virtual de PipeWire "jbl-multicanal" (estéreo o quad
         ▲ asistente BASS: le dice a cada parlante qué BIS reproducir
         └ configuración: dirección del parlante → canal
 ```
+
+### Herramienta CLI del MVP: un núcleo con backends de captura y de emisor intercambiables · i-7c8794-2fe665
+**Estado:** Planificado. Bloqueado por la decisión de seguir.
+
+**Qué es:** una sola herramienta en Python sobre Bumble (nombre provisional
+`jblsync`) con subcomandos `doctor`, `scan`, `tone`, `play`, `calibrate` y
+`assign`.
+- Tiene un núcleo común: remuestreador, DSP, LC3 y BIG.
+- Tiene backends de captura por sistema (PipeWire, Core Audio tap, WASAPI,
+  archivo y, en la Fase 3, gadget UAC2).
+- Tiene un backend emisor: Bumble por `serial:`, o combine-stream si se toma el
+  camino A2DP.
+- El diseño está en [08](research/08-integracion-y-plan.md) §6.
+
+**Hitos**, cada uno con un criterio MEDIDO ([08](research/08-integracion-y-plan.md) §7.2):
+- **M0:** `doctor` y `scan`, que solo leen.
+- **M1:** el emisor con 4 BIS (cierra el prototipo del emisor multicanal).
+- **M2:** la captura del sistema con el lazo de drift (usa P1 y P2).
+- **M3:** upmix y distribuciones (cierra el upmix).
+- **M4:** calibración (cierra la calibración).
+- **M5:** BASS y el modo receptor automático (cierra el asistente BASS).
+
+**Con qué choca:** con d-7c8794-346170 hasta la decisión de seguir. Con la
+invariante central solo si el backend emisor rompe el BIG único, y no lo hace.
+
+**Qué la favorece:** Bumble ya expone como biblioteca todo lo que hace falta
+para el emisor (VERIFICADO). Un emisor propio evita el parche de `auracast.py`.
+
+**Qué hay que decidir antes:**
+- el sistema operativo de referencia;
+- el stack;
+- el nombre.
+
+Las recomendaciones están en [08](research/08-integracion-y-plan.md) §8, y
+ninguna está decidida todavía.
 
 ### Prototipo del emisor multicanal · i-7c8794-5f25b0
 **Estado:** Planificado. Bloqueado por la decisión de seguir.
@@ -384,6 +507,33 @@ Audio.
 **Qué hay que decidir antes:** si una alineación de mejor esfuerzo (~5–20 ms
 variable) alcanza para el uso que se quiere.
 
+## Fase 3: emisor dedicado (después de M2 y P3)
+
+### Fase 3: emisor dedicado en una Raspberry Pi que el PC ve como tarjeta USB · i-7c8794-80f3ac
+**Estado:** Planificado. Depende de M2 y de P3.
+
+**Qué es:** la misma herramienta del MVP, corriendo en una Raspberry Pi:
+- con el backend `gadget` (ALSA UAC2 y `Capture Pitch`);
+- con la SuperMini por el UART;
+- opcionalmente, con entradas de red (shairport-sync, librespot).
+
+El PC la ve como una tarjeta de sonido de 4 canales y no instala nada, en
+Windows, macOS o Linux ([08](research/08-integracion-y-plan.md) §7.3).
+
+**Con qué choca:** con el lip-sync, porque el PC no conoce la latencia del tramo
+Auracast y en video queda el ajuste manual del reproductor. No choca con la
+invariante: el BIG es el mismo.
+
+**Qué la favorece:** el gadget asíncrono hace que el PC entregue al ritmo del
+BIG, así que no hace falta remuestrear.
+
+**Variante con la Pico 2 W** (H2b, [08](research/08-integracion-y-plan.md) §3.1):
+TinyUSB, BTstack y liblc3 en C, con la SuperMini por UART. No reutiliza el núcleo
+Python, pero no cuesta nada.
+
+**Qué hay que decidir antes:** Pico 2 W o Pi Zero 2 W. Lo decide P3(a): si 4
+codificadores LC3 caben en el RP2350.
+
 ## Proceso y herramientas
 
 ### Primer commit de la preparación · i-7c8794-c28668
@@ -416,5 +566,7 @@ en los documentos 00 y 01.
 | Upmix 4.0 | No, ocurre antes del emisor |
 | Charge 6 por USB-C | **Sí, en parte**: es otro camino con otra latencia. Se compensa con un retardo fijo medido |
 | Calibración con micrófono | No, solo la verifica |
+| Herramienta CLI (MVP) | No. Un solo BIG; los 4 canales comparten remuestreador, así que el drift no los desalinea entre sí |
+| Emisor dedicado en una Pi (Fase 3) | No. Es el mismo BIG; solo cambia de dónde viene el audio |
 | Camino A2DP | **Sí**: no hay reloj común; es la mejor alineación posible |
 | Dos transmisiones independientes | **Sí**: descartado por d-7c8794-203de2 |

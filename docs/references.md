@@ -163,6 +163,27 @@ no.
   (i-7c8794-c7ccb9). Hay que comparar métodos
   ([07](research/07-software-de-audio-en-el-pc.md) §4.2).
 
+- **[Gadget USB `f_uac2` de Linux](https://github.com/torvalds/linux/blob/master/drivers/usb/gadget/function/f_uac2.c)**
+  Tarjeta de sonido USB con feedback asíncrono (`Capture Pitch 1000000`): el PC
+  entrega al ritmo que le pide el dispositivo.
+
+  **Qué confirma:** que un emisor dedicado en una Pi puede evitar el remuestreo,
+  y no requiere instalar nada en el PC (Fase 3, i-7c8794-80f3ac;
+  [08](research/08-integracion-y-plan.md) §3).
+
+- **[`IsoPacketStream` en `bumble/device.py`](https://github.com/google/bumble/blob/main/bumble/device.py)**
+  Da contrapresión por paquetes completados. `apps/auracast.py` la usa con una
+  cola de 64 SDU (hasta 640 ms) y sin control de drift.
+
+  **Qué confirma:** que el MVP tiene que traer su propio lazo de reloj (P2,
+  i-7c8794-cb208f; [08](research/08-integracion-y-plan.md) §4).
+
+- **[Core Audio taps (`CATapDescription`)](https://developer.apple.com/documentation/coreaudio/catapdescription)**
+  Captura del audio del sistema en macOS 14.2+ sin drivers. PyObjC 12.2.2 lo
+  expone.
+
+  **Qué confirma:** que en el Mac no hace falta BlackHole (P1, i-7c8794-fd5f03).
+
 ## Qué leer primero
 
 | Si vas a tocar… | Lee | Y cuidado con |
@@ -172,3 +193,4 @@ no.
 | El hardware que comprar | [02](research/02-le-audio-auracast-linux.md) §2 | Ningún dongle USB está confirmado; el MT7921 es el único con prueba contra un Go 4 |
 | A2DP con varios parlantes | [03](research/03-bluetooth-clasico-y-sync-por-software.md) §1 | combine-stream no corrige el drift |
 | La captura del audio o el upmix | [07](research/07-software-de-audio-en-el-pc.md) §2 y §4 | `4.0` no es cuadrafonía; `psd` no da traseros estéreo |
+| La herramienta del MVP | [08](research/08-integracion-y-plan.md) §2 y §6 | `wpctl set-default` deja historial; el lazo de reloj no existe en Bumble |
