@@ -141,6 +141,10 @@ Nada de esto se ha medido todavía con los parlantes propios.
   - `channelmix.lfe-cutoff` y `channelmix.fc-cutoff`.
 
   VERIFICADO: https://docs.pipewire.org/page_man_pipewire-props_7.html
+- **Corrección (2026-09-26):** estas propiedades **vienen apagadas** por defecto
+  desde 0.3.68 (hay que activar `20-upmix.conf`), y en 1.6.9 `psd` genera
+  traseros en contrafase con la misma señal L−R, no traseros estéreo. El detalle
+  está en [07](07-software-de-audio-en-el-pc.md) §4.2.
 
 ### Calibración con micrófono
 - **No encontré ninguna herramienta para Linux o PipeWire que calibre

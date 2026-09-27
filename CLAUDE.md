@@ -87,6 +87,7 @@ es lo único que avisa a la siguiente.
 | ¿Qué implementaciones existen, en qué lenguaje, y qué stack conviene? | `docs/research/04-implementaciones-y-stacks.md` |
 | ¿Cómo se hace con Bumble (opción A)? | `docs/research/05-opcion-a-bumble.md` |
 | ¿Cómo se hace con un nRF5340 (opción C)? | `docs/research/06-opcion-c-nrf5340.md` |
+| ¿Qué software del PC captura, separa y hace upmix del audio, y con qué latencia? | `docs/research/07-software-de-audio-en-el-pc.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |

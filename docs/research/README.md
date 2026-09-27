@@ -20,6 +20,7 @@ depender de las limitaciones de la app de JBL.
 | [04-implementaciones-y-stacks.md](04-implementaciones-y-stacks.md) | Implementaciones abiertas por capa, con lenguaje, licencia y actividad; proyectos de ingeniería inversa de JBL; opciones de stack para el prototipo |
 | [05-opcion-a-bumble.md](05-opcion-a-bumble.md) | Opción A en profundidad: Bumble por dentro, controladores y transportes, parche para 4 BIS, BASS, sincronización y primeros comandos |
 | [06-opcion-c-nrf5340.md](06-opcion-c-nrf5340.md) | Opción C en profundidad: placas Nordic y precios, entrada USB, varios BIS, datos de fabricante, licencias, timestamps y primeros pasos |
+| [07-software-de-audio-en-el-pc.md](07-software-de-audio-en-el-pc.md) | El software del PC antes del emisor: capturar todo el audio del sistema, qué fuentes traen multicanal, upmix a quad, ruteo de canales, latencia y lip-sync, y cómo se compara Linux, macOS y Windows |
 
 **Qué significa cada marca:**
 - **VERIFICADO**: fuente primaria.
@@ -57,6 +58,25 @@ Nada se ha medido todavía con los parlantes propios.
   **Python** (Bumble, openjbl).
 - El detalle y las cuatro opciones de stack están en
   [04](04-implementaciones-y-stacks.md).
+
+**¿Qué software del PC hace falta, y se puede interceptar cualquier audio?**
+- **Sí, casi todo**: un sink virtual de PipeWire (Linux), BlackHole (Mac) o
+  VB-CABLE/Voicemeeter (Windows) como salida por defecto recibe el audio de todas
+  las apps. Quedan fuera el modo exclusivo, el bitstream Dolby/DTS y quizás parte
+  del contenido con DRM (por probar).
+- **Casi todas las fuentes son estéreo** (Spotify, YouTube, Netflix en Linux y
+  Mac), así que el upmix a quad es la pieza central. Los juegos y los archivos 5.1
+  sí traen multicanal real.
+- **El upmix de PipeWire viene apagado**, y su modo `psd` deja los traseros con
+  la misma señal en contrafase. Es mejor comparar `simple`, `psd` y FFmpeg
+  `surround=chl_out=quad`.
+- **Linux es el destino natural**, con todo gratis y dentro del servidor de
+  audio. **El Mac sirve para probar la cadena hoy** (BlackHole + ffmpeg + Bumble
+  por `serial:`).
+- **Para el par frontal hace falta menos de 1 ms de desfase.** La latencia total
+  (~70–120 ms con Auracast) no importa en música, se compensa en video y es un
+  problema en juegos.
+- El detalle está en [07](07-software-de-audio-en-el-pc.md).
 
 **¿Existen proyectos parecidos?**
 - **Sí, pero ninguno hace exactamente esto.**

@@ -276,8 +276,8 @@ código de producto.
 La arquitectura prevista, **sujeta a lo que muestren E3 y E4**:
 
 ```
-reproductor ──► sink virtual de PipeWire "jbl-multicanal" (estéreo o 4.0)
-                   │ upmix (channelmix psd) si la entrada es estéreo
+reproductor ──► sink virtual de PipeWire "jbl-multicanal" (estéreo o quad)
+                   │ upmix a quad si la entrada es estéreo (método por elegir, 07 §4)
                    ▼
             codificador LC3 por canal
                    ▼
@@ -322,15 +322,32 @@ transmite, y eso compite por tiempo de radio con el BIG.
 ### Upmix de estéreo a 4.0 · i-7c8794-c7ccb9
 **Estado:** Planificado. Depende del emisor.
 
-**Qué es:** convertir fuentes estéreo a 4.0 (o a 3.1 usando el Charge 6) con
-`channelmix.upmix` en modo `psd`, más un retardo trasero configurable.
+**Qué es:** convertir fuentes estéreo a quad (FL, FR, RL, RR), con un retardo
+trasero configurable. Las fuentes que ya son multicanal (juegos, archivos 5.1) no
+pasan por el upmix: van a un sink quad discreto
+([07](research/07-software-de-audio-en-el-pc.md) §6).
 
 **Con qué choca:** con nada, porque ocurre antes del emisor.
 
-**Qué la favorece:** PipeWire ya lo trae ([03](research/03-bluetooth-clasico-y-sync-por-software.md) §2).
+**Qué la favorece:** PipeWire ya lo trae ([03](research/03-bluetooth-clasico-y-sync-por-software.md) §2), y FFmpeg `surround` corre dentro de filter-chain desde PipeWire 1.6.0.
 
-**Qué hay que decidir antes:** qué distribución de canales usar con 3 Go 4 y 1
-Charge 6: 4.0 (FL, FR, RL, RR) o 3.1 (FL, FR, C y el Charge 6 como LFE).
+**Qué cambió (2026-09-26, [07](research/07-software-de-audio-en-el-pc.md) §4.2):**
+- el upmix de PipeWire **viene apagado** por defecto;
+- `psd` manda a los dos traseros **la misma señal L−R en contrafase**, así que no
+  da traseros estéreo;
+- el layout se llama `Quad`: **`4.0` no es cuadrafonía**, ni en PipeWire ni en
+  FFmpeg.
+
+Por eso ya no se asume `psd`: hay que comparar `simple`, `psd` y FFmpeg
+`surround=chl_out=quad` de oído.
+
+**Qué hay que decidir antes:** qué distribución de canales usar. Según
+[07](research/07-software-de-audio-en-el-pc.md) §4.5 (INFERIDO):
+- **quad** para música y juegos, con dos Go 4 adelante;
+- **3/1 (L C R S)** para películas, con el Charge 6 al centro.
+
+La opción 3.1 con el Charge 6 como LFE queda descartada en la práctica, porque
+ninguno de los parlantes es subwoofer.
 
 ### Calibración de la alineación con micrófono · i-7c8794-1ab281
 **Estado:** Planificado.

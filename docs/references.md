@@ -153,6 +153,16 @@ no.
 - **[HyperBoom duo stereo](https://github.com/Zigazou/hyperboom-duo-stereo)**
   Ejemplo funcional de L/R en dos parlantes BT con PipeWire.
 
+## Software de audio en el PC e integración
+
+- **[channelmix de PipeWire 1.6.9](https://github.com/PipeWire/pipewire/blob/1.6.9/spa/plugins/audioconvert/channelmix-ops-c.c)**
+  El modo `psd` manda a los dos traseros la misma señal L−R en contrafase, y con
+  la configuración por defecto (`upmix-method=none`) no genera ningún canal.
+
+  **Qué contradice:** que el upmix de la Fase 2 sea "activar `psd`"
+  (i-7c8794-c7ccb9). Hay que comparar métodos
+  ([07](research/07-software-de-audio-en-el-pc.md) §4.2).
+
 ## Qué leer primero
 
 | Si vas a tocar… | Lee | Y cuidado con |
@@ -161,3 +171,4 @@ no.
 | La asignación de canales | [02](research/02-le-audio-auracast-linux.md) §4 | Dos BIGs separados no quedan sincronizados entre sí |
 | El hardware que comprar | [02](research/02-le-audio-auracast-linux.md) §2 | Ningún dongle USB está confirmado; el MT7921 es el único con prueba contra un Go 4 |
 | A2DP con varios parlantes | [03](research/03-bluetooth-clasico-y-sync-por-software.md) §1 | combine-stream no corrige el drift |
+| La captura del audio o el upmix | [07](research/07-software-de-audio-en-el-pc.md) §2 y §4 | `4.0` no es cuadrafonía; `psd` no da traseros estéreo |
