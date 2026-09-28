@@ -29,7 +29,7 @@ revisar en el código una sola afirmación, la del upmix por defecto de PipeWire
 
 - **Recomendación: una sola herramienta CLI en Python sobre Bumble.** Tiene un
   **núcleo común** (DSP, reloj, LC3, BIG) y **backends intercambiables**: uno de
-  captura por sistema operativo y uno de emisor. Nombre provisional: `jblsync`.
+  captura por sistema operativo y uno de emisor. Se llama `aurasync` (d-7c8794-92aa04).
 - **Configuración que menos toca el sistema, y que es la misma que ya se compró:**
   Bumble con una **SuperMini nRF52840 por `serial:`** (CDC-ACM).
   - BlueZ ni se entera, no hay que activar el modo experimental, no hay root y
@@ -178,7 +178,7 @@ Tarjetas de `.agents/knowledge/` aplicadas a este diseño:
   No se deduce del modelo de la placa ni del firmware que dice tener.
   - Una capacidad que no se pudo observar **solo puede apagar** una función,
     nunca encenderla.
-  - **Chequeo:** `jblsync doctor` muestra la señal observada.
+  - **Chequeo:** `aurasync doctor` muestra la señal observada.
 - **derive-state-from-one-clock.** El número de SDU y el instante de
   presentación se **derivan del reloj del BIG**, no de sumar deltas en el host. El
   reloj del PC es una medición que hay que acotar, no la referencia.
@@ -446,13 +446,13 @@ antes.
 | Control de JBL (modo receptor sin tocar el botón) | `SET_AURACAST_BROADCAST` y el servicio `DFFD` de jbl-aura-play-together; firmware y PID con openjbl ([04](04-implementaciones-y-stacks.md) §6) | N1 | VERIFICADO (en otros modelos) / INFERIDO (Go 4, Charge 6) |
 | Calibración | **Chirp propio + correlación cruzada**, grabando por la misma captura. REW tiene una API REST, pero las mediciones automáticas requieren la licencia Pro. `jack_delay` está pensado para cable | N1 | REPORTADO (REW, `jack_delay`) / INFERIDO |
 | Upmix | Matriz en NumPy (`simple`, `psd`, LCRS) y FFmpeg `surround` por subprocess como opción de calidad ([07](07-software-de-audio-en-el-pc.md) §4) | — | VERIFICADO (algoritmos) |
-| Perfil | TOML en `~/.config/jblsync/` (N3), o con `--profile` explícito (N1) | N1 / N3 | — |
+| Perfil | TOML en `~/.config/aurasync/` (N3), o con `--profile` explícito (N1) | N1 / N3 | — |
 | Fuentes de red (Fase 3) | shairport-sync (AirPlay 2) y librespot en la Pi | N0 en el PC | VERIFICADO (documentación) |
 
 ## 6. Arquitectura propuesta (INFERIDA)
 
 ```
-                    jblsync (un proceso Python, asyncio)
+                    aurasync (un proceso Python, asyncio)
  ┌───────────────────────────────────────────────────────────────────────┐
  │ backend de captura          núcleo                     backend emisor │
  │ ─────────────────           ──────                     ────────────── │
@@ -476,16 +476,81 @@ antes.
 
 | Subcomando | Qué hace | Toca el sistema |
 |---|---|---|
-| `jblsync doctor` | Muestra la señal observada: controlador por `serial:`, comandos ISO, versión de PipeWire o de macOS, permisos (grupo, TCC). No cambia nada | No |
-| `jblsync scan` | Lista los JBL con datos de Harman, en modo transmisor o esperando, con su firmware si openjbl lo lee | No |
-| `jblsync tone --channel FL` | Manda un tono por un solo BIS, para identificar qué parlante suena y armar el perfil | No |
-| `jblsync play --input file:x.wav\|system\|app:<nombre> --layout quad\|lcrs --upmix simple\|psd\|surround` | El emisor completo | N1 (captura del sistema) |
-| `jblsync calibrate` | Chirp por BIS, micrófono, y retardo y ganancia por canal, que se guardan en el perfil | N3 (solo el perfil) |
-| `jblsync assign` | Escribe `BIS_Sync` por BASS, si E4 muestra que hace falta | No (solo en los parlantes) |
+| `aurasync doctor` | Muestra la señal observada: controlador por `serial:`, comandos ISO, versión de PipeWire o de macOS, permisos (grupo, TCC). No cambia nada | No |
+| `aurasync scan` | Lista los JBL con datos de Harman, en modo transmisor o esperando, con su firmware si openjbl lo lee | No |
+| `aurasync tone --channel FL` | Manda un tono por un solo BIS, para identificar qué parlante suena y armar el perfil | No |
+| `aurasync play --input file:x.wav\|system\|app:<nombre> --layout quad\|lcrs --upmix simple\|psd\|surround` | El emisor completo | N1 (captura del sistema) |
+| `aurasync calibrate` | Chirp por BIS, micrófono, y retardo y ganancia por canal, que se guardan en el perfil | N3 (solo el perfil) |
+| `aurasync assign` | Escribe `BIS_Sync` por BASS, si E4 muestra que hace falta | No (solo en los parlantes) |
 
-**Supervisión (C9):** `jblsync` corre la captura en un proceso hijo con timeout.
+**Supervisión (C9):** `aurasync` corre la captura en un proceso hijo con timeout.
 Lo único que no es N1, la salida por defecto de WirePlumber, lo restaura el proceso
 padre. El chequeo con `kill -9` está en §2.4.
+
+### 6.1 Estructura del repositorio y del paquete (2026-09-26)
+
+El usuario eligió cuatro cosas (d-7c8794-f619c4, d-7c8794-c23c20,
+d-7c8794-5c014a, d-7c8794-92aa04):
+- un **monorepo**;
+- **Python + Bumble con hatch**;
+- el nombre **`aurasync`**;
+- una **enmienda** a d-7c8794-346170: la estructura base se permite antes de la
+  decisión de seguir, y la lógica de producto sigue bloqueada.
+
+**Hoy existe** solo lo que está marcado *hoy*. El resto es el plan, con el
+componente (§1) y el hito (§7.2) de cada pieza.
+
+```
+bluetooth-sync/
+├── host/                          paquete Python `aurasync` (hatch, Python 3.12)
+│   ├── pyproject.toml             bumble==0.0.235, lc3py==1.1.3            hoy
+│   ├── src/aurasync/
+│   │   ├── __init__.py __main__.py cli.py                                  hoy
+│   │   ├── profile.py             C8  perfil TOML, fail-closed             M1
+│   │   ├── supervise.py           C9  proceso padre que restaura el estado M2
+│   │   ├── core/                  sin E/S: se prueba con arrays
+│   │   │   ├── codec.py           C4  4× LC3                               M1
+│   │   │   ├── clock.py           C3  DLL + remuestreador (reloj del BIG)  M2
+│   │   │   └── dsp.py             C2  upmix, retardo, ganancia             M3
+│   │   ├── capture/               C1  una interfaz, un backend por fuente
+│   │   │   ├── file.py            WAV / stdin                              M1
+│   │   │   ├── pipewire.py        sink propio en tiempo de ejecución       M2
+│   │   │   ├── coreaudio.py       process tap privado                      M2
+│   │   │   └── gadget.py          UAC2 + Capture Pitch (Pi)                Fase 3
+│   │   ├── emit/                  C5
+│   │   │   ├── bumble_big.py      1 BIG, N BIS, datos de Harman            M1
+│   │   │   └── a2dp_combine.py    camino alternativo                       si E4 falla
+│   │   ├── speakers/              C6  scan (M0), jbl, bass (M5)
+│   │   └── calibrate/             C7                                       M4
+│   └── tests/
+│       ├── test_cli.py test_stack.py                                       hoy
+│       └── hw/                    tests con hardware, fuera de check.sh    M1
+├── firmware/
+│   ├── supermini/                 overlays de hci_uart_iso_timesync        E1, P2
+│   └── pico/                      TinyUSB + BTstack + liblc3 (H2b)         P3, Fase 3
+├── probes/                        desechables (d-7c8794-3208b7)
+├── scripts/check.sh               bundle + ids + lista de archivos + lint + tests   hoy
+└── docs/
+```
+
+**Reglas de la estructura** (INFERIDAS; se aplican al escribir cada módulo):
+- **`core/` no hace E/S.** No toca Bluetooth, archivos ni audio del sistema, así
+  que sus tests corren en `check.sh` con arrays sintéticos.
+  - El reloj se deriva del reloj del BIG (tarjeta *derive-state-from-one-clock*).
+  - El lazo tiene histéresis (tarjeta *close-the-loop-in-the-actuators-frame*).
+- **`capture/` y `emit/`** son backends detrás de una interfaz. Cada backend
+  informa su capacidad observándola, y `doctor` la muestra (tarjeta
+  *detect-by-observation-not-build-flag*).
+- **Los tests que necesitan hardware** (controlador, parlantes, micrófono) van en
+  `tests/hw/`, marcados y fuera de `check.sh`. **El chequeo no ve la radio ni los
+  parlantes** (tarjeta *unrunnable-system-moves-the-gate*). Lo que ellos prueban
+  queda como resultado MEDIDO en `docs/research/experimentos/`.
+- **Sin dobles de prueba de Bumble** mientras no haya un test de contrato (tarjeta
+  *test-double-fidelity*). Si hace falta un controlador falso, el candidato es el
+  controlador virtual del propio Bumble. Que soporte BIG está sin verificar.
+- **Hasta la decisión de seguir,** `scripts/check.sh` solo acepta en
+  `host/src/aurasync/` los archivos de *hoy* (d-7c8794-f619c4). Un módulo nuevo lo
+  pone en rojo.
 
 ## 7. Plan de investigación y desarrollo
 
@@ -558,14 +623,15 @@ llegan las SuperMini ──► E1 ──► P2 ──► E2 … E4 ──► dec
 
 | Decisión | Opciones | Recomendación (INFERIDA) | Cuándo |
 |---|---|---|---|
-| Sistema operativo de referencia | Linux / macOS / los dos | **Linux como destino, macOS como estación de trabajo.** Los dos con el mismo código | Antes de M0 |
-| Stack | Python + Bumble / Rust + Python / C con BlueZ y PipeWire | **Python + Bumble**; Rust solo si P2 lo exige | Antes de M0 |
+| Sistema operativo de referencia | Linux / macOS / los dos | **Linux como destino, macOS como estación de trabajo.** Los dos con el mismo código. El usuario tiene ambos equipos | Antes de M0 |
+| ~~Stack~~ | **Decidido (2026-09-26):** Python + Bumble con hatch (d-7c8794-c23c20) | — | — |
 | Dónde vive el emisor | H1 (PC) / H2 (Pi) / H3 (nRF5340) | **H1 para el MVP, H2 como Fase 3** | H2 después de P3 |
 | Con qué hacer la Fase 3 | Pico 2 W (ya está; C bare-metal) / Pi Zero 2 W (~US$15; reutiliza el Python) | **Probar primero la Pico** con el benchmark de P3(a), que dura horas. Comprar la Zero 2 W solo si la CPU no alcanza, o si se prefiere mantener un solo lenguaje | Después de P3(a) |
-| Nombre de la herramienta | `jblsync` es provisional | — | Antes de M0 |
+| ~~Nombre de la herramienta~~ | **Decidido (2026-09-26):** `aurasync` (d-7c8794-92aa04) | — | — |
 
-Ninguna de estas decisiones está registrada en [decisions.md](../decisions.md).
-Se registran cuando el usuario las tome.
+El stack, el nombre, el monorepo (d-7c8794-5c014a) y la enmienda que permite la
+estructura base (d-7c8794-f619c4) quedaron registrados en
+[decisions.md](../decisions.md). El resto sigue abierto.
 
 ## Lo que no se pudo determinar
 

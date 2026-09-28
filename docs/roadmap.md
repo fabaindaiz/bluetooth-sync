@@ -34,6 +34,7 @@ corresponde.
 **Hardware disponible:**
 - 3× JBL Go 4 y 1× JBL Charge 6.
 - Un equipo con Linux cuyo chip Bluetooth aún no está identificado (i-7c8794-d9c834).
+- Este Mac (Apple Silicon, macOS 27), que es la estación de trabajo.
 - **5× SuperMini nRF52840** (clon de nice!nano), compradas el 2026-09-26 y aún no
   recibidas (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
   el target `promicro_nrf52840`. En cada medición hay que anotar qué unidad y qué
@@ -51,7 +52,15 @@ corresponde.
 están en [research/README.md](research/README.md) §"Opciones A y C comparadas":
 primero A con el chip interno; si no sirve, la combinada o C.
 
-**Siguiente paso:** Fase 1, empezando por el inventario del equipo.
+**Estructura (2026-09-26):**
+- **Stack:** Python + Bumble con hatch (d-7c8794-c23c20).
+- **Repositorio:** monorepo con `host/` y `firmware/` (d-7c8794-5c014a,
+  [08](research/08-integracion-y-plan.md) §6.1).
+- **Esqueleto** del paquete `aurasync` (i-7c8794-f7f5b2), permitido por
+  d-7c8794-f619c4.
+
+**Siguiente paso:** Fase 1, empezando por el inventario del equipo Linux, y en
+paralelo P1 en el Mac y P3(a) en la Pico 2 W.
 
 Etapas del plan:
 
@@ -343,6 +352,26 @@ Si (a) muestra que no caben 4 codificadores, **la alternativa es una Pi Zero 2 W
 **El resultado va a:** `docs/research/experimentos/`, y decide si la Fase 3 es
 viable.
 
+### Estructura base del repositorio · i-7c8794-f7f5b2
+**Estado:** Hecho (2026-09-26).
+
+**En qué quedó:**
+- `host/`: el paquete `aurasync`, con hatch y Python 3.12. Trae una CLI que solo
+  responde `--version` y 9 tests de humo: CLI, API de Bumble, LC3 con 1 y 4
+  canales, y el retardo de 2,5 ms.
+- `firmware/supermini/` y `firmware/pico/`, con su plan y sin código.
+- `scripts/check.sh` corre, además:
+  - `hatch fmt --check` y `hatch test`;
+  - una lista cerrada de los archivos permitidos en `host/src/aurasync/` hasta la
+    decisión de seguir.
+- La estructura prevista está en [08](research/08-integracion-y-plan.md) §6.1.
+
+**Decisiones:** d-7c8794-f619c4 (la enmienda a d-7c8794-346170), d-7c8794-c23c20
+(el stack), d-7c8794-5c014a (el monorepo), d-7c8794-92aa04 (el nombre).
+
+**Qué falta:** probarlo en el equipo Linux. Hay que instalar hatch en el home y
+correr `scripts/check.sh` con `PY` apuntando a un Python ≥3.11.
+
 ### Decisión de seguir o no · i-7c8794-0d129c
 **Estado:** Planificado. Depende de E4, y además de E5 y E6 si se sigue.
 
@@ -355,7 +384,10 @@ medidos:
 - **no seguir con el surround** si fallan los dos.
 
 **Con qué choca:** con d-7c8794-346170. Hasta que esta decisión exista, no hay
-código de producto.
+código de producto; solo la estructura base que permite d-7c8794-f619c4.
+
+**Cuando se registre:** hay que sacar de `scripts/check.sh` la lista cerrada de
+archivos de `host/src/aurasync/`.
 
 **Qué hay que decidir antes:** el umbral de desfase tolerable (ver E5).
 
@@ -381,7 +413,7 @@ reproductor ──► sink virtual de PipeWire "jbl-multicanal" (estéreo o quad
 **Estado:** Planificado. Bloqueado por la decisión de seguir.
 
 **Qué es:** una sola herramienta en Python sobre Bumble (nombre provisional
-`jblsync`) con subcomandos `doctor`, `scan`, `tone`, `play`, `calibrate` y
+`aurasync`) con subcomandos `doctor`, `scan`, `tone`, `play`, `calibrate` y
 `assign`.
 - Tiene un núcleo común: remuestreador, DSP, LC3 y BIG.
 - Tiene backends de captura por sistema (PipeWire, Core Audio tap, WASAPI,
@@ -404,13 +436,10 @@ invariante central solo si el backend emisor rompe el BIG único, y no lo hace.
 **Qué la favorece:** Bumble ya expone como biblioteca todo lo que hace falta
 para el emisor (VERIFICADO). Un emisor propio evita el parche de `auracast.py`.
 
-**Qué hay que decidir antes:**
-- el sistema operativo de referencia;
-- el stack;
-- el nombre.
-
-Las recomendaciones están en [08](research/08-integracion-y-plan.md) §8, y
-ninguna está decidida todavía.
+**Qué hay que decidir antes:** el sistema operativo de referencia. La
+recomendación está en [08](research/08-integracion-y-plan.md) §8. El stack
+(d-7c8794-c23c20), el nombre (`aurasync`, d-7c8794-92aa04) y la estructura
+(d-7c8794-5c014a, 08 §6.1) ya están decididos.
 
 ### Prototipo del emisor multicanal · i-7c8794-5f25b0
 **Estado:** Planificado. Bloqueado por la decisión de seguir.

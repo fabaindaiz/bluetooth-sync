@@ -1,6 +1,7 @@
 # Investigación: audio multicanal sincronizado en parlantes JBL
 
-**Estado:** fase de investigación (2026-09-25). No hay código. Este documento
+**Estado:** fase de investigación (2026-09-25). No hay código de producto; desde el
+2026-09-26 hay un esqueleto en `host/` (d-7c8794-f619c4). Este documento
 resume lo encontrado y sirve para decidir si vale la pena desarrollar algo.
 
 ## La pregunta

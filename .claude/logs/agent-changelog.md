@@ -7,6 +7,100 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-26 · s-7c8794-32c631 — Estructura base: paquete aurasync con hatch, tests de humo y plan de estructura
+
+**Qué.**
+- **Decisiones registradas**, tras preguntarle al usuario:
+  - d-7c8794-f619c4: enmienda a d-7c8794-346170. Se permite la estructura base, y
+    la lógica de producto sigue bloqueada;
+  - d-7c8794-c23c20: Python 3.12 + Bumble + lc3py con hatch, sin lockfiles;
+  - d-7c8794-5c014a: monorepo;
+  - d-7c8794-92aa04: el nombre `aurasync`.
+- **`host/`:**
+  - `pyproject.toml` (hatchling; `bumble==0.0.235`, `lc3py==1.1.3`; entornos con
+    el installer uv interno de hatch);
+  - `src/aurasync/`: una CLI que solo responde `--version` y falla ante un
+    subcomando desconocido;
+  - 9 tests: CLI, `python -m`, versión instalada, API de Bumble para el emisor, y
+    LC3 con 480 muestras, 2,5 ms de retardo e ida y vuelta con 1 y 4 canales.
+- **`firmware/`:** un README general, `supermini/` (plan con
+  `hci_uart_iso_timesync`) y `pico/` (plan de P3 y H2b). Sin código.
+- **`scripts/check.sh`** suma tres cosas:
+  - que `hatch` exista;
+  - una lista cerrada de archivos en `host/src/aurasync/`;
+  - `hatch fmt --check` y `hatch test`.
+- **08 §6.1** tiene la estructura prevista, módulo por módulo, con su componente y
+  su hito, y las reglas (`core/` sin E/S, tests de hardware en `tests/hw/` fuera
+  del chequeo, sin dobles de Bumble).
+- **Otros documentos:**
+  - 08 §8, el roadmap (entrada i-7c8794-f7f5b2 Hecho, y "Qué hay que decidir"
+    del MVP), `CLAUDE.md` (restricción, comandos, tabla) y `.gitignore`;
+  - `jblsync` pasó a `aurasync` en 08 y en el roadmap.
+
+**Archivos.** `host/`, `firmware/`, `scripts/check.sh`, `.gitignore`,
+`docs/decisions.md`, `docs/roadmap.md`, `docs/research/08-integracion-y-plan.md`,
+`CLAUDE.md`, `.agents/tracking/candidates.md`.
+
+**Por qué.** El usuario pidió empezar la estructura base con tests y planificar
+la estructura, considerando su hardware: 5 SuperMini, una Pico 2 W, un equipo
+Linux y este Mac. A mitad de camino pidió usar hatch en vez de uv.
+
+**Arquitectura.** ⚠️ Desvío autorizado.
+- Hay código en `host/` antes de la decisión de seguir. Lo autorizó el usuario
+  explícitamente, y quedó como d-7c8794-f619c4.
+- El límite (solo esqueleto) lo hace cumplir `check.sh`, no solo la revisión.
+- **Tarjetas aplicadas:**
+  - *a-check-must-be-seen-to-fail*: se vio rojo con un test plantado, un import
+    sin usar, `hatch` fuera del PATH y un módulo nuevo en `host/src/aurasync/`;
+  - *ratchet-in-a-pinned-environment*: es greenfield, así que el lint parte en
+    cero. Las dependencias directas van exactas; ruff lo fija la versión de hatch
+    (1.18.1); las transitivas no se fijan (ver abajo);
+  - *reproduce-the-checkout-not-only-the-environment*: `check.sh` se corrió desde
+    una exportación limpia del índice;
+  - *unrunnable-system-moves-the-gate*: 08 §6.1 dice que el chequeo no ve la radio
+    ni los parlantes.
+
+**Qué salió mal en el camino.**
+- **Los lockfiles de hatch 1.18.1 borran el propio proyecto.** Con
+  `lock-envs = true` e `installer = "uv"`, hatch aplica el lock con `uv pip
+  sync`, que desinstala todo lo que no está en el lock, incluido `aurasync` en
+  modo desarrollo. Por eso `hatch test` no encontraba el módulo. Se confirmó en el
+  código de hatch (`env/virtual.py`, `lockers/uv.py`) y recreando los entornos.
+- `skip-install = true` tampoco sirve, porque también omite las dependencias del
+  proyecto.
+- Se quedó **sin lockfiles, con las directas exactas**. Las transitivas flotan.
+- Además, el lock que generó hatch salía **solo para la plataforma del Mac**. Con
+  `[tool.uv.pip] universal = true` salía universal; se descartó junto con los
+  lockfiles.
+- En la primera versión del docstring de `__init__.py` quedó un id de decisión
+  inventado, porque se escribió antes de generarlo. Se corrigió al generar los ids
+  reales.
+
+**Qué quedó pendiente.**
+- Correr `scripts/check.sh` en el equipo Linux, con hatch en el home y `PY`
+  apuntando a un Python ≥3.11. No está probado.
+- Fijar las dependencias transitivas cuando hatch corrija el sync, o si aparece
+  un problema de versiones.
+- La toolchain de firmware (NCS/west, Pico SDK) no está instalada en el Mac.
+- Si el controlador virtual de Bumble soporta BIG, para usarlo como doble en
+  tests de `emit/`.
+
+**No verificado.**
+- Que la API de Bumble alcance para el emisor: el test solo comprueba que existan
+  los nombres (`create_big`, `create_advertising_set`,
+  `BasicAudioAnnouncement`, `IsoPacketStream`).
+
+**Commit.** Uno solo, de estructura, a pedido del usuario (2026-09-27), sin
+trailer de coautor. También se actualizaron las líneas de estado de `CLAUDE.md`,
+`docs/research/README.md` y el roadmap, que decían "no hay código".
+
+**Medido.**
+- `scripts/check.sh` pasa: 9 tests en 0,3 s en el Mac, con Python 3.12.13 de
+  hatch.
+- Se vio en rojo en los cuatro casos plantados.
+
+---
+
 ## 2026-09-26 · s-7c8794-f44ace — Software de audio del PC (07) y plan de integración e I+D (08)
 
 **Qué.**
