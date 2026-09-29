@@ -63,10 +63,14 @@ def test_init_reparte_roles_sin_pedir_numeros(tmp_path, monkeypatch):
 
     inst = Instalacion.cargar(destino)
     assert [p.nombre for p in inst.parlantes] == ["Parlante 0", "Parlante 1", "Parlante 2"]
-    # Los dos primeros al frente, abiertos; el tercero, ambiente.
+    # Los dos primeros al frente, abiertos; el tercero, mayormente ambiente.
     assert inst.parlantes[0].pan < 0
     assert inst.parlantes[1].pan > 0
-    assert inst.parlantes[2].ambiente == 1.0
+    assert inst.parlantes[2].ambiente > inst.parlantes[0].ambiente
+    # **Ninguno en ambiente puro.** Escuchado: un parlante que solo reproduce el ambiente
+    # extraído suena difuso y no se ubica en la pieza
+    # (`docs/research/experimentos/09-primera-escucha-con-3-go-4.md`).
+    assert all(0.0 < p.ambiente < 1.0 for p in inst.parlantes)
     # Y nadie tiene todavía corrección: eso lo escribe `calibrate`.
     assert all(p.retardo_ms == 0.0 and p.ganancia_db == 0.0 for p in inst.parlantes)
 
@@ -139,3 +143,46 @@ def test_run_avisa_si_un_parlante_no_esta_conectado(tmp_path, monkeypatch, capsy
     capsys.readouterr()
     assert main(["--config", str(destino), "run"]) == 1
     assert "no están conectados" in capsys.readouterr().err
+
+
+# -- las opciones del lazo de recalibración -------------------------------------------
+
+
+def test_run_trae_el_lazo_apagado_por_defecto():
+    """Hasta validarlo con parlantes, `run` tiene que comportarse como siempre."""
+    from aurasync.cli import build_parser
+
+    args = build_parser().parse_args(["run"])
+    assert args.recalibrar is False
+    assert args.guardar is False
+    assert args.registro is None
+    assert args.volumen_db == 0.0
+
+
+def test_el_valor_por_defecto_de_medir_es_el_que_valido_la_simulacion():
+    """Por debajo de 10 s el estimador falla en silencio (`experimentos/08` §3)."""
+    from aurasync.cli import build_parser
+    from aurasync.sincronia import VentanaDeEmision
+
+    args = build_parser().parse_args(["run"])
+    assert args.medir == VentanaDeEmision.SEGUNDOS_DE_MEDICION == 10.0
+
+
+def test_run_acepta_las_opciones_de_la_prueba_de_audio():
+    from aurasync.cli import build_parser
+
+    args = build_parser().parse_args(
+        ["run", "--recalibrar", "--cada", "30", "--medir", "12", "--registro", "/tmp/x.jsonl", "--guardar"]
+    )
+    assert args.recalibrar
+    assert args.guardar
+    assert (args.cada, args.medir) == (30.0, 12.0)
+    assert args.registro == "/tmp/x.jsonl"
+
+
+def test_calibrate_y_run_comparten_el_microfono_por_defecto():
+    from aurasync.cli import MICROFONO_POR_DEFECTO, build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["calibrate"]).microfono == MICROFONO_POR_DEFECTO
+    assert parser.parse_args(["run"]).microfono == MICROFONO_POR_DEFECTO

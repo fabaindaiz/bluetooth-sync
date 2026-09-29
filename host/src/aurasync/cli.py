@@ -33,6 +33,8 @@ from aurasync import __version__
 
 SEGUNDOS_DE_CALIBRACION = 10.0
 BLOQUE = 4096
+MICROFONO_POR_DEFECTO = "alsa_input.usb-3142_fifine_Microphone-00.analog-stereo"
+"""El fifine de este equipo. Se cambia con `--microfono`; `aurasync doctor` lista los que hay."""
 
 
 def _instalacion_o_error(ruta: Path):
@@ -73,6 +75,18 @@ def cmd_doctor(args) -> int:
         )
     elif 0 < len(salidas) < minimo_util:
         problemas.append("con un solo parlante no hay nada que sincronizar")
+
+    # El micrófono es el instrumento de `calibrate` y de `run --recalibrar`. Sin él no se
+    # puede medir nada, y el nombre del nodo es largo y fácil de equivocar.
+    print("\n== micrófono ==")
+    entradas = [e for e in sonido.entradas_audio() if not e.es_monitor]
+    if not entradas:
+        print("  ninguno (sin micrófono no se puede calibrar)")
+    for e in entradas:
+        marca = "  ← el de por defecto" if e.nodo == MICROFONO_POR_DEFECTO else ""
+        print(f"  {e.descripcion:<32} {e.nodo}{marca}")
+    if entradas and all(e.nodo != MICROFONO_POR_DEFECTO for e in entradas):
+        print(f"  nota: el micrófono por defecto ({MICROFONO_POR_DEFECTO}) no está; usá --microfono")
 
     ruta = Path(args.config)
     print(f"\n== instalación ==\n  {ruta}: {'existe' if ruta.exists() else 'no existe'}")
@@ -115,16 +129,23 @@ def cmd_init(args) -> int:
         return 1
 
     # Reparto por defecto: el primero a la izquierda, el segundo a la derecha, y del tercero
-    # en adelante, ambiente. No pretende adivinar dónde están —eso no se puede— sino dar un
-    # punto de partida audible que después se ajusta de oído.
+    # en adelante, mayormente ambiente. No pretende adivinar dónde están —eso no se puede—
+    # sino dar un punto de partida audible que después se ajusta de oído.
+    #
+    # **Ninguno queda en ambiente puro, y eso cambió el 2026-09-29 después de escucharlo.**
+    # El tercer parlante arrancaba en `ambiente=1.0` y en la primera escucha real sonó "muy
+    # difuso": con material corriente, el ambiente extraído por coherencia es poco y sin
+    # transitorios, así que un parlante que solo reproduce eso no se percibe como parlante.
+    # Con 0,55 lleva algo de directo, se ubica, y sigue aportando el envolvimiento
+    # (`docs/research/experimentos/09-primera-escucha-con-3-go-4.md`).
     parlantes = []
     for i, s in enumerate(salidas):
         if i == 0:
-            pan, ambiente = -0.7, 0.0
+            pan, ambiente = -0.7, 0.15
         elif i == 1:
-            pan, ambiente = 0.7, 0.0
+            pan, ambiente = 0.7, 0.15
         else:
-            pan, ambiente = 0.0, 1.0
+            pan, ambiente = 0.0, 0.55
         parlantes.append(Parlante(s.descripcion, s.nodo, pan=pan, ambiente=ambiente))
 
     inst = Instalacion(parlantes=parlantes)
@@ -136,6 +157,7 @@ def cmd_init(args) -> int:
     print(f"instalación creada en {ruta}:")
     for p in inst.parlantes:
         rol = "ambiente" if p.ambiente > 0.5 else ("izquierda" if p.pan < 0 else "derecha")  # noqa: PLR2004
+        rol += f" (ambiente {p.ambiente:.2f})"
         print(f"  {p.nombre:<24} {rol}")
     print("\nAjustá `pan` y `ambiente` si querés, y después: aurasync calibrate")
     return 0
@@ -183,7 +205,9 @@ def cmd_calibrate(args) -> int:
         print("¿El micrófono está captando los parlantes?", file=sys.stderr)
         return 1
 
-    mudos = medicion.parlantes_sin_sonar(medicion.niveles(micro, referencias, resultado.retardos_ms))
+    # Los niveles vienen de la propia medición: recalcularlos acá, con las referencias sin
+    # alinear, marcaba "no suena" a parlantes que sonaban bien.
+    mudos = resultado.sin_sonar()
     print(f"\n{'parlante':<24} {'retardo':>10} {'ganancia':>10} {'estabilidad':>12}")
     for p in inst.parlantes:
         nombre = p.nombre
@@ -237,9 +261,14 @@ def cmd_play(args) -> int:
 
 def cmd_run(args) -> int:
     """Crea una salida de audio del sistema y procesa en vivo lo que se reproduzca ahí."""
+    import contextlib
+    import json
+    import signal
+    import time
+
     import numpy as np
 
-    from aurasync import sonido
+    from aurasync import medicion, sincronia, sonido
     from aurasync.motor import Motor
 
     inst = _instalacion_o_error(Path(args.config))
@@ -255,35 +284,166 @@ def cmd_run(args) -> int:
     motor = Motor(inst, args.rate, extraer_ambiente=not args.sin_ambiente, decorrelar=not args.sin_decorrelar)
     por_nombre = {p.nombre: p.sink for p in inst.parlantes}
     silencio = np.zeros(args.bloque)
+    volumen = 10 ** (args.volumen_db / 20)
 
     print(f'Salida creada: "{args.descripcion}"')
     print("  Elegila como dispositivo de salida en tu sistema, o mandale una aplicación.")
     print(
         f"  {len(inst.parlantes)} parlantes · "
         f"ambiente {'no' if args.sin_ambiente else 'sí'} · "
-        f"decorrelación {'no' if args.sin_decorrelar else 'sí'}"
+        f"decorrelación {'no' if args.sin_decorrelar else 'sí'} · "
+        f"volumen {args.volumen_db:+.0f} dB"
     )
     print(f"  latencia estimada: ~{motor.latencia / args.rate * 1000 + args.bloque / args.rate * 1000 + 200:.0f} ms")
+
+    # -- el lazo de recalibración, si se pidió ----------------------------------------
+    # Mide contra **el propio contenido**, así que no interrumpe ni emite ningún estímulo.
+    # Está apagado por defecto: hasta que se valide acústicamente, el comportamiento
+    # normal de `run` es el de siempre.
+    lazo = None
+    if args.recalibrar:
+        lazo = sincronia.Controlador(inst, motor, confirmar_todo=True)
+        emision = sincronia.VentanaDeEmision(list(por_nombre), args.rate, segundos=args.medir + 2.0)
+        medidor = sincronia.MedicionEnSegundoPlano(medicion.calibrar)
+        print(
+            f"\n  Recalibración continua: cada {args.cada:.0f} s, midiendo {args.medir:.0f} s "
+            f"contra el propio contenido, con micrófono {args.microfono.split('.')[0]}…"
+        )
+        print("  Cada cambio necesita confirmarse en dos mediciones seguidas antes de aplicarse.")
+        if args.registro:
+            print(f"  Registro: {args.registro}")
+
     print("\n  Ctrl-C para terminar. Al salir, la salida desaparece sola.\n")
 
-    with (
-        sonido.SinkVirtual(args.nombre, args.descripcion, args.rate) as entrada,
-        sonido.Reproductor(list(por_nombre.values()), args.rate) as rep,
-    ):
-        while True:
-            par = entrada.leer(args.bloque)
-            if par is None:
-                # Nada reproduciéndose. Se manda silencio igual, para que los streams A2DP
-                # no se suspendan: al despertar traerían un desfase distinto del que acaba
-                # de medir la calibración.
+    registro = open(args.registro, "a", buffering=1) if (lazo and args.registro) else None  # noqa: SIM115
+    arranque = time.monotonic()
+
+    # **SIGTERM se trata como Ctrl-C.** Sin esto, terminar el proceso desde afuera se lleva
+    # sin pasar por el cierre: `--guardar` no escribía nada y la deriva estimada no se
+    # imprimía. Pasó en la primera sesión con parlantes: el lazo había corregido 5,82 ms y
+    # el archivo quedó en cero (`docs/research/experimentos/09-…`).
+    def _como_ctrl_c(*_) -> None:
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _como_ctrl_c)
+
+    def anotar(clase: str, **campos) -> None:
+        linea = {"t": round(time.monotonic() - arranque, 2), "clase": clase, **campos}
+        # `flush` porque `run` se deja corriendo en segundo plano y ahí Python almacena la
+        # salida en buffer: sin esto no se ve nada hasta que el proceso termina, que es
+        # justo cuando ya no sirve.
+        print(f"  [{linea['t']:>7.1f} s] {clase}: {campos.get('motivo', '')}", flush=True)
+        if registro is not None:
+            registro.write(json.dumps(linea, ensure_ascii=False) + "\n")
+
+    try:
+        with contextlib.ExitStack() as pila:
+            # **El orden importa, y el silencio también.** `pw-play` no se enlaza a su
+            # destino hasta que recibe datos, y resuelve `--target` en ese momento. Si el
+            # sink virtual ya existiera, WirePlumber puede tomarlo como salida por defecto y
+            # un target que no resuelva caería ahí, cerrando un lazo de realimentación: el
+            # audio de un parlante volvería a entrar por la entrada. Pasó, medido
+            # (`docs/research/experimentos/09-primera-escucha-con-3-go-4.md`).
+            #
+            # Así que primero los parlantes, después medio segundo de silencio para que los
+            # enlaces se formen mientras el sink virtual todavía no existe, después se
+            # comprueba dónde cayó cada uno, y solo entonces se crea la entrada.
+            rep = pila.enter_context(sonido.Reproductor(list(por_nombre.values()), args.rate))
+            for _ in range(max(1, int(0.5 * args.rate / args.bloque))):
                 rep.escribir(dict.fromkeys(por_nombre.values(), silencio))
-                continue
-            izq, der = par
-            bloques = motor.procesar(izq, der)
-            rep.escribir({por_nombre[n]: x for n, x in bloques.items()})
-            if not rep.vivos:
-                print("se desconectaron todos los parlantes", file=sys.stderr)
+            entrada = pila.enter_context(sonido.SinkVirtual(args.nombre, args.descripcion, args.rate))
+
+            # **La comprobación va acá, después de crear la entrada, y no antes.** Al
+            # aparecer, WirePlumber toma el sink virtual como salida por defecto y mueve el
+            # stream que apuntaba al default anterior. Comprobar antes no veía nada: el
+            # desvío ocurre justo en este momento.
+            time.sleep(1.0)
+            reparados = rep.reparar_ruteo()
+            if reparados:
+                for pedido, real in reparados.items():
+                    print(f"  se desvió a {real or 'ningún destino'}: {pedido} — devuelto", flush=True)
+            time.sleep(0.5)
+            perdidos = rep.mal_ruteados()
+            if perdidos:
+                print("los streams no llegaron a su parlante:", file=sys.stderr)
+                for pedido, real in perdidos.items():
+                    print(f"  {pedido} → {real or 'ningún destino'}", file=sys.stderr)
                 return 1
+            micro = None
+            if lazo is not None:
+                micro = pila.enter_context(
+                    sonido.MicrofonoContinuo(args.microfono, args.rate, segundos=args.medir + 4.0)
+                )
+                # La tajada que se le pide después es más corta que el anillo: el sobrante
+                # es holgura por si el bombeo se atrasa un bloque.
+                pila.callback(medidor.cerrar)
+
+            proxima = time.monotonic() + args.cada
+            while True:
+                par = entrada.leer(args.bloque)
+                if par is None:
+                    # Nada reproduciéndose. Se manda silencio igual, para que los streams
+                    # A2DP no se suspendan: al despertar traerían un desfase distinto del
+                    # que acaba de medir la calibración.
+                    bloques = dict.fromkeys(por_nombre, silencio)
+                else:
+                    izq, der = par
+                    bloques = motor.procesar(izq, der)
+                    if volumen != 1.0:
+                        bloques = {n: x * volumen for n, x in bloques.items()}
+                rep.escribir({por_nombre[n]: x for n, x in bloques.items()})
+                if not rep.vivos:
+                    print("se desconectaron todos los parlantes", file=sys.stderr)
+                    return 1
+
+                if lazo is None:
+                    continue
+
+                # Se guarda **exactamente lo que se mandó**, que es la referencia del lazo.
+                emision.agregar(bloques)
+                micro.bombear()
+
+                listo, resultado = medidor.recoger()
+                if listo:
+                    if isinstance(resultado, Exception):
+                        anotar("error", motivo=f"la medición falló: {resultado}")
+                    else:
+                        ajuste = lazo.proponer(resultado)
+                        anotar(
+                            "ajuste" if ajuste.aceptado else "descartado",
+                            motivo=ajuste.motivo,
+                            cambios_ms={n: round(v, 3) for n, v in ajuste.cambios_ms.items()},
+                            retardos_ms={p.nombre: round(p.retardo_ms, 3) for p in inst.parlantes},
+                        )
+
+                ahora = time.monotonic()
+                if ahora < proxima or medidor.ocupado:
+                    continue
+                proxima = ahora + args.cada
+                referencias = emision.referencias(args.medir)
+                grabado = micro.ultimos(args.medir + sincronia.VentanaDeEmision.MARGEN_DEL_MICROFONO_S)
+                if referencias is None or grabado is None:
+                    continue
+                if not emision.hay_senal(referencias):
+                    anotar("sin señal", motivo="no hay contenido sonando: no se mide")
+                    continue
+                medidor.lanzar(grabado, referencias, args.rate)
+    except KeyboardInterrupt:
+        print()
+    finally:
+        if registro is not None:
+            registro.close()
+
+    if lazo is not None:
+        deriva = lazo.deriva_ms_h()
+        if deriva:
+            print("\n  Deriva estimada (INFERIDA, del propio lazo):")
+            for nombre, valor in sorted(deriva.items()):
+                print(f"    {nombre:<24} {valor:+8.2f} ms/h")
+        if args.guardar:
+            inst.guardar(Path(args.config))
+            print(f"\n  Instalación guardada en {args.config}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -306,7 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cal = subs.add_parser("calibrate", help="mide retardo y ganancia con el micrófono")
     p_cal.add_argument("--segundos", type=float, default=SEGUNDOS_DE_CALIBRACION)
     p_cal.add_argument("--amplitud", type=float, default=0.4)
-    p_cal.add_argument("--microfono", default="alsa_input.usb-3142_fifine_Microphone-00.analog-stereo")
+    p_cal.add_argument("--microfono", default=MICROFONO_POR_DEFECTO)
 
     p_play = subs.add_parser("play", help="reproduce un WAV con el efecto envolvente")
     p_play.add_argument("archivo")
@@ -320,7 +480,34 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--bloque", type=int, default=BLOQUE)
     p_run.add_argument("--sin-ambiente", action="store_true", help="apaga la extracción")
     p_run.add_argument("--sin-decorrelar", action="store_true", help="para comparar A/B")
+    p_run.add_argument("--volumen-db", type=float, default=0.0, help="ganancia global de salida, en dB")
+    p_run.add_argument(
+        "--recalibrar",
+        action="store_true",
+        help="corrige la alineación mientras suena, midiendo contra el propio contenido",
+    )
+    p_run.add_argument("--microfono", default=MICROFONO_POR_DEFECTO, help="solo con --recalibrar")
+    p_run.add_argument("--cada", type=float, default=20.0, help="segundos entre intentos de medición")
+    p_run.add_argument(
+        "--medir",
+        type=float,
+        default=sincronia_segundos_de_medicion(),
+        help="segundos de contenido por medición; por debajo de 10 el estimador falla en silencio",
+    )
+    p_run.add_argument("--registro", help="archivo JSON Lines con lo que decide el lazo")
+    p_run.add_argument("--guardar", action="store_true", help="escribe la instalación al terminar")
     return parser
+
+
+def sincronia_segundos_de_medicion() -> float:
+    """El valor por defecto sale del módulo, para que no quede duplicado acá.
+
+    Se importa dentro de la función porque `build_parser` corre en cada invocación de la
+    CLI y el resto del paquete se importa recién cuando hace falta.
+    """
+    from aurasync.sincronia import VentanaDeEmision
+
+    return VentanaDeEmision.SEGUNDOS_DE_MEDICION
 
 
 COMANDOS = {
