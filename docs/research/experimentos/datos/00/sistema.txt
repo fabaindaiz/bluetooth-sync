@@ -1,0 +1,5 @@
+# sw_vers / uname -m — 2026-09-26 01:29
+ProductName:		macOS
+ProductVersion:		27.0
+BuildVersion:		26A428
+arm64

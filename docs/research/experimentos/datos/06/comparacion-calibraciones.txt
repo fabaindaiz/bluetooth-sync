@@ -1,0 +1,31 @@
+# comparación de estrategias de calibración
+# retardos verdaderos: {'A': 0.0, 'B': 7.302083, 'C': 23.09375} ms
+# 12 repeticiones por celda, con parlantes y sala distintos en cada una
+# el número es el error absoluto máximo entre los parlantes, en ms
+
+estrategia                 2s        5s       10s       15s       30s
+---------------------------------------------------------------------
+ruido + GCC-PHAT        0.00      0.00      0.00      0.00      0.00 
+ruido, sin PHAT         0.01      0.01      0.01      0.01      0.01 
+música + GCC-PHAT       0.00      0.00      0.00      0.00      0.00 
+ráfagas tonales         1.80      1.78      1.77      1.78      1.79 
+
+
+# dónde se rompe cada método, a 10 s
+# 'ruido' es la desviación del ruido de sala sobre el pico de la señal:
+#   0,03 = pieza callada · 0,3 = conversación · 1 = ruido como la música · 30 = absurdo
+
+estrategia              0.03      0.30      1.00      3.00     10.00     30.00 
+-------------------------------------------------------------------------------
+ruido + GCC-PHAT        0.00      0.00      0.00      0.00     16.27    169.23 
+ruido, sin PHAT         0.01      0.01      0.01      0.01    214.29     99.58 
+música + GCC-PHAT       0.00      0.00      0.00      0.02    223.84    203.14 
+ráfagas tonales         1.57     25.27     23.09     23.09     23.09     23.09 
+
+# confianza del estimador (pico sobre mediana), ruido + GCC-PHAT a 10 s
+  ruido  0.03 → confianza    532.9
+  ruido  0.30 → confianza    139.2
+  ruido  1.00 → confianza     56.3
+  ruido  3.00 → confianza     21.8
+  ruido 10.00 → confianza      6.8  ← se descartaría
+  ruido 30.00 → confianza      5.8  ← se descartaría

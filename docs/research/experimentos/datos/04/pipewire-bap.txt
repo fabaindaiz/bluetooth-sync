@@ -1,0 +1,59 @@
+# Perfiles de la tarjeta y nodos de PipeWire — 2026-09-28T17:11:22-03:00
+
+	Name: bluez_card.88_92_CC_68_91_C0
+	Driver: module-bluez5-device.c
+	Owner Module: n/a
+	Properties:
+		device.api = "bluez5"
+		device.bus = "bluetooth"
+		media.class = "Audio/Device"
+		device.name = "bluez_card.88_92_CC_68_91_C0"
+		device.description = "JBL Tune 770NC"
+		device.alias = "JBL Tune 770NC"
+		device.vendor.id = "usb:1915"
+		device.product.id = "0xeeee"
+		device.form_factor = "headset"
+		device.icon_name = "audio-headset-bluetooth"
+		device.string = "88:92:CC:68:91:C0"
+		api.bluez5.icon = "audio-headset"
+		api.bluez5.path = "/org/bluez/hci0/dev_88_92_CC_68_91_C0"
+		api.bluez5.address = "88:92:CC:68:91:C0"
+		api.bluez5.device = ""
+		api.bluez5.class = "0x244404"
+		api.bluez5.connection = "connected"
+		bluez5.profile = "off"
+		spa.object.id = "74"
+		factory.id = "15"
+		client.id = "42"
+		object.id = "76"
+		object.serial = "802"
+	Profiles:
+		off: Off (sinks: 0, sources: 0, priority: 0, available: yes)
+		bap-duplex: High Fidelity Duplex (BAP Source/Sink, codec LC3) (sinks: 1, sources: 1, priority: 513, available: yes)
+		bap-sink: High Fidelity Playback (BAP Sink, codec LC3) (sinks: 1, sources: 0, priority: 513, available: yes)
+		bap-source: High Fidelity Input (BAP Source, codec LC3) (sinks: 0, sources: 1, priority: 513, available: yes)
+	Active Profile: bap-duplex
+	Ports:
+		headset-input: Headset (type: Headset, priority: 0, latency offset: 0 usec, available)
+			Properties:
+				port.type = "headset"
+			Part of profile(s): bap-duplex, bap-source
+		headset-output: Headset (type: Headset, priority: 0, latency offset: 0 usec, not available)
+			Properties:
+				port.type = "headset"
+			Part of profile(s): bap-duplex, bap-sink
+		headset-set-output: Headset (type: Headset, priority: 0, latency offset: 0 usec, available)
+			Properties:
+				port.type = "headset"
+			Part of profile(s): bap-duplex, bap-sink
+
+=== nodos ===
+53	alsa_output.usb-3142_fifine_Microphone-00.iec958-stereo	PipeWire	s16le 2ch 48000Hz	SUSPENDED
+55	alsa_output.pci-0000_30_00.6.analog-stereo	PipeWire	s32le 2ch 48000Hz	SUSPENDED
+807	bluez_output.88_92_CC_68_91_C0.257	PipeWire	float32le 2ch 48000Hz	SUSPENDED
+53	alsa_output.usb-3142_fifine_Microphone-00.iec958-stereo.monitor	PipeWire	s16le 2ch 48000Hz	SUSPENDED
+54	alsa_input.usb-3142_fifine_Microphone-00.iec958-stereo	PipeWire	s16le 2ch 48000Hz	SUSPENDED
+55	alsa_output.pci-0000_30_00.6.analog-stereo.monitor	PipeWire	s32le 2ch 48000Hz	SUSPENDED
+56	alsa_input.pci-0000_30_00.6.analog-stereo	PipeWire	s32le 2ch 48000Hz	SUSPENDED
+803	bluez_input.88_92_CC_68_91_C0.0	PipeWire	s24-32le 1ch 32000Hz	SUSPENDED
+807	bluez_output.88_92_CC_68_91_C0.257.monitor	PipeWire	float32le 2ch 48000Hz	SUSPENDED

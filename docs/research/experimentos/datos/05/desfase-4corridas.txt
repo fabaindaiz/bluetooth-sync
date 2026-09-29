@@ -1,0 +1,174 @@
+# E6 · desfase Go 4 Black (FL, SBC) vs Charge 6 (FR, AAC)
+# 2026-09-28T17:51:15-03:00 · micrófono fifine en posición fija, a igual distancia (el usuario lo ubicó)
+# BlueZ 5.87 · PipeWire 1.6.9 · AX210 fw 202-5.26 · analizador con ventana corregida
+precisión declarada: ~1.0 ms · 6 ráfagas por caso
+
+ real (ms)   reverb     medido     error     n
+       0.0       no      +0.03     +0.03     6
+       1.0       no      +1.02     +0.02     6
+       2.5       no      +2.53     +0.03     6
+       5.0       no      +5.03     +0.03     6
+       7.3       no      +7.32     +0.02     6
+      15.0       no     +15.04     +0.04     6
+      40.0       no     +40.00     +0.00     6
+      -6.0       no      -5.98     +0.02     6
+       0.0       sí      -0.00     -0.00     6
+       4.0       sí      +4.01     +0.01     6
+      12.0       sí     +11.99     -0.01     6
+      40.0       sí     +40.01     +0.01     6
+      55.0       sí     +54.99     -0.01     6
+     120.0       sí    +120.00     +0.00     6
+
+→ OK
+
+########## corrida 1 ##########
+sink jbl_combine listo. Asignación (de combine.json):
+  bluez_output.90_F2_60_DA_66_6D.1	combine.audio.position = [ FL ]
+  bluez_output.78_66_F3_93_1D_B7.1	combine.audio.position = [ FR ]
+
+# desfase entre parlantes — 2026-09-28T17:51:19-0300
+# sink=jbl_combine  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+# FL=1000 Hz  FR=3000 Hz  10 ráfagas  ~11 s
+# precisión del método: ~1.0 ms. El micrófono TIENE que estar
+# equidistante: cada 34 cm de diferencia mete 1 ms de error.
+
+  #    FL (ms)    FR (ms)    Δt (ms)
+  1    3000.73    3059.13     +58.40
+  2    3999.21    4057.61     +58.41
+  3    4998.69    5058.92     +60.23
+  4    5998.52    6058.36     +59.84
+  5    6999.47    7060.60     +61.13
+  6    8000.23    8056.89     +56.66
+  7    8999.39    9062.01     +62.62
+  8   10000.44   10061.71     +61.26
+  9   10999.23   11062.06     +62.83
+
+(1 ráfagas descartadas por pico débil en una de las bandas)
+
+ráfagas medidas: 9 de 10
+  (si difiere mucho, revisá volumen, ruido de sala y posición del micrófono)
+Δt mediana     : +60.23 ms   ← el valor a usar
+Δt medio       : +60.15 ms
+MAD escalada   : 2.70 ms   ← dispersión robusta
+desvío estándar: 2.06 ms
+mínimo / máximo: +56.66 / +62.83 ms   (rango 6.17 ms)
+
+grabación: /tmp/tmpsfuh68e4/grabacion.wav
+
+Umbrales del roadmap (E5): <5 ms para una imagen estéreo, <20 ms para traseros.
+Lo que decide en A2DP no es el promedio sino el rango y si cambia entre
+arranques de reproducción: un desfase fijo se compensa, uno variable no.
+
+########## corrida 2 ##########
+sink jbl_combine listo. Asignación (de combine.json):
+  bluez_output.90_F2_60_DA_66_6D.1	combine.audio.position = [ FL ]
+  bluez_output.78_66_F3_93_1D_B7.1	combine.audio.position = [ FR ]
+
+# desfase entre parlantes — 2026-09-28T17:51:39-0300
+# sink=jbl_combine  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+# FL=1000 Hz  FR=3000 Hz  10 ráfagas  ~11 s
+# precisión del método: ~1.0 ms. El micrófono TIENE que estar
+# equidistante: cada 34 cm de diferencia mete 1 ms de error.
+
+  #    FL (ms)    FR (ms)    Δt (ms)
+  1    3005.77    3052.87     +47.11
+  2    4006.82    4052.99     +46.18
+  3    5008.95    5051.87     +42.92
+  4    6007.80    6055.18     +47.39
+  5    7007.02    7055.77     +48.75
+  6    8006.93    8051.10     +44.18
+  7    9007.03    9055.24     +48.21
+  8   10007.33   10056.58     +49.25
+  9   11006.06   11057.62     +51.56
+
+(1 ráfagas descartadas por pico débil en una de las bandas)
+
+ráfagas medidas: 9 de 10
+  (si difiere mucho, revisá volumen, ruido de sala y posición del micrófono)
+Δt mediana     : +47.39 ms   ← el valor a usar
+Δt medio       : +47.28 ms
+MAD escalada   : 2.03 ms   ← dispersión robusta
+desvío estándar: 2.62 ms
+mínimo / máximo: +42.92 / +51.56 ms   (rango 8.63 ms)
+
+grabación: /tmp/tmp0mfcpgxi/grabacion.wav
+
+Umbrales del roadmap (E5): <5 ms para una imagen estéreo, <20 ms para traseros.
+Lo que decide en A2DP no es el promedio sino el rango y si cambia entre
+arranques de reproducción: un desfase fijo se compensa, uno variable no.
+
+########## corrida 3 ##########
+sink jbl_combine listo. Asignación (de combine.json):
+  bluez_output.90_F2_60_DA_66_6D.1	combine.audio.position = [ FL ]
+  bluez_output.78_66_F3_93_1D_B7.1	combine.audio.position = [ FR ]
+
+# desfase entre parlantes — 2026-09-28T17:52:00-0300
+# sink=jbl_combine  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+# FL=1000 Hz  FR=3000 Hz  10 ráfagas  ~11 s
+# precisión del método: ~1.0 ms. El micrófono TIENE que estar
+# equidistante: cada 34 cm de diferencia mete 1 ms de error.
+
+  #    FL (ms)    FR (ms)    Δt (ms)
+  1    3009.38    3061.45     +52.08
+  2    4012.74    4058.08     +45.34
+  3    5014.08    5059.04     +44.96
+  4    6013.73    6062.45     +48.71
+  5    7012.62    7065.99     +53.36
+  6    8012.17    8058.58     +46.41
+  7    9011.58    9062.38     +50.80
+  8   10011.22   10064.04     +52.82
+  9   11009.77   11064.73     +54.96
+
+(1 ráfagas descartadas por pico débil en una de las bandas)
+
+ráfagas medidas: 9 de 10
+  (si difiere mucho, revisá volumen, ruido de sala y posición del micrófono)
+Δt mediana     : +50.80 ms   ← el valor a usar
+Δt medio       : +49.94 ms
+MAD escalada   : 3.81 ms   ← dispersión robusta
+desvío estándar: 3.72 ms
+mínimo / máximo: +44.96 / +54.96 ms   (rango 10.01 ms)
+
+grabación: /tmp/tmp0ah04e_d/grabacion.wav
+
+Umbrales del roadmap (E5): <5 ms para una imagen estéreo, <20 ms para traseros.
+Lo que decide en A2DP no es el promedio sino el rango y si cambia entre
+arranques de reproducción: un desfase fijo se compensa, uno variable no.
+
+########## corrida 4 ##########
+sink jbl_combine listo. Asignación (de combine.json):
+  bluez_output.90_F2_60_DA_66_6D.1	combine.audio.position = [ FL ]
+  bluez_output.78_66_F3_93_1D_B7.1	combine.audio.position = [ FR ]
+
+# desfase entre parlantes — 2026-09-28T17:52:21-0300
+# sink=jbl_combine  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+# FL=1000 Hz  FR=3000 Hz  10 ráfagas  ~11 s
+# precisión del método: ~1.0 ms. El micrófono TIENE que estar
+# equidistante: cada 34 cm de diferencia mete 1 ms de error.
+
+  #    FL (ms)    FR (ms)    Δt (ms)
+  1    3001.18    3062.89     +61.71
+  2    4003.15    4061.00     +57.84
+  3    5003.73    5059.90     +56.17
+  4    6002.57    6061.63     +59.06
+  5    7001.56    7063.44     +61.88
+  6    8001.47    8059.78     +58.31
+  7    9000.86    9064.79     +63.93
+  8   10000.45   10060.70     +60.25
+  9   11000.60   11065.40     +64.79
+
+(1 ráfagas descartadas por pico débil en una de las bandas)
+
+ráfagas medidas: 9 de 10
+  (si difiere mucho, revisá volumen, ruido de sala y posición del micrófono)
+Δt mediana     : +60.25 ms   ← el valor a usar
+Δt medio       : +60.44 ms
+MAD escalada   : 2.88 ms   ← dispersión robusta
+desvío estándar: 2.88 ms
+mínimo / máximo: +56.17 / +64.79 ms   (rango 8.62 ms)
+
+grabación: /tmp/tmpa1iut1zr/grabacion.wav
+
+Umbrales del roadmap (E5): <5 ms para una imagen estéreo, <20 ms para traseros.
+Lo que decide en A2DP no es el promedio sino el rango y si cambia entre
+arranques de reproducción: un desfase fijo se compensa, uno variable no.

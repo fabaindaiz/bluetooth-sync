@@ -1,0 +1,50 @@
+precisión declarada: ~1.0 ms · 6 ráfagas por caso
+
+ real (ms)   reverb     medido     error     n
+       0.0       no      +0.03     +0.03     6
+       1.0       no      +1.02     +0.02     6
+       2.5       no      +2.53     +0.03     6
+       5.0       no      +5.03     +0.03     6
+       7.3       no      +7.32     +0.02     6
+      15.0       no     +15.04     +0.04     6
+      40.0       no     +40.00     +0.00     6
+      -6.0       no      -5.98     +0.02     6
+       0.0       sí      -0.00     -0.00     6
+       4.0       sí      +4.01     +0.01     6
+      12.0       sí     +11.99     -0.01     6
+
+→ OK
+
+===== corrida real (posición del micrófono NO controlada) =====
+sink jbl_combine listo. Asignación (de combine.json):
+  bluez_output.90_F2_60_DA_66_6D.1	combine.audio.position = [ FL ]
+  bluez_output.78_66_F3_93_1D_B7.1	combine.audio.position = [ FR ]
+
+# desfase entre parlantes — 2026-09-28T17:26:47-0300
+# sink=jbl_combine  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+# FL=1000 Hz  FR=3000 Hz  8 ráfagas  ~9 s
+# precisión del método: ~1.0 ms. El micrófono TIENE que estar
+# equidistante: cada 34 cm de diferencia mete 1 ms de error.
+
+  #    FL (ms)    FR (ms)    Δt (ms)
+  1    3051.65    3051.05      -0.60
+  2    4053.73    4051.06      -2.68
+  3    5054.38    5051.51      -2.88
+  4    6054.91    6057.07      +2.16
+  5    7055.41    7053.98      -1.44
+  6    8054.70    8050.70      -4.00
+  7    9055.87    9053.89      -1.98
+
+(1 ráfagas descartadas por pico débil en una de las bandas)
+
+ráfagas medidas: 7 de 8
+  (si difiere mucho, revisá volumen, ruido de sala y posición del micrófono)
+Δt medio      : -1.63 ms
+desvío estándar: 1.99 ms
+mínimo / máximo: -4.00 / +2.16 ms   (rango 6.16 ms)
+
+grabación: /tmp/tmpv32um3nl/grabacion.wav
+
+Umbrales del roadmap (E5): <5 ms para una imagen estéreo, <20 ms para traseros.
+Lo que decide en A2DP no es el promedio sino el rango y si cambia entre
+arranques de reproducción: un desfase fijo se compensa, uno variable no.

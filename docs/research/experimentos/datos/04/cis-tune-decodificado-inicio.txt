@@ -1,0 +1,200 @@
+Bluetooth monitor ver 5.87
+= Note: Linux version 7.2.7-1-cachyos (x86_64)                         0.608605
+= Note: Bluetooth subsystem version 2.22                               0.608607
+= New Index: D4:AB:61:4B:98:07 (Primary,USB,hci0)               [hci0] 0.608608
+= Open Index: D4:AB:61:4B:98:07                                 [hci0] 0.608608
+= Index Info: D4:AB:61:4B:98:07 (Intel Corp.)                   [hci0] 0.608609
+@ RAW Open: bluetoothd (privileged) version 2.22       {0x0002} [hci0] 0.608610
+@ MGMT Open: bluetoothd (privileged) version 1.23             {0x0001} 0.608610
+< ACL: Handle 2048 flags 0x00 dlen 27                        #1 [hci0] 2.621911
+      ATT: Write Command (0x52) len 22
+        Handle: 0x1114
+          Data[20]:
+        03 03 01 04 03 02 02 00 05 04 03 02 02 00 02 04  ................
+        03 02 02 00                                      ....            
+> HCI Event: Number of Completed Packets (0x13) plen 5       #2 [hci0] 2.639250
+        Num handles: 1
+        Handle: 2048
+        Count: 1
+> ACL: Handle 2048 flags 0x02 dlen 18                        #3 [hci0] 2.820632
+      ATT: Handle Value Notification (0x1b) len 13
+        Handle: 0x1114
+          Data[11]:
+        03 03 01 00 00 05 00 00 02 00 00                 ...........     
+> ACL: Handle 2048 flags 0x02 dlen 16                        #4 [hci0] 2.820634
+      ATT: Handle Value Notification (0x1b) len 11
+        Handle: 0x1105
+          Data[9]:
+        01 03 00 00 04 03 02 02 00                       .........       
+> ACL: Handle 2048 flags 0x02 dlen 16                        #5 [hci0] 2.820635
+      ATT: Handle Value Notification (0x1b) len 11
+        Handle: 0x1108
+          Data[9]:
+        02 03 00 01 04 03 02 02 00                       .........       
+> ACL: Handle 2048 flags 0x02 dlen 16                        #6 [hci0] 2.820635
+      ATT: Handle Value Notification (0x1b) len 11
+        Handle: 0x1111
+          Data[9]:
+        05 03 00 00 04 03 02 02 00                       .........       
+< HCI Command: LE Create Connected I.. (0x08|0x0064) plen 9  #7 [hci0] 2.820937
+        Number of CIS: 2
+        CIS Handle: 2304
+        ACL Handle: 2048
+        CIS Handle: 2305
+        ACL Handle: 2048
+> HCI Event: Command Status (0x0f) plen 4                    #8 [hci0] 2.825086
+      LE Create Connected Isochronous Stream (0x08|0x0064) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 29                    #9 [hci0] 3.070628
+      LE Connected Isochronous Stream Established (0x19)
+        Status: Success (0x00)
+        Connection Handle: 2304
+        CIG Synchronization Delay: 4632 us (0x001218)
+        CIS Synchronization Delay: 4632 us (0x001218)
+        Central to Peripheral Latency: 4632 us (0x001218)
+        Peripheral to Central Latency: 4632 us (0x001218)
+        Central to Peripheral PHY: LE 2M (0x02)
+        Peripheral to Central PHY: LE 2M (0x02)
+        Number of Subevents: 3
+        Central to Peripheral Burst Number: 1
+        Peripheral to Central Burst Number: 1
+        Central to Peripheral Flush Timeout: 1
+        Peripheral to Central Flush Timeout: 1
+        Central to Peripheral MTU: 60
+        Peripheral to Central MTU: 60
+        ISO Interval: 7.50 msec (0x0006)
+< HCI Command: LE Setup Isochronou.. (0x08|0x006e) plen 13  #10 [hci0] 3.070735
+        Handle: 2304
+        Data Path Direction: Input (Host to Controller) (0x00)
+        Data Path: HCI (0x00)
+        Coding Format: Transparent (0x03)
+        Company Codec ID: Ericsson Technology Licensing (0)
+        Vendor Codec ID: 0
+        Controller Delay: 0 us (0x000000)
+        Codec Configuration Length: 0
+        Codec Configuration[0]:
+@ RAW Open: btmon (privileged) version 2.22                   {0x0003} 3.070750
+@ RAW Close: btmon                                            {0x0003} 3.070755
+> HCI Event: Command Complete (0x0e) plen 6                 #11 [hci0] 3.075113
+      LE Setup Isochronous Data Path (0x08|0x006e) ncmd 1
+        Status: Success (0x00)
+        Handle: 2304
+< HCI Command: LE Setup Isochronou.. (0x08|0x006e) plen 13  #12 [hci0] 3.075137
+        Handle: 2304
+        Data Path Direction: Output (Controller to Host) (0x01)
+        Data Path: HCI (0x00)
+        Coding Format: Transparent (0x03)
+        Company Codec ID: Ericsson Technology Licensing (0)
+        Vendor Codec ID: 0
+        Controller Delay: 0 us (0x000000)
+        Codec Configuration Length: 0
+        Codec Configuration[0]:
+> HCI Event: Command Complete (0x0e) plen 6                 #13 [hci0] 3.080337
+      LE Setup Isochronous Data Path (0x08|0x006e) ncmd 1
+        Status: Success (0x00)
+        Handle: 2304
+= bluetoothd: /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_sink0/fd0:..   3.080538
+= bluetoothd: /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_source0/fd..   3.080603
+< ACL: Handle 2048 flags 0x00 dlen 10                       #14 [hci0] 3.090540
+      ATT: Write Command (0x52) len 5
+        Handle: 0x1114
+          Data[3]:
+        04 01 05                                         ...             
+> HCI Event: Number of Completed Packets (0x13) plen 5      #15 [hci0] 3.119300
+        Num handles: 1
+        Handle: 2048
+        Count: 1
+> ACL: Handle 2048 flags 0x02 dlen 16                       #16 [hci0] 3.150650
+      ATT: Handle Value Notification (0x1b) len 11
+        Handle: 0x1105
+          Data[9]:
+        01 04 00 00 04 03 02 02 00                       .........       
+> ACL: Handle 2048 flags 0x02 dlen 12                       #17 [hci0] 3.179645
+      ATT: Handle Value Notification (0x1b) len 7
+        Handle: 0x1114
+          Data[5]:
+        04 01 05 00 00                                   .....           
+> ACL: Handle 2048 flags 0x02 dlen 16                       #18 [hci0] 3.179649
+      ATT: Handle Value Notification (0x1b) len 11
+        Handle: 0x1111
+          Data[9]:
+        05 04 00 00 04 03 02 02 00                       .........       
+> HCI Event: LE Meta Event (0x3e) plen 29                   #19 [hci0] 3.312397
+      LE Connected Isochronous Stream Established (0x19)
+        Status: Success (0x00)
+        Connection Handle: 2305
+        CIG Synchronization Delay: 4632 us (0x001218)
+        CIS Synchronization Delay: 3702 us (0x000e76)
+        Central to Peripheral Latency: 4632 us (0x001218)
+        Peripheral to Central Latency: 4632 us (0x001218)
+        Central to Peripheral PHY: LE 2M (0x02)
+        Peripheral to Central PHY: LE 2M (0x02)
+        Number of Subevents: 3
+        Central to Peripheral Burst Number: 1
+        Peripheral to Central Burst Number: 0
+        Central to Peripheral Flush Timeout: 1
+        Peripheral to Central Flush Timeout: 1
+        Central to Peripheral MTU: 60
+        Peripheral to Central MTU: 0
+        ISO Interval: 7.50 msec (0x0006)
+@ RAW Open: btmon (privileged) version 2.22                   {0x0003} 3.312487
+@ RAW Close: btmon                                            {0x0003} 3.312492
+< HCI Command: LE Setup Isochronou.. (0x08|0x006e) plen 13  #20 [hci0] 3.312501
+        Handle: 2305
+        Data Path Direction: Input (Host to Controller) (0x00)
+        Data Path: HCI (0x00)
+        Coding Format: Transparent (0x03)
+        Company Codec ID: Ericsson Technology Licensing (0)
+        Vendor Codec ID: 0
+        Controller Delay: 0 us (0x000000)
+        Codec Configuration Length: 0
+        Codec Configuration[0]:
+> HCI Event: Command Complete (0x0e) plen 6                 #21 [hci0] 3.316152
+      LE Setup Isochronous Data Path (0x08|0x006e) ncmd 1
+        Status: Success (0x00)
+        Handle: 2305
+= bluetoothd: /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_sink0/fd1:..   3.316320
+> LE-CIS: Handle 2304 SN 1... flags 0x02 dlen 4 slen 32768  #22 [hci0] 3.321630
+        invalid packet slen (32768+4 != 4)
+        01 00 00 80                                      ....            
+< LE-CIS: Handle 2304 SN 0 [0.. flags 0x02 dlen 64 slen 60  #23 [hci0] 3.339156
+< LE-CIS: Handle 2304 SN 1 [0.. flags 0x02 dlen 64 slen 60  #24 [hci0] 3.339163
+< LE-CIS: Handle 2305 SN 0 [0.. flags 0x02 dlen 64 slen 60  #25 [hci0] 3.339168
+< LE-CIS: Handle 2305 SN 1 [0.. flags 0x02 dlen 64 slen 60  #26 [hci0] 3.339173
+> HCI Event: Number of Completed Packets (0x13) plen 9      #27 [hci0] 3.343319
+        Num handles: 2
+        Handle: 2304 (LE-CIS) Address: 00:00:00:00:00:00 (OUI 00-00-00)
+        Count: 1
+        #23: len 64 (128 Kb/s)
+        Latency: 4 msec (4-4 msec ~4 msec)
+        Handle: 2305 (LE-CIS) Address: 00:00:00:00:00:00 (OUI 00-00-00)
+        Count: 1
+        #25: len 64 (128 Kb/s)
+        Latency: 4 msec (4-4 msec ~4 msec)
+< LE-CIS: Handle 2304 SN 2 [0.. flags 0x02 dlen 64 slen 60  #28 [hci0] 3.346650
+< LE-CIS: Handle 2305 SN 2 [0.. flags 0x02 dlen 64 slen 60  #29 [hci0] 3.346662
+> HCI Event: Number of Completed Packets (0x13) plen 9      #30 [hci0] 3.347148
+        Num handles: 2
+        Handle: 2304 (LE-CIS) Address: 00:00:00:00:00:00 (OUI 00-00-00)
+        Count: 1
+        #24: len 64 (73 Kb/s)
+        Latency: 7 msec (4-7 msec ~6 msec)
+        Handle: 2305 (LE-CIS) Address: 00:00:00:00:00:00 (OUI 00-00-00)
+        Count: 1
+        #26: len 64 (73 Kb/s)
+        Latency: 7 msec (4-7 msec ~6 msec)
+< LE-CIS: Handle 2304 SN 3 [0.. flags 0x02 dlen 64 slen 60  #31 [hci0] 3.354157
+< LE-CIS: Handle 2305 SN 3 [0.. flags 0x02 dlen 64 slen 60  #32 [hci0] 3.354169
+> HCI Event: Number of Completed Packets (0x13) plen 9      #33 [hci0] 3.355149
+        Num handles: 2
+        Handle: 2304 (LE-CIS) Address: 00:00:00:00:00:00 (OUI 00-00-00)
+        Count: 1
+        #28: len 64 (64 Kb/s)
+        Latency: 8 msec (4-8 msec ~7 msec)
+        Handle: 2305 (LE-CIS) Address: 00:00:00:00:00:00 (OUI 00-00-00)
+        Count: 1
+        #29: len 64 (64 Kb/s)
+        Latency: 8 msec (4-8 msec ~7 msec)
+> LE-CIS: Handle 2304 SN 39 [.. flags 0x02 dlen 64 slen 60  #34 [hci0] 3.356630
+< LE-CIS: Handle 2304 SN 4 [0.. flags 0x02 dlen 64 slen 60  #35 [hci0] 3.361647
+< LE-CIS: Handle 2305 SN 4 [0.. flags 0x02 dlen 64 slen 60  #36 [hci0] 3.361660

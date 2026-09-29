@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aurasync"
+dynamic = ["version"]
+description = "Un canal de audio distinto a cada parlante Bluetooth, sincronizados por Auracast (en investigación)"
+readme = "README.md"
+requires-python = ">=3.12"
+# Sin el extra `auracast` de Bumble: trae sounddevice, que en Linux exige PortAudio
+# del sistema, y la captura no pasa por ahí (docs/research/08 §2).
+# lc3py solo publica ruedas para macOS arm64 y Linux x86_64. En otra plataforma la
+# instalación falla, y eso es intencional (fail-closed).
+# Versiones exactas: Bumble no llegó a 1.0 y cambia su API entre versiones. Las
+# dependencias transitivas no se fijan (ver la nota sobre lockfiles más abajo).
+dependencies = [
+  "bumble==0.0.235",
+  "lc3py==1.1.3",
+  # numpy hace el DSP: decorrelación, extracción de ambiente y la medición de desfase
+  # con micrófono. Sin scipy a propósito: todo lo que hace falta (FFT, convolución,
+  # ajuste por mínimos cuadrados) está en numpy, y scipy es una dependencia pesada que
+  # en la Raspberry Pi de la Fase 3 costaría compilar.
+  "numpy>=2.0",
+]
+
+[project.scripts]
+aurasync = "aurasync.cli:main"
+
+[tool.hatch.version]
+path = "src/aurasync/__init__.py"
+
+# Sin lockfiles de hatch (`lock-envs`): con `locked = true`, hatch 1.18.1 aplica el
+# lock con `uv pip sync`, que desinstala todo lo que no está en el lock, incluido el
+# propio proyecto en modo desarrollo, y los tests no lo encuentran. Se reabre si una
+# versión de hatch lo corrige (docs/decisions.md, d-7c8794-c23c20).
+[tool.hatch.envs.default]
+installer = "uv"
+python = "3.12"
+
+[tool.hatch.envs.hatch-test]
+installer = "uv"
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.12"]
+
+[tool.ruff.lint.per-file-ignores]
+# OJO: esta tabla **reemplaza** la que trae hatch, no la extiende. Por eso hay que repetir
+# acá las exenciones de los tests, o aparecen 127 errores por usar `assert`.
+# PLC0415: varios tests importan adentro para poder monkeypatchear el módulo antes.
+"tests/**/*" = ["PLC0415", "PLC1901", "PLR2004", "PLR6301", "S", "TID252"]
+# La CLI imprime: es su trabajo. Y difiere los imports pesados (numpy, el DSP) a dentro de
+# cada subcomando, para que `aurasync --version` y la ayuda respondan al instante en vez de
+# cargar todo el paquete.
+"src/aurasync/cli.py" = ["T201", "PLC0415"]
+# `pw-dump`, `pw-play` y `pw-record` se invocan por nombre y no por ruta absoluta: viven en
+# PATH y su ubicación cambia entre distribuciones. Fijarla rompería la portabilidad sin
+# ganar nada, porque el usuario ya controla su propio PATH.
+"src/aurasync/sonido.py" = ["S607"]

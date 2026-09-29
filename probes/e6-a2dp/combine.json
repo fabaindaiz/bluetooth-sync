@@ -1,0 +1,13 @@
+{
+  combine.mode = sink
+  node.name = "jbl_combine"
+  node.description = "JBL multicanal (E6)"
+  combine.latency-compensate = true
+  combine.props = { audio.position = [ FL FR ] }
+  stream.rules = [
+    { matches = [ { node.name = "bluez_output.90_F2_60_DA_66_6D.1" } ]
+      actions = { create-stream = { combine.audio.position = [ FL ] audio.position = [ FL FR ] } } }
+    { matches = [ { node.name = "bluez_output.78_66_F3_93_1D_B7.1" } ]
+      actions = { create-stream = { combine.audio.position = [ FR ] audio.position = [ FL FR ] } } }
+  ]
+}

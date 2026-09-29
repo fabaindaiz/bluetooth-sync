@@ -1,0 +1,48 @@
+# system_profiler SPBluetoothDataType — 2026-09-26 01:29
+Bluetooth:
+
+      Bluetooth Controller:
+          Address: 5C:13:AC:0E:7D:17
+          State: On
+          Chipset: MTK_7932
+          Discoverable: Off
+          Firmware Version: HCI Revision:2600, LMP Subrevision:5106
+          Product ID: 0x4A45
+          Supported services: 0x1390039 < HFP AVRCP A2DP HID LEA AACP GATT SerialPort SCO >
+          Transport: PCIe
+          Vendor ID: 0x004C (Apple)
+      Not Connected:
+          BLIK-SOUL900:
+              Address: B0:F0:0C:61:78:16
+              Vendor ID: 0x05D6
+              Product ID: 0x000A
+              Firmware Version: 2.4.0
+              Minor Type: Headset
+          F's S22 Ultra:
+              Address: D0:04:B0:CD:17:1E
+              Vendor ID: 0x0075
+              Product ID: 0x0100
+              Firmware Version: 2.0.1
+              Minor Type: Mobile Phone
+          JBL Charge 6:
+              Address: 78:66:F3:93:1D:B7
+              Vendor ID: 0x0ECB
+              Product ID: 0x20E3
+              Firmware Version: 1.0.0
+              Minor Type: Speaker
+          JBL Go 4 de Fabi:
+              Address: 90:F2:60:DA:66:6D
+              Minor Type: Speaker
+          JBL Tune 770NC-LE:
+              Address: 88:92:CC:68:91:C0
+              Vendor ID: 0x0ECB
+              Product ID: 0x20B7
+              Firmware Version: 1.0.0
+              Minor Type: Headset
+          WH-CH520:
+              Address: 14:06:A7:6B:E3:F0
+              Vendor ID: 0x054C
+              Product ID: 0x0EAD
+              Firmware Version: 16.0.0
+              Minor Type: Headset
+

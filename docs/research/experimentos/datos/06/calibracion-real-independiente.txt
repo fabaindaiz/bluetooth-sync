@@ -1,0 +1,29 @@
+# calibración con parlantes — 2026-09-28T20:58:59-0300
+# sink=jbl_3  parlantes=['Go 4 Black', 'Go 4 Red', 'Go 4 Blue']
+# El valor verdadero NO se conoce: lo que se compara es la DISPERSIÓN.
+
+
+==============================================================
+RUIDO
+==============================================================
+
+-- corrida 1 de 2 --
+  reproduciendo ruido rosa decorrelado (10 s)…
+  desfase grueso: RECHAZADO (los canales no concuerdan entre sí)
+  parlante         retardo  dispersión     nivel
+  Go 4 Black          +nan         inf         —
+  Go 4 Red            +nan         inf         —
+  Go 4 Blue           +nan         inf         —
+
+-- corrida 2 de 2 --
+  reproduciendo ruido rosa decorrelado (10 s)…
+  desfase grueso: RECHAZADO (los canales no concuerdan entre sí)
+  parlante         retardo  dispersión     nivel
+  Go 4 Black          +nan         inf         —
+  Go 4 Red            +nan         inf         —
+  Go 4 Blue           +nan         inf         —
+
+  -- entre corridas (2) --
+  Go 4 Black     sin datos suficientes
+  Go 4 Red       sin datos suficientes
+  Go 4 Blue      sin datos suficientes

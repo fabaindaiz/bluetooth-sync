@@ -1,0 +1,115 @@
+# E6 · 2 Go 4, mismo modelo y mismo códec — 2026-09-28T18:34:45-03:00
+
+### corrida 1
+# desfase entre 2 parlantes — 2026-09-28T18:34:45-0300
+# sink=jbl_2  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    2350 Hz  Go 4 Black
+#   FR    3250 Hz  Go 4 Red
+# referencia: Go 4 Black · 12 ráfagas
+# precisión: ~1.25 ms con señal limpia, hasta ~2.5 ms en sala reverberante
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+nivel relativo de cada canal (1,0 = como los demás):
+  Go 4 Black      1.32
+  Go 4 Red        0.68
+
+  #       Go 4 Red
+  1          -0.51
+  2          -0.84
+  3          -0.47
+  4          -0.30
+  5          -0.39
+  6          +0.22
+  7          +0.29
+  8          -0.11
+  9          -0.71
+ 10          -0.37
+ 11          -0.09
+ 12          -0.02
+
+ráfagas medidas: 12 de 12
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red            -0.34     0.35     1.12
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmp5ayof952/grabacion.wav
+
+### corrida 2
+# desfase entre 2 parlantes — 2026-09-28T18:35:03-0300
+# sink=jbl_2  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    2350 Hz  Go 4 Black
+#   FR    3250 Hz  Go 4 Red
+# referencia: Go 4 Black · 12 ráfagas
+# precisión: ~1.25 ms con señal limpia, hasta ~2.5 ms en sala reverberante
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+nivel relativo de cada canal (1,0 = como los demás):
+  Go 4 Black      1.29
+  Go 4 Red        0.71
+
+  #       Go 4 Red
+  1          -0.08
+  2          +0.13
+  3          +0.10
+  4          +0.19
+  5          +0.30
+  6          -0.20
+  7          -0.19
+  8          +0.15
+  9          +0.24
+ 10          +0.07
+ 11          +0.20
+ 12          +0.04
+
+ráfagas medidas: 12 de 12
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red            +0.11     0.12     0.50
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmpqvomi25a/grabacion.wav
+
+### corrida 3
+# desfase entre 2 parlantes — 2026-09-28T18:35:21-0300
+# sink=jbl_2  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    2350 Hz  Go 4 Black
+#   FR    3250 Hz  Go 4 Red
+# referencia: Go 4 Black · 12 ráfagas
+# precisión: ~1.25 ms con señal limpia, hasta ~2.5 ms en sala reverberante
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+nivel relativo de cada canal (1,0 = como los demás):
+  Go 4 Black      1.28
+  Go 4 Red        0.72
+
+  #       Go 4 Red
+  1          +0.68
+  2          +0.01
+  3          -0.13
+  4          +0.31
+  5          +0.35
+  6          +0.50
+  7          +0.43
+  8          -0.07
+  9          +0.12
+ 10          +0.21
+ 11          +0.31
+ 12          -0.08
+
+ráfagas medidas: 12 de 12
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red            +0.26     0.30     0.81
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmpte4gds4u/grabacion.wav

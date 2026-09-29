@@ -1,0 +1,17 @@
+{
+  combine.mode = sink
+  node.name = "jbl_quad"
+  node.description = "JBL quad (E6/MVP)"
+  combine.latency-compensate = true
+  combine.props = { audio.position = [ FL FR RL RR ] }
+  stream.rules = [
+    { matches = [ { node.name = "bluez_output.90_F2_60_DA_66_6D.1" } ]
+      actions = { create-stream = { combine.audio.position = [ FL ] audio.position = [ FL FR ] } } }
+    { matches = [ { node.name = "bluez_output.90_F2_60_75_4A_83.1" } ]
+      actions = { create-stream = { combine.audio.position = [ FR ] audio.position = [ FL FR ] } } }
+    { matches = [ { node.name = "bluez_output.90_F2_60_E3_07_39.1" } ]
+      actions = { create-stream = { combine.audio.position = [ RL ] audio.position = [ FL FR ] } } }
+    { matches = [ { node.name = "bluez_output.78_66_F3_93_1D_B7.1" } ]
+      actions = { create-stream = { combine.audio.position = [ RR ] audio.position = [ FL FR ] } } }
+  ]
+}

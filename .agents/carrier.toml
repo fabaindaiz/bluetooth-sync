@@ -1,0 +1,16 @@
+# This repository's own fields. Carrier-owned: never listed in SHA256SUMS, never written by a release.
+carrier = "r-7c8794"
+adopted = "2026-09-25"
+upstream = ""
+adapted = [
+  "gate: the audit script is scripts/check.sh, which runs bundle.py verify and bundle.py ids with /opt/homebrew/bin/python3.14; the default python3 is 3.9",
+  "roadmap headings: the id goes after the middle dot (### Idea · i-...), because bundle.py ids only reads a heading definition there; the method template puts it first",
+  "probes: throwaway probe code lives in probes/ and its results in docs/research/experimentos/",
+]
+declined = [
+  "skills, including state-review: there is no code yet; revisit at the go/no-go decision",
+  ".claude/settings.json permissions and hooks: there is no code or generated artefact to protect yet",
+  "structural audit script beyond bundle.py: there are no structural rules over code yet",
+  "nested CLAUDE.md files per area: the repository has no areas yet",
+  "Cursor and Copilot surfaces: only Claude Code is in use",
+]

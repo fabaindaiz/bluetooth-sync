@@ -1,0 +1,24 @@
+# calibración con parlantes — 2026-09-28T20:40:18-0300
+# sink=jbl_3  parlantes=['Go 4 Black', 'Go 4 Red', 'Go 4 Blue']
+# El valor verdadero NO se conoce: lo que se compara es la DISPERSIÓN.
+
+
+==============================================================
+RUIDO
+==============================================================
+
+-- corrida 1 de 3 --
+  reproduciendo ruido rosa decorrelado (10 s)…
+  desfase grueso: 965.5 ms (confianza 12)
+Traceback (most recent call last):
+  File "/home/fadiaz/Desktop/Projects/bluetooth-sync/probes/calibracion/medir_real.py", line 206, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/fadiaz/Desktop/Projects/bluetooth-sync/probes/calibracion/medir_real.py", line 184, in main
+    medianas, dispersiones, niveles = fn(args.segundos)
+                                      ~~^^^^^^^^^^^^^^^
+  File "/home/fadiaz/Desktop/Projects/bluetooth-sync/probes/calibracion/medir_real.py", line 110, in prueba_ruido
+    niveles = medicion.niveles(micro, alineadas, medianas, SR)
+  File "/home/fadiaz/Desktop/Projects/bluetooth-sync/host/src/aurasync/medicion.py", line 168, in niveles
+    desplazamiento = round(sr * retardos_ms.get(nombre, 0.0) / 1000)
+ValueError: cannot convert float NaN to integer

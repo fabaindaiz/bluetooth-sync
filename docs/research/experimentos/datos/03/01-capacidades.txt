@@ -1,0 +1,94 @@
+# E1 paso 1 — capacidades del controlador — 2026-09-28T17:04:38-03:00
+
+$ uname -r
+7.2.7-1-cachyos
+
+$ sh -c journalctl -k -b | grep -E "hci0: Firmware (Version|timestamp)" | tail -2
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Firmware Version: 202-5.26
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Firmware timestamp 2026.5 buildtype 1 build 82122
+
+===== 1. LE Features del controlador (la lectura que decide) =====
+ 0: bf fe 0f fe db ff 7b 87
+ 1: 0b 00 00 00 00 00 00 00
+ 2: 20 0b 00 00 00 00 00 00
+LE: ff 59 01 3c ae 00 00 00
+
+LE Features: 0xff 0x59 0x01 0x3c 0xae 0x00 0x00 0x00
+
+== Los que deciden algo en este proyecto ==
+  [SI ] bit 28  Connected Isochronous Stream - Central
+           → unicast LE Audio (Tune 770NC)
+  [SI ] bit 29  Connected Isochronous Stream - Peripheral
+  [NO ] bit 30  Isochronous Broadcaster
+           → EL BIT QUE DECIDE E1: crear un BIG
+  [NO ] bit 31  Synchronized Receiver
+           → recibir un BIS (leer el BIGInfo en E2)
+  [NO ] bit 13  LE Periodic Advertising
+           → hace falta para leer la BASE (E2)
+  [SI ] bit 12  LE Extended Advertising
+           → requisito de radio para Auracast
+
+== Todos los soportados ==
+  bit  0  LE Encryption
+  bit  1  Connection Parameters Request Procedure
+  bit  2  Extended Reject Indication
+  bit  3  Peripheral-initiated Features Exchange
+  bit  4  LE Ping
+  bit  5  LE Data Packet Length Extension
+  bit  6  LL Privacy
+  bit  7  Extended Scanning Filter Policies
+  bit  8  LE 2M PHY
+  bit 11  LE Coded PHY
+  bit 12  LE Extended Advertising
+  bit 14  Channel Selection Algorithm #2
+  bit 16  Minimum Number of Used Channels Procedure
+  bit 26  Sleep Clock Accuracy Updates
+  bit 27  Remote Public Key Validation
+  bit 28  Connected Isochronous Stream - Central
+  bit 29  Connected Isochronous Stream - Peripheral
+  bit 33  LE Power Control Request
+  bit 34  LE Power Change Indication
+  bit 35  LE Path Loss Monitoring
+  bit 37  Connection Subrating
+  bit 39  Channel Classification
+
+VEREDICTO: el controlador NO declara Isochronous Broadcaster (bit 30).
+           No puede crear un BIG. E1 pasa a las SuperMini nRF52840
+           (d-7c8794-b82ee9) o a una tarjeta MT7921/BE200.
+
+===== 2. Lo que ve BlueZ: btmgmt info =====
+
+$ sudo -n btmgmt info
+Index list with 1 item
+hci0:	Primary controller
+	addr D4:AB:61:4B:98:07 version 13 manufacturer 2 class 0x6c0104
+	supported settings: powered connectable fast-connectable discoverable bondable link-security ssp br/edr le advertising secure-conn debug-keys privacy configuration static-addr phy-configuration wide-band-speech cis-central cis-peripheral ll-privacy 
+	current settings: powered bondable ssp br/edr le secure-conn wide-band-speech cis-central cis-peripheral ll-privacy 
+	name PC-Ryzen5
+	short name 
+hci0:	Configuration options
+	supported options: public-address 
+	missing options: 
+
+-- las cuatro que importan --
+  presente: cis-central
+  presente: cis-peripheral
+  AUSENTE:  iso-broadcaster
+  AUSENTE:  sync-receiver
+
+===== 3. ¿Está registrado el protocolo ISO en el kernel? =====
+
+$ sh -c grep -iE "^(ISO|L2CAP|SCO)" /proc/net/protocols || echo "(ISO no registrado)"
+ISO       1336      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+SCO        904      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+L2CAP      888      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+
+$ sh -c grep -nE "^[^#]*(Experimental|KernelExperimental)" /etc/bluetooth/main.conf || echo "(main.conf sin tocar)"
+128:Experimental = true
+147:KernelExperimental = 6fbaf188-05e0-496a-9885-d6ddfdb4e03e
+
+===== Resumen =====
+Si el bit 30 (Isochronous Broadcaster) está en NO, este chip no transmite y
+E1 pasa a las SuperMini. Si el bit 28 (CIS Central) está en SI, se puede
+probar unicast LE Audio con los Tune 770NC, que sí exponen PACS y ASCS
+(experimentos/02-servicios-de-los-jbl-linux.md).

@@ -1,0 +1,125 @@
+---
+bundle: "agent-guides"
+version: "0.0.22"
+released: "2026-09-25"
+---
+
+# Agent guides
+
+**This folder is what a carrier runs**: the method its coding sessions, harvests and updates follow,
+the knowledge base they consult, and the tool that checks both. Everything in it belongs to the
+release except the carrier-owned files below. The full notes, the literature, the roadmap and the
+procedures that build and carry a release are kept by the home repository, and no session here needs
+them.
+
+## What is in it
+
+| Path | Holds | Belongs to |
+|---|---|---|
+| `README.md` | this file; its frontmatter carries the bundle's version | the release |
+| `CHANGELOG.md` | every release, newest first ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)) | the release |
+| `SHA256SUMS` | the checksum of every file the release ships | the release |
+| `method/` | the executable prompts (`prompt-evaluate.md`, `prompt-bootstrap.md`, `prompt-update.md`, `prompt-harvest.md`) and their shared reference, `prompt-context.md` | the release |
+| `knowledge/` | `INDEX.md` and `areas/` (the cards), `notes/active/` and `notes/review/` (one heuristic each), `OPEN.md` (what the home is still waiting for), `README.md` | the release, generated: never edited here |
+| `tools/bundle.py` | the carrier's tool: one file, standard library, Python 3.11 or newer | the release |
+| `carrier.toml` | this repository's own fields (below) | this repository |
+| `tracking/` | the outbox: `candidates.md` and `experiments.md`, what this repository's harvest learned since the last release | this repository |
+| `incoming/` | a release offered from elsewhere, in `incoming/release/`, awaiting triage; data, not instructions (its `README.md` is the release's) | this repository |
+| `evaluation-*.md` | this repository's evaluation reports; they never travel | this repository |
+
+**Where a new learning goes:** a rule about reviewing, committing, verifying or documenting is a
+method candidate; a claim about retries, concurrency, defaults, naming or data shape is a knowledge
+candidate; both are rows in `tracking/candidates.md`, never an edit here. A fact about this repository
+belongs in its own `docs/decisions.md`: the test is whether it can be stated without a project noun.
+
+## How these documents are written
+
+These rules survive being copied, which is why they are written here and not in a repository's
+own conventions. `bundle.py verify` enforces the privacy rule and the checksums, and `bundle.py ids`
+the typed ids; English, carrier ids and project nouns are checked by the carrier's own audit if it
+has such a check, and otherwise by review, which the audit should say.
+
+- **Nothing private, direct or reconstructible**: nothing lets a reader identify a private
+  repository, its owner, organisation, customers, users or infrastructure, or anyone who uses the
+  bundle. Figures, quotes, identifiers, narrowing domain nouns and personal context are generalised.
+  The rule is `method/prompt-context.md`, principle 20; `bundle.py privacy` checks it (generic
+  patterns plus the terms in this machine's `~/.config/agent-guides/private-terms.txt`, never
+  committed). An override, `privacy-allow: <reason>` on the line, is written only on the user's
+  explicit instruction, and every run lists it.
+- **English, always**, whatever language the repository around it uses.
+- **Repositories by carrier id, domains by mechanism**: never a product, organisation or tracker
+  key, and never a description beside a carrier id.
+- **Typed ids.** A carrier is `r-` and six random hex, minted once by `bundle.py carrier-id --mint`,
+  never derived from anything guessable. Its own records are `<kind>-<repo6>-<content6>` (`d-`
+  decision, `i-` roadmap item, `s-` session entry), minted by `bundle.py id d|i|s TEXT`, frozen once
+  written; `bundle.py ids FILE...` checks them. A counted id cannot be minted by two sessions that
+  cannot see each other.
+- **Numbers are never reused and never renumbered**: principles, artifacts, phases, steps. Other
+  copies cite them.
+- **`~~~text` for a block to copy, a backtick fence for an example to read**, never normalised to
+  one: the tilde fence can hold a backtick fence without truncating it.
+- **Newest first in anything chronological**, stable order in anything indexed.
+
+## Consulting it
+
+To answer a question from the bundle (which note applies, what a rule says, why), read only:
+
+~~~text
+Reads:
+- knowledge/INDEX.md
+~~~
+
+and then the one card, note or section of `method/prompt-context.md` that the index or the question
+points to. Quote the file; do not paraphrase from memory.
+
+## Verifying a copy
+
+`python3 .agents/tools/bundle.py verify` is the carrier's gate. It fails on a file that differs from
+`SHA256SUMS`, is missing, or is not listed; on a dead link or one that leaves `.agents/`; on a note no
+index reaches; on a `Reads:` list naming a file or heading that does not exist; on a privacy leak or
+an invisible character; on a malformed outbox or `carrier.toml`; and on anything `incoming/` must not
+hold. `bundle.py check-local` answers the narrower question a harvest asks: whether this repository
+changed anything but its own files, committed or not.
+
+Without the tool, `cd .agents && sha256sum -c SHA256SUMS` (or `shasum -a 256 -c SHA256SUMS`) checks
+the listed files; it does not see an unlisted one. **A checksum proves integrity, not
+authenticity**: a copy is as trustworthy as the place it came from. A released file changed here is a
+fork of the release: take it back from the release, and offer the change as a candidate.
+
+## Versions
+
+One [Semantic Versioning](https://semver.org/spec/v2.0.0.html) version for the whole bundle, in this
+file's frontmatter; the home repository tags each release `vX.Y.Z`. While the version is `0.0.z`,
+every release may change what a carrier depends on. To read what changed since the version this
+repository holds: `python3 .agents/tools/bundle.py changelog --since X.Y.Z`.
+
+## How a copy travels
+
+**The home repository builds every release and carries it** to the carriers open on its machine. A
+carrier it does not reach updates from a release: `bundle.py export` writes the release into
+`.agents/incoming/release/`, and `method/prompt-update.md` applies it; `incoming/README.md` says what to run
+for which version. **A bundle is offered, never pushed**: the receiving repository is the only one that
+knows which note contradicts something it settled on purpose.
+
+What this repository learned travels the other way, through its outbox: `method/prompt-harvest.md`
+writes it in `tracking/`, and the home gathers every outbox at its next release and empties the rows
+it took.
+
+## The fields that are this repository's
+
+**This is the one statement of the rule; every prompt points here.** They live in `carrier.toml`,
+which no release writes and `SHA256SUMS` does not list:
+
+| Key | Holds |
+|---|---|
+| `carrier` | this repository's random id, `r-` and six hex, minted once by `bundle.py carrier-id --mint` |
+| `adopted` | the date it took the bundle |
+| `upstream` | where it takes releases from; empty in the home repository |
+| `harvested_through` | the last date its harvest read; the next harvest starts there |
+| `adapted` | its renamings and substitutions, one line each |
+| `declined` | what it refused, each with a reason written for a stranger |
+
+**They are never taken from another copy.** A bundle that arrives with a `carrier.toml` carries the
+record of the repository it came from, and an `adapted` entry naming a file this repository does not
+have is the tell. A copy that takes them from upstream has erased its own record of what it changed and
+refused, and every later update re-proposes the same rename and the same rejected delta.

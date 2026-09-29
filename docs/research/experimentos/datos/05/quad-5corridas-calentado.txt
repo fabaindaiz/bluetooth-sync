@@ -1,0 +1,167 @@
+# E6 · 4 parlantes en quad, CON calentamiento de 12 s — 2026-09-28T18:24:44-03:00
+# FL=Go 4 Black(SBC) FR=Go 4 Red(SBC) RL=Go 4 Blue(SBC) RR=Charge 6(AAC)
+# 5 reproducciones separadas, 12 ráfagas cada una
+
+--- calentamiento ---
+ok
+
+########## corrida 1 ##########
+# desfase entre 4 parlantes — 2026-09-28T18:24:56-0300
+# sink=jbl_quad  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    1000 Hz  Go 4 Black
+#   FR    2000 Hz  Go 4 Red
+#   RL    3000 Hz  Go 4 Blue
+#   RR    4000 Hz  Charge 6
+# referencia: Go 4 Black · 12 ráfagas · precisión ~1.25 ms
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+  #       Go 4 Red      Go 4 Blue       Charge 6
+  1          +0.10          +0.00          +0.00
+  2          -2.31          +5.53         +78.53
+  3        -214.68        -216.32         +77.29
+  4         -91.56        -104.70         +40.24
+
+ráfagas medidas: 4 de 12 (11 descartadas)
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red           -46.94    67.95   214.78
+Go 4 Blue          -52.35    81.71   221.85
+Charge 6           +58.76    28.39    78.53
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmpofa5tnn5/grabacion.wav
+
+########## corrida 2 ##########
+# desfase entre 4 parlantes — 2026-09-28T18:25:14-0300
+# sink=jbl_quad  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    1000 Hz  Go 4 Black
+#   FR    2000 Hz  Go 4 Red
+#   RL    3000 Hz  Go 4 Blue
+#   RR    4000 Hz  Charge 6
+# referencia: Go 4 Black · 12 ráfagas · precisión ~1.25 ms
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+  #       Go 4 Red      Go 4 Blue       Charge 6
+  1          -1.42          -1.89        +169.96
+  2         +59.54         +59.60          +2.26
+  3         -58.01         -60.82          +0.97
+  4        -235.91        -236.03         +97.06
+  5          -9.35        +133.19         +93.39
+  6          -0.85          -0.54          -2.62
+  7         +23.60         +15.61          +0.00
+  8          -7.89          -6.15          +3.11
+  9         +16.21         +12.67          +0.00
+ 10         -10.74        +233.04         +95.73
+ 11          -3.38         +31.59         +66.89
+
+ráfagas medidas: 11 de 12 (7 descartadas)
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red            -3.38    10.91   295.45
+Go 4 Blue          +12.67    28.05   469.07
+Charge 6            +3.11     8.49   172.58
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmph7hdovwx/grabacion.wav
+
+########## corrida 3 ##########
+# desfase entre 4 parlantes — 2026-09-28T18:25:32-0300
+# sink=jbl_quad  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    1000 Hz  Go 4 Black
+#   FR    2000 Hz  Go 4 Red
+#   RL    3000 Hz  Go 4 Blue
+#   RR    4000 Hz  Charge 6
+# referencia: Go 4 Black · 12 ráfagas · precisión ~1.25 ms
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+  #       Go 4 Red      Go 4 Blue       Charge 6
+  1        -207.24        -207.24         +92.96
+  2        -108.10        -114.02          +1.86
+  3         -13.49          -1.84        +321.23
+  4        -233.75        -235.59        -218.15
+  5         -58.17        -108.94        -109.43
+  6        -132.46        -142.69         +94.78
+  7          +3.43         +12.24         +12.63
+  8          -4.69         -47.46         +95.15
+  9          -4.61         -33.43         +75.14
+ 10        -287.14        -286.45        -279.38
+ 11         +31.73         +25.32         +42.41
+ 12         -27.42         -27.28         +92.75
+ 13        -252.86        -268.38          +0.27
+ 14         -58.20         -58.65         -58.23
+
+ráfagas medidas: 14 de 12 (6 descartadas)
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red           -58.19    85.39   318.86
+Go 4 Blue          -83.80   104.42   311.77
+Charge 6           +27.52    98.37   600.60
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmplegr9hqi/grabacion.wav
+
+########## corrida 4 ##########
+# desfase entre 4 parlantes — 2026-09-28T18:25:50-0300
+# sink=jbl_quad  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    1000 Hz  Go 4 Black
+#   FR    2000 Hz  Go 4 Red
+#   RL    3000 Hz  Go 4 Blue
+#   RR    4000 Hz  Charge 6
+# referencia: Go 4 Black · 12 ráfagas · precisión ~1.25 ms
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+  #       Go 4 Red      Go 4 Blue       Charge 6
+  1         -38.14         -45.18          +7.35
+  2        -213.66        -222.38        -199.88
+  3          -3.51         +34.70         +55.23
+  4          -1.16         -11.41        +258.60
+  5          -8.80         -39.35         +68.46
+
+ráfagas medidas: 5 de 12 (9 descartadas)
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red            -8.80    11.33   212.50
+Go 4 Blue          -39.35    41.43   257.09
+Charge 6           +55.23    70.98   458.48
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmpww_pvyht/grabacion.wav
+
+########## corrida 5 ##########
+# desfase entre 4 parlantes — 2026-09-28T18:26:08-0300
+# sink=jbl_quad  mic=alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+#   FL    1000 Hz  Go 4 Black
+#   FR    2000 Hz  Go 4 Red
+#   RL    3000 Hz  Go 4 Blue
+#   RR    4000 Hz  Charge 6
+# referencia: Go 4 Black · 12 ráfagas · precisión ~1.25 ms
+# El micrófono NO se mueve entre corridas: así el término de distancia es
+# constante y no afecta la variación entre reproducciones.
+
+  #       Go 4 Red      Go 4 Blue       Charge 6
+  1        -201.26        -200.90         +79.29
+  2         -10.36         -53.33         +80.42
+
+ráfagas medidas: 2 de 12 (12 descartadas)
+
+parlante          mediana      MAD    rango   (ms, respecto de Go 4 Black)
+Go 4 Red          -105.81   141.51   190.90
+Go 4 Blue         -127.12   109.40   147.58
+Charge 6           +79.86     0.84     1.13
+
+El valor absoluto lleva la distancia del parlante al micrófono (1 ms por 34 cm).
+La MAD y el rango no: son la dispersión real dentro de la reproducción.
+
+grabación: /tmp/tmp8zkkjfqx/grabacion.wav

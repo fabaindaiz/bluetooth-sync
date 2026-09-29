@@ -1,0 +1,265 @@
+# GATT y anuncios de los JBL — 2026-09-28T17:18:17-03:00
+# BlueZ 5.87 · kernel 7.2.7-1-cachyos · Intel AX210 fw 202-5.26
+
+===== objetos D-Bus por dispositivo (busctl tree org.bluez) =====
+      ├─ /org/bluez/hci0/dev_78_66_F3_93_1D_B7
+      │ ├─ /org/bluez/hci0/dev_78_66_F3_93_1D_B7/sep1
+      │ └─ /org/bluez/hci0/dev_78_66_F3_93_1D_B7/sep2
+      │   └─ /org/bluez/hci0/dev_78_66_F3_93_1D_B7/sep2/fd4
+      ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_sink0
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_sink0/fd0
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_sink0/fd1
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_source0
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/pac_source0/fd2
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0001
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0001/char0002
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0001/char0004
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0001/char0006
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0001/char0008
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011/char0012
+      │ │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011/char0012/desc0014
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011/char0012/desc0015
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011/char0016
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011/char0018
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0011/char001a
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0031
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0031/char0032
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0031/char0032/desc0034
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0051
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0051/char0052
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0051/char0054
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0051/char0054/desc0056
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char0061
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char0063
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char0065
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char0067
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char0069
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char006b
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char006d
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char006f
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0060/char0071
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0101
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0103
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0103/desc0105
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0106
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0106/desc0108
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0109
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char010b
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char010b/desc010d
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char010e
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0110
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0110/desc0112
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0113
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0100/char0113/desc0115
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0230
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0230/char0231
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service0230/char0231/desc0233
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1104
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1104/desc1106
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1107
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1107/desc1109
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char110a
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char110a/desc110c
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char110d
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char110d/desc110f
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1110
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1110/desc1112
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1113
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1103/char1113/desc1115
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1201
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1201/desc1203
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1204
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1204/desc1206
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1207
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1207/desc1209
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char120a
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char120a/desc120c
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char120d
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char120d/desc120f
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1210
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1200/char1210/desc1212
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1301
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1301/char1305
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1301/char1305/desc1307
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1301/char1308
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1301/char130a
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service1301/char130a/desc130c
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char2002
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char2002/desc2004
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char2005
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char2005/desc2007
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char2008
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char200a
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service2001/char200a/desc200c
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char3002
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char3002/desc3004
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char3005
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char3005/desc3007
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char3008
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char300a
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service3001/char300a/desc300c
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char4002
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char4002/desc4004
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char4005
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char4007
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char4009
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char4009/desc400b
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char400c
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char400e
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service4001/char400e/desc4010
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service5001
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service5001/char5003
+      │ │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service5001/char5003/desc5005
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service6001
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service6001/char6002
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service6001/char6004
+      │ │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service6001/char6006
+      │ │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service6001/char6006/desc6008
+      │ │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service6001/char6009
+      │ ├─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/service7001
+      │ └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/servicea301
+      │   └─ /org/bluez/hci0/dev_88_92_CC_68_91_C0/servicea301/chara302
+      ├─ /org/bluez/hci0/dev_90_F2_60_75_4A_83
+      ├─ /org/bluez/hci0/dev_90_F2_60_DA_66_6D
+      │ ├─ /org/bluez/hci0/dev_90_F2_60_DA_66_6D/avrcp
+      │ │ └─ /org/bluez/hci0/dev_90_F2_60_DA_66_6D/avrcp/player0
+      │ └─ /org/bluez/hci0/dev_90_F2_60_DA_66_6D/sep2
+      │   └─ /org/bluez/hci0/dev_90_F2_60_DA_66_6D/sep2/fd3
+
+===== anuncios y UUID =====
+78:66:F3:93:1D:B7  'JBL Charge 6'             AddressType=public Connected=True Paired=True RSSI=-
+88:92:CC:68:91:C0  'JBL Tune 770NC'           AddressType=public Connected=True Paired=True RSSI=-
+   ServiceData       0000184e-0000-1000-8000-00805f9b34fb: 00ff0fff0f00
+   ServiceData       00001855-0000-1000-8000-00805f9b34fb: 2a00
+   ServiceData       00001853-0000-1000-8000-00805f9b34fb: 00
+   ServiceData       0000fe2c-0000-1000-8000-00805f9b34fb: 10408088101521c6ef4677d32dae
+   ServiceData       0000fddf-0000-1000-8000-00805f9b34fb: b720050000ed0e2357
+   UUID LE Audio: ['00001843-0000-1000-8000-00805f9b34fb', '00001844-0000-1000-8000-00805f9b34fb', '00001845-0000-1000-8000-00805f9b34fb', '00001846-0000-1000-8000-00805f9b34fb', '0000184d-0000-1000-8000-00805f9b34fb', '0000184e-0000-1000-8000-00805f9b34fb', '00001850-0000-1000-8000-00805f9b34fb', '00001853-0000-1000-8000-00805f9b34fb', '00001855-0000-1000-8000-00805f9b34fb']
+90:F2:60:75:4A:83  'JBL Go 4 Red'             AddressType=public Connected=False Paired=True RSSI=-
+90:F2:60:DA:66:6D  'JBL Go 4 Black'           AddressType=public Connected=True Paired=True RSSI=-
+
+===== info por dispositivo =====
+--- 90:F2:60:DA:66:6D
+Device 90:F2:60:DA:66:6D (public)
+	Name: JBL Go 4 Black
+	Alias: JBL Go 4 Black
+	Class: 0x00240414 (2360340)
+	Icon: audio-card
+	Paired: yes
+	Bonded: yes
+	Trusted: yes
+	Blocked: no
+	Connected: yes
+	LegacyPairing: no
+	CablePairing: no
+	UUID: Headset                   (00001108-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: Advanced Audio Distribu.. (0000110d-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: Handsfree                 (0000111e-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (65786365-6c70-6f69-6e74-2e04ffe42001)
+	UUID: Vendor specific           (df21fe2c-2515-4fdb-8886-f12c4d67927c)
+	BREDR.Paired: yes
+	BREDR.Bonded: yes
+	BREDR.Connected: yes
+--- 78:66:F3:93:1D:B7
+Device 78:66:F3:93:1D:B7 (public)
+	Name: JBL Charge 6
+	Alias: JBL Charge 6
+	Class: 0x00240414 (2360340)
+	Icon: audio-card
+	Paired: yes
+	Bonded: yes
+	Trusted: yes
+	Blocked: no
+	Connected: yes
+	LegacyPairing: no
+	CablePairing: no
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (65786365-6c70-6f69-6e74-2e04ffe32014)
+	UUID: Vendor specific           (df21fe2c-2515-4fdb-8886-f12c4d67927c)
+	Modalias: bluetooth:v0ECBp20E3d0100
+	BREDR.Paired: yes
+	BREDR.Bonded: yes
+	BREDR.Connected: yes
+--- 88:92:CC:68:91:C0
+Device 88:92:CC:68:91:C0 (public)
+	Name: JBL Tune 770NC
+	Alias: JBL Tune 770NC
+	Class: 0x00244404 (2376708)
+	Icon: audio-headset
+	Paired: yes
+	Bonded: yes
+	Trusted: yes
+	Blocked: no
+	Connected: yes
+	LegacyPairing: no
+	CablePairing: no
+	UUID: Vendor specific           (00000000-0000-0000-0099-aabbccddeeff)
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: Handsfree                 (0000111e-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)
+	UUID: Battery Service           (0000180f-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Input Control       (00001843-0000-1000-8000-00805f9b34fb)
+	UUID: Volume Control            (00001844-0000-1000-8000-00805f9b34fb)
+	UUID: Volume Offset Control     (00001845-0000-1000-8000-00805f9b34fb)
+	UUID: Coordinated Set Identif.. (00001846-0000-1000-8000-00805f9b34fb)
+	UUID: Microphone Control        (0000184d-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Stream Control      (0000184e-0000-1000-8000-00805f9b34fb)
+	UUID: Published Audio Capabil.. (00001850-0000-1000-8000-00805f9b34fb)
+	UUID: Common Audio              (00001853-0000-1000-8000-00805f9b34fb)
+	UUID: Telephony and Media Audio (00001855-0000-1000-8000-00805f9b34fb)
+	UUID: Google                    (0000fe2c-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (0000ff01-0000-1000-8000-00805f9b34ff)
+	UUID: Vendor specific           (15190001-12f4-c226-88ed-2ac5579f2a85)
+	UUID: Vendor specific           (5052494d-2dab-0341-6972-6f6861424c45)
+	UUID: Vendor specific           (81c2e72a-0591-443e-a1ff-05f988593351)
+	UUID: Vendor specific           (df21fe2c-2515-4fdb-8886-f12c4d67927c)
+	UUID: Vendor specific           (f8d1fbe4-7966-4334-8024-ff96c9330e15)
+	UUID: Vendor specific           (fa349b5f-8050-0030-0010-00001bbb231d)
+	Modalias: usb:v1915pEEEEd0001
+	ServiceData.0000184e-0000-1000-8000-00805f9b34fb:
+  00 ff 0f ff 0f 00                                ......          
+	ServiceData.00001855-0000-1000-8000-00805f9b34fb:
+  2a 00                                            *.              
+	ServiceData.00001853-0000-1000-8000-00805f9b34fb:
+  00                                               .               
+	ServiceData.0000fe2c-0000-1000-8000-00805f9b34fb:
+  10 40 80 88 10 15 21 c6 ef 46 77 d3 2d ae        .@....!..Fw.-.  
+	ServiceData.0000fddf-0000-1000-8000-00805f9b34fb:
+  b7 20 05 00 00 ed 0e 23 57                       . .....#W       
+	AdvertisingFlags:
+  00                                               .               
+	AdvertisingData.Key: 0x2e (46)
+	AdvertisingData.Value:
+  49 02 a0 22 79 4b                                I.."yK          
+	Sets.Key: /org/bluez/hci0/set_48020603c09168cc9288c09168cc9288
+	Sets.Value.Rank: 0x01 (1)
+	PreferredBearer: last-used
+	Battery Percentage: 0x3c (60)
+	BREDR.Paired: yes
+	BREDR.Bonded: yes
+	BREDR.Connected: no
+	LE.Paired: yes
+	LE.Bonded: yes
+	LE.Connected: yes

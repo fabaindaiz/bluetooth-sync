@@ -1,0 +1,204 @@
+# Inventario Linux — 2026-09-28T16:39:54-03:00
+
+===== Sistema =====
+
+$ uname -a
+Linux PC-Ryzen5 7.2.7-1-cachyos #1 SMP PREEMPT_DYNAMIC Thu, 24 Sep 2026 10:44:37 +0000 x86_64 GNU/Linux
+
+$ sh -c cat /etc/os-release
+NAME="CachyOS Linux"
+PRETTY_NAME="CachyOS"
+ID=cachyos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;23;147;209"
+HOME_URL="https://cachyos.org/"
+DOCUMENTATION_URL="https://wiki.cachyos.org/"
+SUPPORT_URL="https://discuss.cachyos.org/"
+BUG_REPORT_URL="https://github.com/cachyos"
+PRIVACY_POLICY_URL="https://terms.archlinux.org/docs/privacy-policy/"
+LOGO=cachyos
+
+===== Chip Bluetooth =====
+
+$ sh -c lspci -nn | grep -iE "network|wireless|bluetooth"
+26:00.0 Network controller [0280]: Intel Corporation Wi-Fi 6E(802.11ax) AX210/AX1675* 2x2 [Typhoon Peak] [8086:2725] (rev 1a)
+
+$ sh -c lsusb | grep -i bluetooth
+Bus 001 Device 002: ID 8087:0032 Intel Corp. AX210 Bluetooth
+
+$ sh -c journalctl -k -b | grep -iE "bluetooth|btusb" 
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: Core ver 2.22
+sep 28 16:20:11 PC-Ryzen5 kernel: NET: Registered PF_BLUETOOTH protocol family
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: HCI device and connection manager initialized
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: HCI socket layer initialized
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: L2CAP socket layer initialized
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: SCO socket layer initialized
+sep 28 16:20:11 PC-Ryzen5 kernel: usbcore: registered new interface driver btusb
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Device revision is 0
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Secure boot is enabled
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: OTP lock is enabled
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: API lock is enabled
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Debug lock is disabled
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Minimum firmware build 1 week 10 2014
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Bootloader timestamp 2019.40 buildtype 1 build 38
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: No support for _PRR ACPI method
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Found device firmware: intel/ibt-0041-0041.sfi
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Boot Address: 0x100800
+sep 28 16:20:11 PC-Ryzen5 kernel: Bluetooth: hci0: Firmware Version: 202-5.26
+sep 28 16:20:12 PC-Ryzen5 kernel: Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+sep 28 16:20:12 PC-Ryzen5 kernel: Bluetooth: BNEP filters: protocol multicast
+sep 28 16:20:12 PC-Ryzen5 kernel: Bluetooth: BNEP socket layer initialized
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Waiting for firmware download to complete
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Firmware loaded in 2885266 usecs
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Waiting for device to boot
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Device booted in 27603 usecs
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Found Intel DDC parameters: intel/ibt-0041-0041.ddc
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Applying Intel DDC parameters completed
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Firmware timestamp 2026.5 buildtype 1 build 82122
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Firmware SHA1: 0x2925677d
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Fseq status: Success (0x00)
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Fseq executed: 00.00.02.41
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: hci0: Fseq BT Top: 00.00.02.41
+sep 28 16:20:14 PC-Ryzen5 kernel: Bluetooth: MGMT ver 1.23
+sep 28 16:20:18 PC-Ryzen5 kernel: Bluetooth: RFCOMM TTY layer initialized
+sep 28 16:20:18 PC-Ryzen5 kernel: Bluetooth: RFCOMM socket layer initialized
+sep 28 16:20:18 PC-Ryzen5 kernel: Bluetooth: RFCOMM ver 1.11
+
+===== Topología: por dónde entra cada función de la tarjeta combo =====
+
+$ sh -c for d in /sys/bus/usb/devices/*/; do
+  [ -f "$d/idVendor" ] || continue
+  case "$(cat "$d/idVendor"):$(cat "$d/idProduct")" in
+    8087:*) echo "BT  $(cat "$d/idVendor"):$(cat "$d/idProduct")  $(cat "$d/speed") Mbps  $(readlink -f "$d")" ;;
+  esac
+done
+BT  8087:0032  12 Mbps  /sys/devices/pci0000:00/0000:00:02.1/0000:16:00.0/usb1/1-6
+
+$ sh -c readlink -f /sys/class/bluetooth/hci0
+/sys/devices/pci0000:00/0000:00:02.1/0000:16:00.0/usb1/1-6/1-6:1.0/bluetooth/hci0
+
+$ sh -c lspci -nn -s 16:00.0; lspci -nn -s 26:00.0
+16:00.0 USB controller [0c03]: Advanced Micro Devices, Inc. [AMD] 400 Series Chipset USB 3.1 xHCI Compliant Host Controller [1022:43d5] (rev 01)
+26:00.0 Network controller [0280]: Intel Corporation Wi-Fi 6E(802.11ax) AX210/AX1675* 2x2 [Typhoon Peak] [8086:2725] (rev 1a)
+
+===== Versiones del stack =====
+
+$ bluetoothctl --version
+bluetoothctl: 5.87
+
+$ pipewire --version
+pipewire
+Compiled with libpipewire 1.6.9
+Linked with libpipewire 1.6.9
+
+$ wireplumber --version
+wireplumber
+Compiled with libwireplumber 0.5.17
+Linked with libwireplumber 0.5.17
+
+$ sh -c pacman -Q bluez bluez-utils bluez-libs liblc3 pipewire wireplumber 2>/dev/null
+bluez 5.87-2.1
+bluez-utils 5.87-2.1
+bluez-libs 5.87-2.1
+liblc3 1.1.3-2.1
+pipewire 1:1.6.9-1
+wireplumber 0.5.17-2.1
+
+===== Kernel: opciones de Bluetooth y socket ISO =====
+
+$ sh -c zgrep -E "^CONFIG_BT(_LE|_ISO|=)" /proc/config.gz
+CONFIG_BT=m
+CONFIG_BT_LE=y
+CONFIG_BT_LE_L2CAP_ECRED=y
+CONFIG_BT_LEDS=y
+
+$ sh -c grep -c iso /proc/net/protocols
+0
+(rc=1)
+
+$ sh -c cat /proc/net/protocols | grep -iE "^(ISO|L2CAP|SCO)"
+SCO        904      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+L2CAP      888      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+
+===== Controlador según BlueZ (sin root) =====
+
+$ bluetoothctl show
+Controller D4:AB:61:4B:98:07 (public)
+	Manufacturer: 0x0002 (2)
+	Version: 0x0d (13)
+	Name: PC-Ryzen5
+	Alias: PC-Ryzen5
+	Class: 0x006c0104 (7078148)
+	Powered: yes
+	PowerState: on
+	Discoverable: no
+	DiscoverableTimeout: 0x000000b4 (180)
+	Pairable: yes
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: Handsfree Audio Gateway   (0000111f-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Source              (0000110a-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (03b80e5a-ede8-4b33-a751-6ce34ec4c700)
+	UUID: Handsfree                 (0000111e-0000-1000-8000-00805f9b34fb)
+	Modalias: usb:v1D6Bp0246d0557
+	Discovering: no
+	Roles: central
+	Roles: peripheral
+Advertising Features:
+	ActiveInstances: 0x00 (0)
+	SupportedInstances: 0x0c (12)
+	SupportedIncludes: tx-power
+	SupportedIncludes: appearance
+	SupportedIncludes: local-name
+	SupportedSecondaryChannels: 1M
+	SupportedSecondaryChannels: 2M
+	SupportedSecondaryChannels: Coded
+	SupportedCapabilities.MinTxPower: 0xffffffde (-34)
+	SupportedCapabilities.MaxTxPower: 0x0007 (7)
+	SupportedCapabilities.MaxAdvLen: 0xfb (251)
+	SupportedCapabilities.MaxScnRspLen: 0xfb (251)
+	SupportedFeatures: CanSetTxPower
+	SupportedFeatures: HardwareOffload
+
+$ sh -c grep -nE "^[^#]*(Experimental|KernelExperimental)" /etc/bluetooth/main.conf
+(rc=1)
+
+===== Capacidades mgmt (necesita root) — la lectura que decide E1 =====
+
+(sin root: `btmgmt info` no se pudo leer)
+
+===== PipeWire: BAP y LC3 =====
+
+$ sh -c ls /usr/lib/spa-0.2/bluez5/
+libspa-bluez5.so
+libspa-codec-bluez5-aac.so
+libspa-codec-bluez5-aptx.so
+libspa-codec-bluez5-faststream.so
+libspa-codec-bluez5-g722.so
+libspa-codec-bluez5-hfp-cvsd.so
+libspa-codec-bluez5-hfp-lc3-a127.so
+libspa-codec-bluez5-hfp-lc3-swb.so
+libspa-codec-bluez5-hfp-msbc.so
+libspa-codec-bluez5-lc3.so
+libspa-codec-bluez5-ldac.so
+libspa-codec-bluez5-opus-g.so
+libspa-codec-bluez5-opus.so
+libspa-codec-bluez5-sbc.so
+
+$ sh -c ldconfig -p | grep -i lc3
+	liblc3.so.1 (libc6,x86-64) => /usr/lib/liblc3.so.1
+	liblc3.so (libc6,x86-64) => /usr/lib/liblc3.so
+
+===== Python y hatch =====
+
+$ python3 --version
+Python 3.14.7
+
+$ sh -c hatch --version
+Hatch, version 1.16.2
