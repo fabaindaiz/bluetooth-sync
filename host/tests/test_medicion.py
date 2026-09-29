@@ -309,3 +309,49 @@ def test_la_alineacion_gruesa_acepta_cuando_concuerdan():
     grueso = medicion.alineacion_gruesa(micro, refs, SR)
     assert grueso is not None
     assert grueso == pytest.approx(verdad_ms, abs=1.0)
+
+
+# -- retardos negativos ---------------------------------------------------------------
+# `calibrar` mide contra referencias ya corridas por el desfase grueso, que es la mediana
+# entre parlantes: el que llega antes que la mediana queda con residuo negativo. Cuando
+# `gcc_phat` no podía representarlo, agarraba un pico espurio y erraba por decenas de ms.
+
+
+def test_gcc_phat_encuentra_un_retardo_negativo_si_se_le_permite():
+    rng = np.random.default_rng(3)
+    ref = rng.standard_normal(SR)
+    # El micrófono "adelantado": la referencia aparece 5 ms después de donde está la señal.
+    micro = np.concatenate([ref[int(SR * 0.005) :], np.zeros(int(SR * 0.005))])
+    e = medicion.gcc_phat(micro, ref, SR, retardo_maximo_ms=50.0, retardo_minimo_ms=-50.0)
+    assert e.retardo_ms == pytest.approx(-5.0, abs=0.05)
+
+
+def test_por_defecto_gcc_phat_sigue_sin_buscar_negativos():
+    """Contra la referencia cruda el retardo no puede ser negativo, y el cero filtra picos."""
+    rng = np.random.default_rng(4)
+    ref = rng.standard_normal(SR)
+    micro = np.concatenate([ref[int(SR * 0.005) :], np.zeros(int(SR * 0.005))])
+    assert medicion.gcc_phat(micro, ref, SR, retardo_maximo_ms=50.0).retardo_ms >= 0.0
+
+
+def test_calibrar_acierta_con_el_parlante_que_llega_antes_que_la_mediana():
+    """El caso que destapó el error: tres parlantes a 0, 3,4 y 7,1 ms.
+
+    El desfase grueso da 3,4 —la mediana—, así que el de 0 ms queda con residuo negativo.
+    Antes salía **47 ms** fuera de lugar, y con dispersión entre ventanas de 0,00: el
+    estimador no se daba cuenta.
+    """
+    rng = np.random.default_rng(5)
+    reales = {"a": 0.0, "b": 3.4, "c": 7.1}
+    refs = {n: rng.standard_normal(SR * 3) * 0.3 for n in reales}
+    micro = np.zeros(SR * 3 + SR // 5)
+    for nombre, ref in refs.items():
+        d = round(SR * reales[nombre] / 1000)
+        micro[d : d + len(ref)] += ref
+
+    cal = medicion.calibrar(micro, refs, SR)
+    assert cal is not None
+    assert cal.confiable
+    ultimo = max(reales.values())
+    for nombre, real in reales.items():
+        assert cal.retardos_ms[nombre] == pytest.approx(ultimo - real, abs=0.05)

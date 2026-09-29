@@ -157,3 +157,78 @@ def test_rechaza_canales_de_distinto_largo():
     m = motor.Motor(_instalacion(), SR)
     with pytest.raises(ValueError, match="largos distintos"):
         m.procesar(np.zeros(100), np.zeros(200))
+
+
+# -- actualización de parámetros mientras suena -------------------------------------
+# Es lo que necesita el lazo de recalibración: corregir el retardo de un parlante sin
+# parar, porque cada arranque de A2DP trae un desfase distinto.
+
+
+def _un_parlante(**extra) -> Instalacion:
+    return Instalacion(parlantes=[Parlante("solo", "s0", **extra)], retardo_traseros_ms=0.0)
+
+
+def test_actualizar_mueve_el_retardo_gradualmente():
+    inst = _un_parlante()
+    m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False, velocidad_retardo_ms_s=1.0)
+    assert m.retardos_actuales_ms()["solo"] == pytest.approx(0.0)
+
+    inst.parlantes[0].retardo_ms = 10.0
+    m.actualizar()
+    m.procesar(np.zeros(SR), np.zeros(SR))  # un segundo
+    # A 1 ms/s, en un segundo avanza 1 ms: ni se queda quieto ni salta a los 10.
+    assert m.retardos_actuales_ms()["solo"] == pytest.approx(1.0, abs=0.01)
+
+
+def test_el_retardo_llega_al_objetivo_si_se_le_da_tiempo():
+    inst = _un_parlante()
+    m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False, velocidad_retardo_ms_s=5.0)
+    inst.parlantes[0].retardo_ms = 4.0
+    m.actualizar()
+    for _ in range(2):
+        m.procesar(np.zeros(SR), np.zeros(SR))
+    assert m.retardos_actuales_ms()["solo"] == pytest.approx(4.0, abs=1e-6)
+
+
+def test_cambiar_el_retardo_en_caliente_no_produce_un_clic():
+    """El mismo criterio que en la línea de retardo, pero por la cadena completa."""
+    hz, bloque = 220.0, 2048
+    inst = _un_parlante(retardo_ms=5.0)
+    m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False, velocidad_retardo_ms_s=0.5)
+
+    salidas, fase = [], 0
+    for i in range(8):
+        if i == 4:
+            inst.parlantes[0].retardo_ms = 9.0
+            m.actualizar()
+        x = np.sin(2 * np.pi * hz * (fase + np.arange(bloque)) / SR)
+        salidas.append(m.procesar(x, x)["solo"])
+        fase += bloque
+    y = np.concatenate(salidas)
+
+    natural = np.abs(np.diff(np.sin(2 * np.pi * hz * np.arange(bloque) / SR))).max()
+    assert np.abs(np.diff(y)).max() <= natural * 1.1
+
+
+def test_la_ganancia_cambia_con_rampa_y_no_de_golpe():
+    inst = _un_parlante()
+    m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False, velocidad_ganancia_db_s=6.0)
+    x = np.ones(SR // 10)  # 100 ms
+    m.procesar(x, x)
+
+    inst.parlantes[0].ganancia_db = -20.0
+    salida = m.procesar(x, x)["solo"]
+    # En 100 ms, a 6 dB/s, solo puede bajar 0,6 dB: ni se queda ni llega a -20.
+    assert salida[-1] == pytest.approx(10 ** (-0.6 / 20), rel=0.02)
+    # Y dentro del bloque el cambio es continuo, no un escalón.
+    assert np.abs(np.diff(salida)).max() < 0.01
+
+
+def test_la_ganancia_llega_a_su_objetivo():
+    inst = _un_parlante()
+    m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False, velocidad_ganancia_db_s=60.0)
+    inst.parlantes[0].ganancia_db = -6.0206
+    x = np.ones(SR // 2)
+    for _ in range(3):
+        salida = m.procesar(x, x)["solo"]
+    assert salida[-1] == pytest.approx(0.5, rel=0.01)

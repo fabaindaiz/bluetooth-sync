@@ -123,3 +123,76 @@ def test_el_sink_virtual_arma_bien_su_nombre_y_descripcion():
     sv = sonido.SinkVirtual("mi_salida", "Mi salida")
     assert sv.nombre == "mi_salida"
     assert sv.descripcion == "Mi salida"
+
+
+# -- el anillo del micrófono continuo ---------------------------------------------------
+# Se prueba el anillo, no la captura: la captura necesita PipeWire y un micrófono, y su
+# resultado va a `docs/research/experimentos/`. Se entra por `agregar`, que es la costura
+# que permite probar la lógica sin proceso.
+
+
+def test_el_anillo_del_microfono_devuelve_lo_ultimo_en_orden():
+    m = sonido.MicrofonoContinuo("mic", sr=10, segundos=1.0)  # 10 muestras
+    m.agregar(np.arange(1.0, 8.0))  # 7 muestras: no completó la vuelta
+    assert not m.lleno
+    assert m.ultimos(0.5) is not None
+    assert np.allclose(m.ultimos(0.5), [3, 4, 5, 6, 7])
+
+
+def test_el_anillo_del_microfono_sigue_en_orden_despues_de_dar_la_vuelta():
+    m = sonido.MicrofonoContinuo("mic", sr=10, segundos=1.0)
+    m.agregar(np.arange(1.0, 9.0))  # 8
+    m.agregar(np.arange(9.0, 16.0))  # 7 más: pasa el límite y sobreescribe
+    assert m.lleno
+    assert np.allclose(m.ultimos(1.0), np.arange(6.0, 16.0))
+
+
+def test_el_anillo_del_microfono_no_devuelve_mas_de_lo_que_tiene():
+    m = sonido.MicrofonoContinuo("mic", sr=10, segundos=1.0)
+    m.agregar(np.arange(1.0, 4.0))
+    assert m.ultimos(1.0) is None  # todavía no hay un segundo
+    assert m.ultimos(2.0) is None  # y nunca va a haber dos: el anillo mide uno
+
+
+def test_un_bloque_mas_grande_que_el_anillo_conserva_la_cola():
+    m = sonido.MicrofonoContinuo("mic", sr=10, segundos=1.0)
+    m.agregar(np.arange(1.0, 26.0))  # 25 muestras en un anillo de 10
+    assert np.allclose(m.ultimos(1.0), np.arange(16.0, 26.0))
+
+
+def test_bombear_sin_proceso_no_rompe():
+    m = sonido.MicrofonoContinuo("mic")
+    assert m.bombear() == 0
+    m.cerrar()
+
+
+# -- las entradas de audio, que `doctor` muestra ---------------------------------------
+
+
+def _fuente(nombre: str, descripcion: str = "") -> dict:
+    return {
+        "info": {
+            "props": {"node.name": nombre, "node.description": descripcion or nombre, "media.class": "Audio/Source"}
+        }
+    }
+
+
+def test_reconoce_las_fuentes_de_audio():
+    objetos = [
+        _fuente("alsa_input.usb-3142_fifine_Microphone-00.analog-stereo", "fifine Microphone"),
+        _nodo("bluez_output.90_F2_60_DA_66_6D.1", "JBL Go 4"),
+        {"info": {"props": {"node.name": "x", "media.class": "Audio/Sink"}}},
+    ]
+    assert [e.descripcion for e in sonido.leer_entradas(objetos)] == ["fifine Microphone"]
+
+
+def test_distingue_un_monitor_de_un_microfono():
+    """Un monitor devuelve la señal sin pasar por el aire: no mide nada de la sala."""
+    entradas = sonido.leer_entradas(
+        [_fuente("alsa_output.pci-0000_30_00.6.analog-stereo.monitor"), _fuente("alsa_input.usb-3142_fifine")]
+    )
+    # `leer_entradas` ordena por nombre de nodo, así que el input queda primero.
+    assert {e.nodo: e.es_monitor for e in entradas} == {
+        "alsa_input.usb-3142_fifine": False,
+        "alsa_output.pci-0000_30_00.6.analog-stereo.monitor": True,
+    }

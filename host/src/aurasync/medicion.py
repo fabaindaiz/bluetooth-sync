@@ -22,7 +22,7 @@ eso `gcc_phat` acepta limitar la banda.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -86,6 +86,7 @@ def gcc_phat(
     sr: int = SR,
     retardo_maximo_ms: float = 500.0,
     banda_hz: tuple[float, float] | None = (200.0, 8000.0),
+    retardo_minimo_ms: float = 0.0,
 ) -> Estimacion:
     """Retardo de `referencia` dentro de `micro`, por correlación cruzada generalizada.
 
@@ -95,6 +96,21 @@ def gcc_phat(
 
     `banda_hz` acota dónde se confía en la señal. Fuera de esa banda, PHAT estaría
     amplificando ruido: los parlantes chicos no dan graves y el micrófono no da agudos.
+
+    **`retardo_minimo_ms` y por qué no siempre es cero.** Contra la referencia cruda el
+    retardo no puede ser negativo —el micrófono no capta antes de que se emita—, y dejarlo
+    en cero es un buen filtro contra picos espurios. Pero la medición fina de `calibrar` no
+    corre contra la referencia cruda sino contra una **ya corrida por el desfase grueso**,
+    que es la *mediana* entre parlantes: el que llega antes que la mediana queda con residuo
+    negativo, y con el mínimo en cero eso no se puede representar.
+
+    Esto era un error, y fue el síntoma: en simulación sin ruido ni reverberación, con tres
+    parlantes a 0, 3,4 y 7,1 ms, el desfase grueso daba 3,4 y el parlante de 0 ms salía
+    **47 ms** fuera de lugar, con dispersión entre ventanas de 0,00 —o sea que el estimador
+    ni siquiera lo notaba—. Con mediciones reales no se había visto porque los residuos eran
+    de décimas de ms y el pico, ensanchado por la sala, seguía asomando en el lado positivo.
+    Se destapó al simular desfases grandes, que es justo el caso en que la calibración hace
+    falta.
     """
     n = 1
     while n < len(micro) + len(referencia):
@@ -112,15 +128,17 @@ def gcc_phat(
     cruzado = np.divide(cruzado, magnitud, out=np.zeros_like(cruzado), where=magnitud > _PISO_ESPECTRO)
 
     correlacion = np.fft.irfft(cruzado, n=n)
-    maximo = int(sr * retardo_maximo_ms / 1000)
-    # Solo retardos positivos: la referencia siempre llega después de haberse emitido.
-    ventana = np.abs(correlacion[: min(maximo, len(correlacion))])
+    maximo = min(int(sr * retardo_maximo_ms / 1000), len(correlacion) - 1)
+    # La correlación es circular: los retardos negativos viven al final del arreglo. Se los
+    # trae adelante para poder buscar el pico en un tramo contiguo.
+    minimo = max(int(sr * retardo_minimo_ms / 1000), -(len(correlacion) - 1 - maximo))
+    ventana = np.abs(np.concatenate([correlacion[len(correlacion) + minimo :], correlacion[: maximo + 1]]))
     if ventana.size == 0 or ventana.max() <= 0:
         return Estimacion(0.0, 0.0)
 
     pico = int(np.argmax(ventana))
     confianza = float(ventana.max() / (np.median(ventana) + 1e-12))
-    return Estimacion(_interpolar(ventana, pico) / sr * 1000.0, confianza)
+    return Estimacion((_interpolar(ventana, pico) + minimo) / sr * 1000.0, confianza)
 
 
 def _interpolar(v: np.ndarray, i: int) -> float:
@@ -401,6 +419,19 @@ class Calibracion:
     estabilidad_ms: dict[str, float]
     """Cuánto se movió cada estimación al cambiar el tamaño de ventana de análisis."""
     desfase_grueso_ms: float
+    niveles: dict[str, float] = field(default_factory=dict)
+    """Cuánto aportó cada parlante al micrófono, tal como se midió acá dentro.
+
+    **Se devuelve para que nadie los vuelva a calcular afuera**, que es lo que pasaba y daba
+    un resultado sin sentido: `niveles` necesita las referencias ya corridas por el desfase
+    grueso, y quien lo llamara de nuevo con las referencias crudas buscaba el pico un segundo
+    antes de donde está —el buffer de A2DP— y obtenía casi cero para todos. El síntoma fue
+    que la primera calibración real marcó *"no suena"* dos parlantes que sonaban bien y cuyos
+    retardos habían salido estables a 0,00 ms."""
+
+    def sin_sonar(self, fraccion: float = 0.1) -> list[str]:
+        """Los parlantes que no llegaron al micrófono, según los niveles de esta medición."""
+        return parlantes_sin_sonar(self.niveles, fraccion)
 
     @property
     def confiable(self) -> bool:
@@ -438,7 +469,11 @@ def calibrar(micro: np.ndarray, referencias: dict[str, np.ndarray], sr: int = SR
 
     por_ventana: dict[str, list[float]] = {n: [] for n in referencias}
     for ventana in VENTANAS_DE_CONTROL:
-        medianas, _ = calibrar_por_ventanas(micro, alineadas, sr, ventana_s=ventana, retardo_maximo_ms=120.0)
+        # El mínimo negativo es imprescindible acá: contra referencias ya corridas por el
+        # desfase grueso, el parlante que llega antes que la mediana tiene residuo negativo.
+        medianas, _ = calibrar_por_ventanas(
+            micro, alineadas, sr, ventana_s=ventana, retardo_maximo_ms=120.0, retardo_minimo_ms=-120.0
+        )
         primera = next(iter(referencias))
         base = medianas.get(primera, float("nan"))
         if not np.isfinite(base):
@@ -470,6 +505,7 @@ def calibrar(micro: np.ndarray, referencias: dict[str, np.ndarray], sr: int = SR
         ganancias_db=ganancias_para_igualar(niveles_medidos),
         estabilidad_ms=estabilidad,
         desfase_grueso_ms=grueso,
+        niveles=niveles_medidos,
     )
 
 
