@@ -31,9 +31,29 @@ desde una **referencia de tiempo común**, con un canal asignado a cada parlante
 **La pregunta abierta que decide todo:** si los JBL reproducen solo el BIS que les
 corresponde.
 
+**Lo que cambió el 2026-09-28, midiendo en el equipo Linux:**
+- **E1 está cerrado y salió negativo.** El Intel AX210 no puede transmitir Auracast,
+  y tampoco puede sincronizarse a anuncios periódicos, así que **ni E2 ni E3–E5 se
+  pueden hacer con el hardware que hay hoy**. Todo eso espera a las SuperMini
+  (d-7c8794-b82ee9). **No hay que comprar nada nuevo:** la compra que ya se hizo es
+  justo la que resuelve esto.
+- **Primera evidencia sobre la pregunta que decide todo, y va en contra:** los
+  parlantes no muestran ni BASS ni PACS, los dos únicos mecanismos que el estándar
+  define para asignar un canal
+  ([experimentos/02](research/experimentos/02-servicios-de-los-jbl-linux.md)). No es
+  concluyente: falta conectarse por LE con los parlantes encendidos.
+- **Lo que sí se puede hacer hoy en este equipo:** E8 (unicast con los Tune 770NC,
+  que valida el camino ISO entero), el GATT de los parlantes, E6, E7 y P1.
+
 **Hardware disponible:**
 - 3× JBL Go 4 y 1× JBL Charge 6.
-- Un equipo con Linux cuyo chip Bluetooth aún no está identificado (i-7c8794-d9c834).
+- Un PC con Linux (`PC-Ryzen5`, CachyOS, kernel 7.2.7) con un **Intel AX210**
+  (2026-09-28, [experimentos/00-inventario-linux.md](research/experimentos/00-inventario-linux.md)).
+  La tarjeta va por PCIe, pero **su Bluetooth es USB**. PipeWire 1.6.9 ya trae el
+  códec LC3. **No sirve para transmitir Auracast: MEDIDO** (E1,
+  [experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md)). Le faltan los
+  bits 30, 31 y 13, así que no transmite ni escucha un BIS. **Sí sirve para unicast
+  (CIS central y peripheral) y para A2DP**, o sea para E8, E6, E7 y P1.
 - Este Mac (Apple Silicon, macOS 27), que es la estación de trabajo.
 - **5× SuperMini nRF52840** (clon de nice!nano), compradas el 2026-09-26 y aún no
   recibidas (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
@@ -59,16 +79,27 @@ primero A con el chip interno; si no sirve, la combinada o C.
 - **Esqueleto** del paquete `aurasync` (i-7c8794-f7f5b2), permitido por
   d-7c8794-f619c4.
 
-**Siguiente paso:** Fase 1, empezando por el inventario del equipo Linux, y en
-paralelo P1 en el Mac y P3(a) en la Pico 2 W.
+**Siguiente paso (2026-09-28, después de cerrar E1):** todo lo que no necesita
+transmitir, en este orden por relación información/costo:
+1. **GATT de los parlantes encendidos**
+   ([probes/02-gatt-jbl/enumerar.sh](../probes/02-gatt-jbl/enumerar.sh)): cierra
+   `experimentos/02` y adelanta E4. No necesita root.
+2. **E8**, unicast con los Tune 770NC: valida el camino ISO de Linux.
+3. **P1** (captura sin huella), **E6** (línea base A2DP) y **E7** (USB-C del
+   Charge 6), que no necesitan LE Audio.
+
+Lo que espera a las SuperMini: E2, E3, E4 y E5.
 
 Etapas del plan:
 
 ```
-Fase 1 · Factibilidad (probes, sin producto)            ← estamos por empezar
-  inventario → E1 → E2 → E3 → E4 ──► decisión de seguir o no
-                             └─ E6, E7 en paralelo (línea base y USB-C)
-  probes de software en paralelo: P1 (captura) · P2 (drift, tras E1) · P3 (Pico 2 W: LC3 y USB)
+Fase 1 · Factibilidad (probes, sin producto)            ← en curso
+  inventario ✔ → E1 ✔ (NO: el AX210 no transmite)
+                   └─ E2 → E3 → E4 ──► decisión de seguir o no
+                      ↑ los cuatro esperan las SuperMini nRF52840
+  se puede hacer ya, sin transmitir:
+    GATT de los parlantes · E8 (unicast, Tune 770NC) · E6 (A2DP) · E7 (USB-C) · P1 (captura)
+  después de E1: P2 (drift) · P3 (Pico 2 W: LC3 y USB)
 Fase 2 · MVP, camino A (Auracast, un BIG)                ← solo si E4 sale bien
   herramienta CLI: M0 → M1 emisor → M2 captura → M3 upmix → M4 calibración → M5 BASS
 Camino alternativo · A2DP                                ← solo si E4 sale mal
@@ -88,13 +119,20 @@ equipo, las versiones (kernel, BlueZ, PipeWire, Bumble y el firmware de los JBL)
 la fecha.
 
 ### Inventario del equipo Linux · i-7c8794-d9c834
-**Estado:** A medias.
+**Estado: Hecho (2026-09-28).** Las dos mitades están medidas.
 - **Hecha la mitad del Mac** (2026-09-26, en
   [experimentos/00-inventario-mac.md](research/experimentos/00-inventario-mac.md)):
   el chip es un MediaTek MT7932 por PCIe con LE Audio, pero Bumble no puede llegar
   a él en macOS. El Mac sirve como estación de desarrollo para A y C.
-- **Falta el equipo Linux.** Es la mitad que decide si A se prueba sin comprar
-  nada.
+- **Hecho el equipo Linux** (2026-09-28, en
+  [experimentos/00-inventario-linux.md](research/experimentos/00-inventario-linux.md)):
+  Intel AX210 (firmware BT `202-5.26`), BlueZ 5.87, PipeWire 1.6.9 con LC3,
+  WirePlumber 0.5.17, kernel 7.2.7. `scripts/check.sh` pasa acá con
+  `PY=python3.14`, lo que cierra el pendiente de i-7c8794-f7f5b2.
+- **Capacidades del controlador: medidas** y con su propio experimento, porque el
+  resultado cierra E1 ([experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md)).
+  La regla de sudo acotada está instalada y se quita con
+  `sudo rm /etc/sudoers.d/bluetooth-sync`.
 
 **Qué es:** identificar qué tiene el equipo, con estos comandos:
 - el chip Bluetooth: `lspci -nn`, `lsusb`, `dmesg | grep -i bluetooth`;
@@ -113,7 +151,36 @@ la fecha.
 **El resultado va a:** `docs/research/experimentos/00-inventario-linux.md`.
 
 ### E1: ¿el controlador puede transmitir por ISO? · i-7c8794-3f730a
-**Estado:** Planificado. Depende del inventario.
+**Estado: Hecho (2026-09-28). La respuesta es NO**, medida por dos caminos
+independientes: los bits de LE Features (`ff 59 01 3c ae 00 00 00`) y la lista de
+Supported Commands en una traza de `btmon`. El resultado está en
+[experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md).
+
+**Qué salió, en una línea:** el Intel AX210 con firmware `202-5.26` **no tiene los
+bits 30 (Isochronous Broadcaster), 31 (Synchronized Receiver) ni 13 (LE Periodic
+Advertising)**. Sí tiene **CIS central y peripheral**, y el socket ISO del kernel
+funciona con la bandera experimental.
+
+**Las tres consecuencias:**
+1. **No se puede transmitir desde este equipo.** E3, E4 y E5 quedan bloqueados hasta
+   que lleguen las SuperMini (d-7c8794-b82ee9). No hay que comprar nada más: la
+   opción que ya se compró es justo la que resuelve esto.
+2. **Peor de lo esperado:** sin el bit 13 ni el 31, este adaptador **tampoco puede
+   leer la BASE ni el BIGInfo** de los propios JBL. E2 también necesita otro
+   controlador; se creía que al menos podría escuchar.
+3. **Mejor de lo esperado:** con CIS se puede probar **LE Audio unicast** contra los
+   JBL Tune 770NC, que exponen PACS y ASCS. Eso valida el camino ISO completo
+   (bandera, socket, LC3, PipeWire) sin depender de transmitir. Nueva entrada: E8.
+
+**Trampa que costó un intento:** en `main.conf`, un comentario al final de la línea
+de `KernelExperimental` se lee como parte del UUID y BlueZ descarta el valor sin
+avisar (`Invalid KernelExperimental UUID`). El servicio arranca igual.
+
+**La lectura definitiva no es `btmgmt info`, son los bits de LE Features** del
+controlador, en `/sys/kernel/debug/bluetooth/hci0/features`: el bit 30 es
+Isochronous Broadcaster (crear un BIG), el 31 Synchronized Receiver (recibir un BIS,
+lo que falta de E2), el 28 CIS Central (unicast) y el 13 Periodic Advertising (leer
+la BASE). `btmgmt info` muestra lo que ve BlueZ, que es una capa más arriba.
 
 **Qué es:** confirmar que el controlador puede crear un BIG, con dos intentos:
 - activar `Experimental` y `KernelExperimental` en BlueZ y crear un BIG de prueba;
@@ -165,8 +232,12 @@ opciones 2 y 3 quedan abiertas si esta no alcanza.
   `auracast-hackers-toolkit`). **Con las SuperMini (d-7c8794-b82ee9) se puede hacer desde el
   Mac** con `bumble-auracast scan` sobre `serial:`, apenas lleguen.
 
-Depende de E1, o por lo menos de un controlador que pueda escanear anuncios
-periódicos.
+**Bloqueado por hardware (2026-09-28).** E1 midió que el **AX210 no tiene LE
+Periodic Advertising (bit 13) ni Synchronized Receiver (bit 31)**, así que este
+equipo **no puede sincronizarse a anuncios periódicos**: ni la BASE ni el BIGInfo se
+pueden leer acá. Falta un controlador que sí pueda — las SuperMini
+(d-7c8794-b82ee9). Lo que sí se puede hacer en Linux es lo mismo que se hizo en el
+Mac: ver los datos de fabricante con un `scan le`, que funciona sin root.
 
 **Qué es:** escanear un Go 4 en modo transmisor, un par estéreo de Go 4 y el Charge
 6, para anotar:
@@ -216,7 +287,14 @@ se ponen desde BlueZ, porque PipeWire no tiene una clave para eso.
 - **(c)** agregando un BIS mono aparte, como recomienda el SIG.
 
 **Con qué choca:** si hay que escribir `BIS_Sync`, los JBL tienen que exponer
-BASS. No se sabe si lo hacen.
+BASS. **Primera evidencia propia, y va en contra** (2026-09-28,
+[experimentos/02](research/experimentos/02-servicios-de-los-jbl-linux.md)): en la
+caché de BlueZ del equipo Linux, los 2 Go 4 y el Charge 6 **no exponen ni BASS
+(0x184F) ni PACS (0x1850)**, mientras que los JBL Tune 770NC del usuario sí exponen
+PACS, ASCS, VCS, MICS, CAS y TMAS. Si se confirma conectando por LE, **las dos vías
+del estándar quedan cerradas** y la asignación de canal dependería de algo
+propietario de JBL. No es concluyente todavía: es caché de un emparejamiento BR/EDR,
+con los parlantes apagados.
 
 **Qué la favorece:** el estándar define los dos mecanismos
 ([02](research/02-le-audio-auracast-linux.md) §4), y Bumble ya transmite 2 BIS
@@ -245,16 +323,256 @@ límite de BIS que tenga el controlador.
 - **qué desfase entre parlantes se considera tolerable** (propuesta: menos de 5 ms
   para una imagen estéreo y menos de 20 ms para los traseros).
 
+### E8: LE Audio unicast con los Tune 770NC, para validar el camino ISO · i-7c8794-ef8389
+**Estado: A medias (2026-09-28). Salió bien:** el camino ISO de Linux funciona de
+punta a punta ([experimentos/04](research/experimentos/04-e8-unicast-le-audio-tune-770nc.md)).
+Los Tune se conectan en perfil **`bap-duplex` con LC3**, se estableció un CIG con **2
+CIS** (uno por canal), ISO interval **7,5 ms**, PHY **LE 2M**, SDU **60 B**, CIG
+Synchronization Delay **4632 µs**, y salieron 2214 paquetes `LE-CIS`.
+
+**Tres cosas que esto cambia:**
+1. **Baja el riesgo del plan.** Cuando lleguen las SuperMini, lo único nuevo a
+   depurar es el emisor: socket ISO, LC3 en software, QoS y el reparto en streams ya
+   están medidos funcionando.
+2. **Mueve la disputa de PipeWire.** `pw-dump` muestra **un nodo interno por stream
+   isócrono**, agrupados en un *device set* y expuestos con un **combine-sink** como
+   un solo sink estéreo. El mecanismo de repartir un estéreo en varios streams de un
+   mismo grupo existe y funciona (medido en unicast; con `bis[]` sigue INFERIDO
+   hasta E5).
+3. **Aviso para E3 y E5:** con estos audífonos se negociaron **32 kHz y 7,5 ms**, no
+   los `48_2_x` que asume [02](research/02-le-audio-auracast-linux.md) §4. **La
+   negociación la manda el receptor**, así que lo que acepten los JBL puede no ser lo
+   que el proyecto planea pedir.
+
+**Qué falta para cerrarlo:** confirmar de oído que suena; capturar desde el cambio de
+perfil para tener **frecuencia de muestreo y presentation delay medidos** y no
+inferidos; y leer el firmware de los Tune.
+
+**De dónde salió:** de dos mediciones del 2026-09-28 que se cruzan. E1 midió que el
+AX210 **sí** tiene CIS central y que el socket ISO del kernel funciona
+([experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md)), y al revisar los
+emparejamientos apareció que los **JBL Tune 770NC exponen PACS, ASCS, VCS, MICS, CAS
+y TMAS** ([experimentos/02](research/experimentos/02-servicios-de-los-jbl-linux.md)).
+O sea que hay un emisor y un receptor unicast en la misma casa.
+
+**Qué es:** reproducir audio por LE Audio unicast (CIS) desde este equipo a los Tune
+770NC, con PipeWire en rol `bap_sink`… en realidad el PC es el cliente: `bluez5.roles`
+tiene que incluir el rol de central. Se mide:
+- si se establece el CIS y se oye audio;
+- qué presentation delay se negocia, y con qué preset LC3;
+- si `Transparent` como único códec del controlador sobre LE CIS confirma que LC3 va
+  en software (E1 §5 lo dice: INFERIDO hasta verlo funcionar).
+
+**Qué valida, y por eso vale la pena:** el camino ISO completo en Linux —bandera
+experimental, socket ISO, liblc3, PipeWire y la negociación de QoS— **sin depender de
+poder transmitir**. Cuando lleguen las SuperMini, lo único nuevo a depurar sería el
+emisor, no el stack entero. Es el único experimento LE Audio que este equipo puede
+hacer hoy.
+
+**Con qué choca:** con nada del sistema más de lo que ya cambió E1
+(`Experimental = true` y el socket ISO en `main.conf`, que se revierte con
+`probes/e1-iso/03-revertir.sh`).
+
+**Qué no responde:** nada sobre los parlantes ni sobre la asignación de canal. Los
+Tune son audífonos unicast; no hay BIG ni BIS acá.
+
+**Qué hay que decidir antes:** nada.
+
+**El resultado va a:** `docs/research/experimentos/`.
+
+### Calibración rápida y recalibración continua · i-7c8794-33c4bd
+**Estado: diseñada y probada en simulación (2026-09-28); falta validarla con parlantes.**
+En [experimentos/06](research/experimentos/06-calibracion-rapida-y-recalibracion.md).
+
+**Qué es:** medir retardo y ganancia de cada parlante correlacionando lo que capta el
+micrófono contra **la señal que se le mandó a cada uno**. Funciona porque el sistema ya le
+manda a cada parlante una versión **decorrelacionada** del material, que es lo que produce
+el envolvimiento: **la condición del efecto es la condición de la medición**.
+
+**Lo que dice la comparación** (SIMULADO, retardos conocidos, 12 repeticiones por celda):
+- **2 segundos de ruido de banda ancha ya dan toda la precisión.** Alargar no mejora.
+- Es unas **170 veces más preciso que las ráfagas tonales** (0,00 contra 1,70 ms), porque
+  la resolución va como 1/ancho de banda.
+- **Con música anda igual de bien que con ruido**, que es lo que habilita recalibrar
+  **sin interrumpir la reproducción ni reiniciar los streams**.
+- Las ráfagas tonales **se rompen con ruido de conversación de fondo**; el ruido de banda
+  ancha aguanta ruido de sala tan fuerte como la señal.
+
+**La receta:** 10 segundos en **5 ventanas de 2**. Los 8 segundos extra no compran
+exactitud: compran una **mediana** (descarta una ventana arruinada) y una **dispersión**,
+que es la única forma de saber si la calibración sirvió sin conocer la respuesta correcta.
+
+**Es autónoma:** no hay que escribir ningún número ni medir distancias con cinta. El retardo
+medido ya incluye el vuelo por el aire, y el nivel sale de la misma grabación por mínimos
+cuadrados. Las coordenadas quedan opcionales, solo para DBAP.
+
+**Qué falta:** validarla acústicamente, y con eso revisar el umbral de confianza, que hoy
+está calibrado en simulación.
+
+### E9: el par estéreo de JBL como relé · i-7c8794-3e42af
+**Estado:** Planificado. **Se puede hacer ya**, con lo que hay. Idea del usuario
+(2026-09-28).
+
+**Qué es:** poner dos Go 4 en par estéreo de JBL, conectar el **primario** al PC por
+A2DP, mandarle un tono distinto por canal y medir con el micrófono: (a) qué parlante
+reproduce qué canal, y (b) el desfase **dentro** del par.
+
+**Las dos razones para hacerlo, y la segunda vale más que la primera:**
+
+1. **Multiplicar parlantes por encima del techo de 3 streams.** El Auracast de JBL es un
+   **relé**: entra A2DP clásico a un parlante y sale por BIS a los demás
+   ([01](research/01-parlantes-jbl.md) §2). Medido de rebote en esta sesión: con Blue y
+   Red en par estéreo, **el Red no llega a tener tarjeta en PipeWire**, o sea que el host
+   ve **un solo dispositivo**. Si el par reparte L/R, **1 stream da 2 canales**. Con el
+   techo de 3 streams eso sería hasta 5 parlantes (par de Go 4 + par de Charge 6 + un Go 4
+   suelto), porque JBL solo hace estéreo **entre dos parlantes del mismo modelo**.
+2. **Evidencia indirecta de E4, que es la pregunta que decide el proyecto.** Si el par
+   estéreo funciona relevando Auracast con L y R separados, entonces **un Go 4 sí puede
+   reproducir solo el canal que le corresponde** de una transmisión. E4 pregunta
+   exactamente eso. **Y esto se puede medir sin las SuperMini**, acústicamente, porque no
+   hace falta leer la BASE: basta oír qué sale de cada parlante.
+
+**Con qué choca, y es serio:** **What Hi-Fi lista como defecto del Go 4 "Poor sound
+synchronisation of Auracast in stereo mode"** y un retardo notable
+([01](research/01-parlantes-jbl.md) §"El estéreo sincroniza mal"). O sea que lo que se
+delegaría a JBL —la sincronización— es justamente su punto débil reportado. Y esta sesión
+midió que **dos Go 4 manejados de forma independiente desde el PC se alinean a 0,1–0,35 ms**
+([experimentos/05](research/experimentos/05-e6-a2dp-un-canal-por-parlante.md)). **Es
+bastante probable que el camino propio ya le gane al par estéreo de JBL en sincronía**, y
+esta medición lo resolvería con un número. INFERIDO hasta medirlo.
+
+**Qué la favorece:** el instrumento de medición ya existe y está validado
+(`probes/e6-a2dp/`), y los parlantes están a mano. Es una medición de ~20 minutos.
+
+**Qué se pierde si se adopta:**
+- el control de retardo y nivel **por parlante** dentro del par: solo queda el
+  preprocesado de L y R, que igual mapea a un parlante cada uno;
+- saber **qué parlante físico es L y cuál es R** (lo decide la app de JBL). Se resuelve
+  midiendo;
+- la independencia de la app de JBL, que es lo que el proyecto quería evitar.
+
+**Dos cosas que el usuario pidió verificar (2026-09-28), y lo que salió:**
+
+1. **"Usar Auracast desactiva el Stereo Group".** **Probablemente cierto, pero no
+   confirmado.** La app llama al modo "Stereo Group" dentro de la sección
+   *PartyTogether*, y ofrece **elegir** entre Stereo y Party/Auracast. Ninguna fuente dice
+   explícitamente que sean excluyentes; la estructura de la app lo sugiere. REPORTADO
+   ([Android Authority](https://www.androidauthority.com/how-to-connect-jbl-speakers-together-3301073/);
+   las páginas de JBL devolvieron 403).
+
+   **No invalida el plan**, porque el plan no necesita estéreo y party a la vez. Lo que
+   necesita es **dos Stereo Groups independientes** (un par de Go 4 y un par de Charge 6),
+   cada uno conectado por separado al PC. **Eso es otra pregunta, y es el riesgo real.**
+   Según cuál sea la respuesta, el techo cambia:
+
+   | Si la app permite… | Parlantes con 3 streams |
+   |---|---|
+   | dos grupos estéreo | **5** (par + par + uno suelto) |
+   | un solo grupo estéreo | **4** (par + dos sueltos) |
+   | ninguno usable desde el PC | 3, como hoy |
+
+2. **"Ese parlante soporta menos códecs".** **Cierto, y es el Go 4: MEDIDO.** El Go 4
+   ofrece **solo SBC**; el Charge 6 ofrece **SBC y AAC**
+   ([01](research/01-parlantes-jbl.md) §"Códecs A2DP por modelo"). Dentro de un par del
+   mismo modelo no molesta, porque el códec es uniforme. **Entre grupos sí:** hay que
+   seguir forzando SBC, que ya se hace.
+
+   **Y hay algo más profundo que esto destapa.** En el relé, la cadena es
+   **A2DP (SBC) → decodificar → recodificar a LC3 → BIS → decodificar**: dos etapas con
+   pérdida, y el Go 4 entra con el techo de SBC. Además **el primario tiene que retrasarse
+   a sí mismo** para esperar el camino más largo del secundario. Eso es inherente al relé, y
+   es la explicación más probable del defecto que reporta What Hi-Fi. INFERIDO.
+
+**Qué se puede capturar de la fase de sincronización, y qué no.** El probe
+[probes/e9-stereo-group/observar.py](../probes/e9-stereo-group/observar.py) registra cada
+cambio con marca de tiempo mientras se forma el grupo. **Ve:** qué parlante deja de exponer
+A2DP (o sea quién es el secundario), si aparece o desaparece el anuncio de Auracast
+(0x1852), los bytes que marcan el modo estéreo, y los cambios en los datos de fabricante.
+**No ve el mecanismo:** el AX210 no tiene los bits 13 ni 31, así que **no puede
+sincronizarse a los anuncios periódicos ni recibir el BIS** (E1,
+[experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md)). La BASE, los parámetros
+del BIG y el reparto de canales por BIS **necesitan las SuperMini**.
+
+**Qué hay que decidir antes:** nada. Pero hace falta que el usuario **forme el par estéreo
+desde los parlantes o la app** con el probe corriendo, y que diga qué parlante quedó
+primario.
+
+**El resultado va a:** `docs/research/experimentos/`.
+
 ### E6: línea base con A2DP y combine-stream · i-7c8794-24ea65
-**Estado:** Planificado. Puede hacerse en paralelo desde el inventario.
+**Estado: A medias (2026-09-28)**, en
+[experimentos/05](research/experimentos/05-e6-a2dp-un-canal-por-parlante.md).
+
+**Lo que ya está medido:**
+- **El AX210 sostiene los dos parlantes a la vez. No hace falta un segundo dongle**,
+  que era la duda anotada más abajo.
+- **`combine-stream` reparte un canal a cada parlante** y se oye por el parlante
+  correcto. El sink vive en un proceso `pw-cli -m` y no deja nada al morir.
+- **El instrumento de medición está escrito y validado**
+  (`probes/e6-a2dp/`): 11 casos sintéticos entre −6 y +40 ms, con y sin
+  reverberación, error máximo **0,04 ms**. El micrófono es el **fifine USB**, que
+  resuelve el "qué micrófono usar" que E5 dejaba pendiente.
+- **El desfase, con los 4 parlantes en standalone y todos en SBC.** Lo que manda es
+  **cuántos streams suenan a la vez**, no el códec:
+
+  | parlantes | Δt entre ellos | MAD | variación entre reproducciones |
+  |---|---|---|---|
+  | **2 Go 4** | −0,34 / +0,11 / +0,26 ms | 0,12–0,35 ms | **0,6 ms** |
+  | **3 Go 4** | Red −2,7 · Blue +1,8 ms | 0,25–0,68 ms | **0,1 ms** |
+  | **4 (3 Go 4 + Charge 6)** | de −8 a +113 ms, salta | 2–30 ms | no converge |
+
+  **Con 2 o 3 parlantes iguales el desfase es de pocos ms y repetible a 0,1 ms**, o sea
+  dentro del umbral de 5 ms para estéreo **sin recalibrar en cada arranque**. Con 4 se
+  cae, con cualquier códec: el límite es la cantidad de streams A2DP simultáneos.
+  Y los ±2–3 ms son compatibles con geometría de la sala (2,7 ms = 92 cm).
+- **Códecs distintos cuestan 45–150 ms.** Se arregla con `bluez5.codecs = [ sbc ]` en
+  **WirePlumber** (en PipeWire no tiene efecto; se probó).
+- **El protocolo no aporta nada:** no hay ni un `AVDTP Delay Report` en la traza, y los
+  nodos informan latencia 0. **La calibración con micrófono es el único mecanismo**, no
+  una mejora opcional.
+- **Con los 4 parlantes más el Tune conectado, un transporte A2DP no se pudo levantar**
+  (`Acquire … returned error: org.bluez.Error.Failed`).
+
+**Dos factores nuevos que este plan no había previsto:**
+1. **Forzar el mismo códec en caliente falla** (`endpoint /MediaEndpoint/A2DPSource/sbc
+   in use`), aunque varios dispositivos **sí** comparten un códec si lo negocian al
+   conectarse (medido: los 3 Go 4 los tres en SBC). Hay que limitarlo por configuración.
+2. **El par estéreo de JBL bloquea el camino A2DP igual que el Auracast.** Con los Go 4
+   Blue y Red en par estéreo, el Red **no llega a tener tarjeta en PipeWire** aunque
+   BlueZ lo reporte conectado. Se deshace desde los parlantes.
+
+**La corrida de 30 minutos se hizo y NO fue concluyente** (2026-09-28). Salieron 180
+ráfagas, pero con **25 ms de dispersión** contra los 0,25–0,68 ms de las corridas cortas. Y
+hay una prueba de que no es física: los valores saltan ±50 ms en 10 s, que serían 5000 ppm
+de error de reloj. **La culpa fue del estímulo:** una ráfaga tonal tiene su información de
+tiempo solo en la envolvente (~1,25 ms de resolución), y la cama de ruido que hacía falta
+para que el stream no se suspendiera la degradó.
+
+**Qué falta:** repetir el drift con **ruido decorrelado de banda ancha**, que es unas 170
+veces más preciso y además es continuo por sí mismo, así que no necesita cama de ruido
+aparte ([experimentos/06](research/experimentos/06-calibracion-rapida-y-recalibracion.md)).
+
+**Techo medido del camino A2DP: tres parlantes.** Las tres formas de pasar de ahí, en
+orden de costo ([09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §8):
+1. **El Charge 6 por USB-C** (E7, i-7c8794-b30648): **no usa ancho de banda Bluetooth**,
+   así que da un cuarto canal dentro del techo medido. Es lo más barato y conviene
+   probarlo primero. Si se compra un segundo Charge 6, uno va por cable y otro por radio.
+2. **Un segundo adaptador USB** (~US$10): reparte 2+2. **INFERIDO que mantiene la
+   alineación**, porque el ritmo lo marca el grafo de PipeWire y no el adaptador, pero hay
+   que medirlo con el instrumento que ya existe.
+3. **Auracast con las SuperMini**, que lo resuelve de raíz pero depende de E4.
+
+**Bajar el bitrate de SBC no es una opción:** WirePlumber no expone control de bitpool
+(VERIFICADO en su documentación, [09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §8).
 
 **Qué es:** 2 Go 4 por A2DP clásico, con FL y FR usando
 `libpipewire-module-combine-stream`. Se miden el desfase con un micrófono, la
 variación entre inicios de reproducción y lo que reporta `pw-dump`, para saber si
 llega un delay report o si PipeWire usa los 125 ms fijos.
 
-**Con qué choca:** probablemente se necesite un segundo dongle (RTL8761B) si el
-chip integrado no aguanta dos streams.
+**Con qué choca:** ~~probablemente se necesite un segundo dongle (RTL8761B) si el
+chip integrado no aguanta dos streams~~ — **descartado por medición (2026-09-28):** el
+AX210 aguanta los dos.
 
 **Qué la favorece:** no requiere hardware LE Audio, y HyperBoom ya lo hizo.
 
@@ -277,7 +595,23 @@ retardo fijo.
 **Qué hay que decidir antes:** nada.
 
 ### P1: captura del audio del sistema sin huella en Mac y Linux · i-7c8794-fd5f03
-**Estado:** Planificado. Se puede hacer ya, sin hardware.
+**Estado: la mitad de Linux, hecha (2026-09-28).** Está en
+`host/src/aurasync/sonido.SinkVirtual` y se usa con `aurasync run`.
+
+**Qué quedó comprobado**, con `pw-record -P '{ media.class=Audio/Sink … }'`:
+- **el nodo aparece como una salida más del sistema**, con el nombre y la descripción que
+  se le den, y cualquier aplicación puede rutearse ahí sin instalar ni configurar nada;
+- **al terminar el proceso desaparece**: `pactl list sinks` no lo muestra más y la
+  configuración del sistema queda como estaba. Es el criterio de *no dejar huella*.
+
+**Un detalle que salió de otra medición:** cuando no hay nada reproduciéndose, el nodo se
+suspende y no emite datos. Por eso `aurasync run` **le manda silencio a los parlantes** en
+ese caso: si sus streams A2DP se suspendieran, al volver traerían un desfase distinto del
+que acaba de medir la calibración, que es lo que se vio en
+[experimentos/05](research/experimentos/05-e6-a2dp-un-canal-por-parlante.md).
+
+**Qué falta de P1:** la mitad del Mac (el process tap), y el criterio de terminado formal
+—comprobar que tras un `kill -9` en plena captura no queda nada—, que no se ejecutó.
 
 **Qué es:** comprobar que la captura del audio del sistema funciona sin instalar
 drivers y sin dejar nada al terminar
@@ -410,7 +744,37 @@ reproductor ──► sink virtual de PipeWire "jbl-multicanal" (estéreo o quad
 ```
 
 ### Herramienta CLI del MVP: un núcleo con backends de captura y de emisor intercambiables · i-7c8794-2fe665
-**Estado:** Planificado. Bloqueado por la decisión de seguir.
+**Estado: A medias (2026-09-28). Desbloqueada** por d-7c8794-9afee2, y con el núcleo ya
+construido: **92 tests**, lint y formato en verde.
+
+**Lo que existe y funciona:**
+
+| Módulo | Qué hace |
+|---|---|
+| `config.py` | la instalación, por coordenadas **opcionales** y no por etiquetas de canal |
+| `dsp/decorrelate.py` | todo-paso de fase aleatoria (Potard y Burnett) |
+| `dsp/ambience.py` | extracción de ambiente por coherencia, con versión **para flujos** |
+| `motor.py` | la cadena completa: estéreo → una señal por parlante |
+| `estimulos.py`, `medicion.py` | la calibración autónoma con micrófono |
+| `sonido.py` | la capa de PipeWire: descubrir, reproducir a N parlantes, grabar |
+| `cli.py` | `doctor`, `sinks`, `init`, `calibrate`, `play` |
+
+**Tres decisiones de diseño que vale la pena no reabrir sin motivo:**
+
+1. **Un proceso `pw-play` por parlante**, y no un sink combinado. Con `combine-stream` el
+   reparto lo decide PipeWire y el retardo y la ganancia por parlante quedan fuera de
+   nuestro alcance; los probes lo usaron, el producto no.
+2. **La corrección de sincronía es una etapa enchufable** (`retardo_ms` y `ganancia_db` por
+   parlante). Según lo que resulte el drift, el mismo código se escribe una vez desde la
+   calibración o lo actualiza un lazo. El resultado de la medición cambia un parámetro, no
+   la arquitectura.
+3. **La extracción de ambiente tiene latencia propia** (43 ms) y el motor **retrasa el
+   camino directo lo mismo**. Sin eso el ambiente llegaría adelantado y el efecto de
+   precedencia haría lo contrario de lo buscado.
+
+**Qué falta:** el `play` todavía lee de un archivo WAV y no captura el audio del sistema
+(eso es P1); no hay modo de ajuste en vivo (i-7c8794-bdb678); y no hay lazo de
+recalibración continua, que depende de medir el drift.
 
 **Qué es:** una sola herramienta en Python sobre Bumble (nombre provisional
 `aurasync`) con subcomandos `doctor`, `scan`, `tone`, `play`, `calibrate` y
@@ -470,6 +834,74 @@ transmite, y eso compite por tiempo de radio con el BIG.
 **Qué la favorece:** BlueZ 5.84 y 5.87 mejoraron BASS, y Bumble implementa BASS.
 
 **Qué hay que decidir antes:** si los JBL exponen BASS (lo resuelve E4).
+
+### Decorrelación por parlante, para producir envolvimiento · i-7c8794-250043
+**Estado: Hecho (2026-09-28)**, en `host/src/aurasync/dsp/decorrelate.py`, con 11 tests que
+comprueban las tres propiedades que importan: magnitud plana (no colorea), mismo espectro a
+la salida (suena igual) y salidas decorrelacionadas. Se expone en la CLI con
+`aurasync play --sin-decorrelar`, que es el A/B para mostrar el efecto.
+
+**De dónde salió:** de la investigación del 2026-09-28
+([09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md)), pedida por el
+usuario para entender el efecto que busca.
+
+**Qué es:** mandar a cada parlante una versión del mismo material con forma de onda
+distinta pero que suena igual, con filtros todo-paso de fase aleatoria distintos por
+canal.
+
+**Por qué es lo más importante del MVP, y no el cuarto canal:** lo que produce la
+sensación de estar rodeado (**listener envelopment**) es la energía lateral tardía
+**decorrelacionada**, no la cantidad de canales. Y además la decorrelación **debilita el
+efecto de precedencia**, o sea que hace al sistema **menos sensible al desfase**, que es
+la debilidad del camino A2DP. Las dos cosas están REPORTADAS en
+[09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §1 y §2.
+
+**Con qué choca:** con nada. Ocurre antes del emisor, igual que el upmix.
+
+**Qué hay que decidir antes:** nada. Conviene que se pueda **prender y apagar en vivo**,
+porque es el A/B que muestra el efecto.
+
+### Modelo de posiciones en coordenadas y panning DBAP · i-7c8794-26c302
+**Estado: A medias (2026-09-28).** El modelo de datos ya está: `config.Parlante` lleva
+coordenadas, y son **opcionales**, porque la calibración con micrófono mide el retardo
+total —que ya incluye el vuelo por el aire— y no las necesita. **Falta el panning DBAP en
+sí**: hoy el reparto se hace con un `pan` simple por parlante.
+
+**Qué es:** describir la instalación como **coordenadas de cada parlante en la pieza**, en
+vez de etiquetas de canal (FL/FR/RL/RR), y calcular las ganancias con **DBAP**
+(Distance-Based Amplitude Panning).
+
+**Por qué:** VBAP y ambisonics suponen un oyente en el *sweet spot*. DBAP se diseñó sin
+suposiciones sobre las posiciones de los parlantes ni sobre dónde está el oyente
+(VERIFICADO en el paper de Lossius,
+[09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §4). El caso de uso
+—parlantes en los bordes, el oyente caminando— es literalmente el que DBAP resuelve.
+
+**Beneficio extra:** con las coordenadas, el retardo acústico por distancia se calcula en
+vez de medirse, y la calibración con micrófono solo tiene que corregir lo electrónico.
+
+**Con qué choca:** con la configuración por distribución de canales que asumía
+[07](research/07-software-de-audio-en-el-pc.md) §4.5 (quad, 3/1). Las distribuciones
+quedan como presets sobre el modelo de coordenadas, no como el modelo en sí.
+
+### Modo difusión en vivo: ajuste interactivo de niveles y retardos · i-7c8794-bdb678
+**Estado:** Planificado.
+
+**Qué es:** un modo donde se ajustan nivel, retardo y decorrelación de cada parlante
+**mientras suena**, y no editando un archivo.
+
+**De dónde salió:** de la práctica de los *loudspeaker orchestras* (Acousmonium del GRM,
+BEAST), donde la difusión de una obra estéreo entre muchos parlantes **es una
+performance**, ajustada en vivo
+([09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §6). También de que el
+usuario quiere **calibrar de oído** en su pieza y después mostrarlo a otras personas.
+
+**Con qué choca:** con nada del protocolo. Pide que el núcleo tenga los parámetros
+cambiables en caliente, lo que conviene saber antes de diseñarlo.
+
+**Qué la favorece:** la misma tradición dice algo útil para este proyecto: en el
+Acousmonium los parlantes son **de timbres y tamaños distintos a propósito**. O sea que el
+Charge 6 al lado de tres Go 4 no es un defecto a igualar, sino una voz distinta.
 
 ### Upmix de estéreo a 4.0 · i-7c8794-c7ccb9
 **Estado:** Planificado. Depende del emisor.

@@ -5,21 +5,30 @@ canal de audio distinto a cada uno de varios parlantes JBL** (3× Go 4 y 1× Cha
 6), **sincronizados**, para lograr estéreo real, cuadrafonía o surround simulado sin
 las limitaciones de la app de JBL.
 
-**Hoy está en fase de investigación y factibilidad: no hay código de producto.** Solo
-hay un esqueleto en `host/` (el paquete `aurasync`, d-7c8794-f619c4) y el plan de
-`firmware/`. Lo
-distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
-solo el BIS de Auracast que les corresponde) solo se responde con los parlantes en
-la mano, no leyendo.
+**Estado (2026-09-28): se construye el núcleo, con A2DP como primer backend emisor**
+(d-7c8794-9afee2). Lo que lo desbloqueó es que **E4 resultó imposible con el hardware
+actual** —el AX210 no puede transmitir ni escuchar un BIS— y que **A2DP con 2 o 3
+parlantes iguales alinea a pocos milisegundos**. La decisión sobre Auracast sigue
+abierta hasta que lleguen las SuperMini.
+
+Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
+solo el BIS de Auracast que les corresponde) solo se responde con los parlantes en la
+mano, no leyendo. Y lo segundo: **el objetivo no es la precisión de imagen estéreo sino
+el envolvimiento** —parlantes en los bordes de una pieza y el oyente moviéndose—, lo que
+cambia qué importa (`docs/research/09-…`).
 
 ## Restricciones que no se negocian
 
-- **No se escribe código de producto hasta registrar la decisión de seguir o no**
-  (d-7c8794-346170). Lo único que se programa antes son probes en `probes/` y la
-  estructura base de `host/` que permite d-7c8794-f619c4: esqueleto, tooling y
-  tests de humo, sin captura, DSP, reloj, emisor, parlantes ni calibración. Si
-  esto se rompe, el código queda construido sobre un camino que nadie validó.
-  `scripts/check.sh` falla si aparece un módulo nuevo en `host/src/aurasync/`.
+- **El núcleo del host se construye con A2DP como primer backend emisor**
+  (d-7c8794-9afee2, que enmienda d-7c8794-346170). **Auracast no queda descartado**: E4
+  se hace igual cuando llegue el hardware, y nada del núcleo debe atarse a A2DP. El
+  roadmap lo dice así desde el principio: *mismo núcleo, otro backend emisor*.
+- **Nada de lo que se mide con parlantes se da por bueno si no sobrevive a cambiar un
+  parámetro que no debería importar.** Esta sesión descartó tres criterios de calidad
+  que parecían razonables (la nitidez del pico, la coincidencia entre ventanas iguales,
+  el residuo de reconstrucción) porque cada uno informaba "todo bien" mientras la
+  medición estaba equivocada. El que quedó es la **estabilidad ante cambios del
+  análisis** (`docs/research/experimentos/06-…`).
 - **Todo hallazgo queda escrito en `docs/research/`**, con su fuente y su marca
   VERIFICADO, REPORTADO, INFERIDO o MEDIDO (d-7c8794-1253b0). Un resultado que solo
   queda en el chat se pierde. Se revisa en cada revisión.
@@ -100,6 +109,7 @@ es lo único que avisa a la siguiente.
 | ¿Cómo se hace con un nRF5340 (opción C)? | `docs/research/06-opcion-c-nrf5340.md` |
 | ¿Qué software del PC captura, separa y hace upmix del audio, y con qué latencia? | `docs/research/07-software-de-audio-en-el-pc.md` |
 | ¿Cómo se integra todo en una herramienta, con qué stack y en qué orden? | `docs/research/08-integracion-y-plan.md` |
+| ¿Qué produce el efecto envolvente, cómo potenciarlo y qué considerar al implementarlo? | `docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |

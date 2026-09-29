@@ -7,6 +7,365 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-28 · s-7c8794-21e1f2 — Del inventario del AX210 al MVP: E1 cerrado, A2DP medido y el núcleo de aurasync construido
+
+**Qué.**
+- **Inventario del equipo Linux** (i-7c8794-d9c834), la mitad que faltaba: el chip es
+  un **Intel AX210** con firmware BT `202-5.26`, HCI 5.4, advertising extendido con
+  2M. BlueZ 5.87, PipeWire **1.6.9** con `libspa-codec-bluez5-lc3.so`, WirePlumber
+  0.5.17, liblc3 1.1.3, kernel 7.2.7-1-cachyos.
+- **Hallazgo nuevo, y el más importante de la sesión:** los cuatro JBL ya estaban
+  emparejados con este equipo, y `bluetoothctl info` muestra que **los parlantes (2
+  Go 4 y el Charge 6) no exponen ni PACS (0x1850) ni BASS (0x184F)**, mientras que
+  los **Tune 770NC sí exponen el stack LE Audio completo** (PACS, ASCS, VCS, MICS,
+  CAS, TMAS). Si se confirma, **las dos vías del estándar para asignar un canal por
+  parlante están cerradas**. Queda en `experimentos/02`.
+- **`scripts/check.sh` corre en Linux** con `PY=python3.14`: cierra el pendiente de
+  i-7c8794-f7f5b2.
+- **E1 cerrado, y la respuesta es NO** (i-7c8794-3f730a,
+  `experimentos/03-e1-iso-en-el-ax210.md`). El AX210 con firmware `202-5.26` tiene
+  LE Features `ff 59 01 3c ae 00 00 00`: **le faltan los bits 30 (Isochronous
+  Broadcaster), 31 (Synchronized Receiver) y 13 (LE Periodic Advertising)**. Medido
+  por dos caminos independientes: debugfs y una traza de `btmon` del arranque del
+  controlador, cuya lista de Supported Commands tiene **solo** comandos CIS. Sí tiene
+  CIS central y peripheral, y el socket ISO del kernel funciona con la bandera.
+- **Consecuencia que empeora el plan:** sin los bits 13 y 31, este adaptador tampoco
+  puede *escuchar* un BIS, así que **E2 tampoco se puede hacer acá**. Se creía que al
+  menos podría leer la BASE.
+- **Consecuencia que lo mejora:** se agregó **E8** (i-7c8794-ef8389), unicast LE
+  Audio contra los Tune 770NC. Sale de cruzar dos mediciones de esta sesión (hay CIS
+  central, y los Tune exponen PACS y ASCS) y valida el camino ISO completo de Linux
+  sin depender de transmitir. Es el único experimento LE Audio que este equipo puede
+  hacer hoy.
+- **E8 corrido en el mismo momento en que se definió, y salió bien**
+  (`experimentos/04-e8-unicast-le-audio-tune-770nc.md`). Al activar el socket ISO,
+  los Tune 770NC se reconectaron solos en perfil **`bap-duplex` con LC3**. Un tono de
+  4 s estableció un **CIG con 2 CIS** (uno por canal), ISO interval 7,5 ms, PHY LE
+  2M, SDU 60 B, CIG Synchronization Delay 4632 µs, 2214 paquetes `LE-CIS`.
+  **El camino ISO de Linux funciona de punta a punta en este equipo.**
+- **Hallazgo de arquitectura que mueve una disputa del proyecto:** `pw-dump` muestra
+  que PipeWire crea **un nodo interno por stream isócrono**, los agrupa en un *device
+  set* de BlueZ y expone un **combine-sink** como único sink estéreo. `research/02`
+  §PipeWire tenía esto "en disputa, se resuelve en E5": ahora está medido para
+  unicast. Con `bis[]` sigue INFERIDO.
+- **Aviso para E3 y E5:** con los Tune se negociaron **32 kHz y 7,5 ms**, no los
+  `48_2_x` que asume `research/02` §4. La negociación la manda el receptor.
+- **`experimentos/02` cerrado casi del todo, con los parlantes encendidos y
+  conectados.** `busctl tree org.bluez` muestra que el Go 4 y el Charge 6 **no tienen
+  ni un objeto GATT** (solo `sep`/`avrcp` de A2DP), mientras el Tune 770NC tiene
+  `pac_sink0`, `pac_source0` y varios `service00XX`. En un `scan le`, el Tune anuncia
+  ServiceData de ASCS, TMAS y CAS y declara PACS y **CSIS**; los tres parlantes no
+  anuncian nada. Los dos parlantes se conectaron por **BR/EDR**, así que falta el único
+  caso que queda: un Go 4 **en modo Auracast**.
+- **E6 a medias, con instrumento propio validado**
+  (`experimentos/05-e6-a2dp-un-canal-por-parlante.md`). El **AX210 sostiene los dos
+  parlantes a la vez**, así que se descarta el segundo dongle que el roadmap temía.
+  `combine-stream` reparte un canal a cada parlante y se oye por el correcto.
+  `probes/e6-a2dp/medir-desfase.py` mide el desfase con el **fifine USB**, y
+  `test-medir-desfase.py` lo valida contra desfases conocidos.
+- **E6, tanda definitiva con los 4 parlantes en standalone y todos en SBC.** Lo que
+  domina es **cuántos streams suenan a la vez**: con **2 Go 4** el desfase es
+  −0,34/+0,11/+0,26 ms (MAD 0,12–0,35, variación entre reproducciones **0,6 ms**); con
+  **3 Go 4**, Red −2,7 y Blue +1,8 ms, **repetible a 0,1 ms**; con **4** se cae (MAD 2–30
+  ms, rangos hasta 112 ms, ráfagas perdidas), **con cualquier códec**. **Techo del camino
+  A2DP: tres parlantes.**
+- **Códecs distintos cuestan 45–150 ms.** Se fuerza SBC con `bluez5.codecs = [ sbc ]` en
+  `~/.config/wireplumber/wireplumber.conf.d/`. **En PipeWire no tiene efecto**, se probó.
+- **A2DP no da nada para compensar:** cero `AVDTP Delay Report` en la traza, latencia 0
+  en los nodos. La calibración con micrófono es el único mecanismo.
+- **Esto corrige el veredicto anterior de E6**, que decía que A2DP para estéreo solo
+  servía con calibración en cada arranque. Los 12,9 ms que lo sustentaban eran casi todo
+  diferencia de códec: con el mismo códec y 2–3 parlantes iguales, la variación entre
+  reproducciones baja a 0,1–0,6 ms.
+- **E6 medido antes con el micrófono ubicado por el usuario (tanda descartada):** 4 reproducciones, Go 4 Black
+  (SBC) contra Charge 6 (AAC). Medianas **+60,23 / +47,39 / +50,80 / +60,25 ms**, MAD
+  2–4 ms. **La mediana se corre 12,9 ms entre reproducciones**, y eso no lo explica la
+  distancia al micrófono, que no cambió. **Conclusión: A2DP para estéreo solo sirve con
+  calibración en cada arranque**; para traseros o modo fiesta alcanza.
+- **Dos factores nuevos que el plan no había previsto:**
+  1. los parlantes negocian **códecs distintos** (SBC y AAC) y forzar el mismo **en
+     caliente falla** (`endpoint /MediaEndpoint/A2DPSource/sbc in use`). Dos
+     dispositivos **sí** comparten un códec si lo negocian al conectarse (Tune y
+     Charge 6 los dos en AAC);
+  2. **el par estéreo de JBL bloquea el camino A2DP igual que el Auracast:** con Blue y
+     Red emparejados entre sí, el Red no llega a tener tarjeta en PipeWire aunque BlueZ
+     lo reporte conectado.
+- **Investigación nueva, pedida por el usuario:**
+  `research/09-efecto-ambiental-y-diseno-de-la-experiencia.md`. Qué es el efecto que
+  busca (**listener envelopment**, distinto de *apparent source width*), que viene de
+  **energía lateral tardía decorrelacionada** y no de la cantidad de canales; la
+  **decorrelación** como herramienta central (Kendall), que además **debilita el efecto de
+  precedencia** y por eso vuelve al sistema tolerante al desfase; las zonas del **efecto
+  de precedencia y de Haas**, que reencuadran el desfase como parámetro de diseño; **DBAP**
+  para oyente móvil en arreglo irregular; **extracción de ambiente por coherencia**
+  (Avendaño–Jot) en vez del `psd` de PipeWire; y los ***loudspeaker orchestras***
+  (Acousmonium, BEAST), que son la tradición de 40 años del setup que se quiere armar.
+- **Se leyeron dos papers completos** (paso G, que el usuario priorizó primero), y de ahí
+  salió `research/09` §11, que es **VERIFICADO** y trae los parámetros para implementar:
+  - **Potard y Burnett (DAFx'04):** decorrelación por **todo-paso de fase aleatoria**,
+    ~**100 polos y ceros**, **máximo 5–6 señales** totalmente decorrelacionadas con filtros
+    fijos, y fases elegidas por ortogonalidad máxima. **Y la advertencia que corrige este
+    repositorio: en parlantes hay que evitar decorrelar con retardo, por filtrado peine.**
+  - **Avendaño y Jot (AES 22nd):** índice de ambiente = 1 − coherencia, mapeo por
+    **tangente hiperbólica** con umbral, rango y pendiente (μ₁ = 1, σ = 2 u 8), el criterio
+    extra de energías comparables entre L y R, y la cadena del surround
+    **todo-paso → retardo de 5 a 20 ms**. Más dos cosas de método: **no hay que juzgar un
+    canal aislado** (los artefactos se enmascaran entre sí) y **la extracción de ambiente
+    aguanta cualquier material, el índice de paneo no**.
+- **Tres entradas nuevas de roadmap** que salen de eso: decorrelación por parlante
+  (i-7c8794-250043), modelo de posiciones en coordenadas con DBAP (i-7c8794-26c302) y modo
+  difusión en vivo (i-7c8794-bdb678).
+- **Dos reencuadres que cambian prioridades:**
+  1. los **2–3 ms** medidos entre los Go 4 caen en *localization dominance*, no en zona de
+     eco (que empieza en ~100 ms para música). O sea que el desfase medido **no es el
+     problema**;
+  2. conviene **gastar el esfuerzo en decorrelación antes que en sumar un cuarto canal**,
+     porque el predictor de envolvimiento es el nivel lateral tardío, no el número de
+     fuentes.
+- **La corrida de drift de 30 minutos se hizo y NO fue concluyente**, y la culpa es del
+  estímulo que elegí. 180 ráfagas, pero con **25 ms de dispersión** contra los 0,25–0,68 ms
+  de las corridas cortas. Prueba de que no es física: saltos de ±50 ms en 10 s serían
+  **5000 ppm** de error de reloj. Causa: una ráfaga tonal tiene su información de tiempo
+  solo en la envolvente (~1,25 ms de resolución) y la cama de ruido —necesaria para que
+  PipeWire no suspendiera el nodo— la degradó. **El drift sigue sin medirse.**
+- **Se registró la decisión d-7c8794-9afee2** y se quitó la lista cerrada de `check.sh`: se
+  construye el núcleo compartido con A2DP como primer backend, sin cerrar Auracast.
+- **Núcleo del host, con tests** (51 en total, antes 9):
+  - `dsp/decorrelate.py`: todo-paso de fase aleatoria con los parámetros de Potard y
+    Burnett, y el *best performance selection* de fases ortogonales;
+  - `dsp/ambience.py`: ecuaciones (11) y (12) de Avendaño y Jot;
+  - `config.py`: la instalación por **coordenadas** (opcionales) y no por etiquetas de
+    canal, con retardo y ganancia por parlante como **etapa enchufable**;
+  - `medicion.py`: GCC-PHAT, medición simultánea de todos los parlantes, niveles por
+    mínimos cuadrados y calibración por ventanas;
+  - `estimulos.py`: ruido rosa decorrelado, ráfagas tonales (para comparar) y barrido.
+- **Comparación de estrategias de calibración** (SIMULADO,
+  `experimentos/06-calibracion-rapida-y-recalibracion.md`): **2 segundos de ruido de banda
+  ancha ya dan toda la precisión**, es **~170 veces mejor que las ráfagas tonales**, y
+  **con música anda igual de bien**, que es lo que habilita recalibrar sin interrumpir.
+  Receta: 10 s en 5 ventanas de 2, para tener mediana y dispersión.
+- **El MVP: el núcleo del host, construido y con 92 tests** (empezó la sesión con 9).
+  Además de `config`, `dsp/decorrelate` y `dsp/ambience`, se agregaron:
+  - `motor.py`, la cadena completa estéreo → una señal por parlante, **con estado entre
+    bloques** para poder alimentar un flujo;
+  - `dsp/ambience.Extractor`, la versión con estado de la extracción;
+  - `sonido.py`, la capa de PipeWire: descubrir parlantes, reproducir a N y grabar;
+  - `cli.py` con `doctor`, `sinks`, `init`, `calibrate` y `play`, probados contra el
+    sistema real (los dos primeros, que solo leen).
+- **Procesamiento en vivo sobre el audio del sistema** (`aurasync run`), que era P1 del
+  roadmap. `sonido.SinkVirtual` crea con `pw-record -P '{ media.class=Audio/Sink … }'` un
+  dispositivo de salida que el sistema muestra como cualquier otro: se lo elige como salida
+  y todo lo que suene ahí pasa por el procesamiento. **Comprobado que no deja huella**: al
+  terminar el proceso, `pactl list sinks` no lo muestra más.
+  - **Detalle que salió de otra medición:** cuando no hay nada reproduciéndose el nodo se
+    suspende y no emite datos, así que `run` **manda silencio a los parlantes** en ese caso.
+    Si sus streams A2DP se suspendieran, al volver traerían un desfase distinto del que
+    acaba de medir la calibración.
+- **La calibración quedó autónoma**, como pidió el usuario: `init` toma los parlantes
+  conectados y `calibrate` mide retardo y ganancia. Lo único ajustable a mano es `pan` y
+  `ambiente` por parlante, que es la decisión artística.
+- **Tres decisiones de diseño del motor**, anotadas en el roadmap para no reabrirlas sin
+  motivo: un proceso `pw-play` por parlante (y no un sink combinado, que dejaría el retardo
+  fuera de nuestro alcance); la corrección de sincronía como **etapa enchufable**; y el
+  camino directo retrasado los 43 ms de latencia que tiene la extracción de ambiente.
+- **CLAUDE.md, `host/README.md` y el roadmap actualizados** para que no contradigan la
+  decisión d-7c8794-9afee2, que ya estaba registrada pero no reflejada.
+- **Probes:** `probes/e1-iso/`, `probes/02-gatt-jbl/`, `probes/e6-a2dp/` y
+  `probes/calibracion/`.
+
+**Archivos.** `docs/research/experimentos/` (`00-inventario-linux.md`,
+`02-servicios-de-los-jbl-linux.md`, `03-e1-iso-en-el-ax210.md`, y `datos/00/` y
+`datos/03/`), `docs/research/02-le-audio-auracast-linux.md` (§2: el AX210 pasa a
+MEDIDO, más cómo leer los bits de LE Features), `probes/00-inventario-linux/`,
+`probes/e1-iso/`, `probes/02-gatt-jbl/`, `scripts/check.sh`, `docs/roadmap.md`.
+
+**Por qué.** El usuario pasó a trabajar desde el equipo Linux y pidió explorar el
+adaptador, después dejar lista la regla de sudo y preparar las pruebas del stack.
+
+**Arquitectura.** ✅ Cumple. Nada de código de producto (d-7c8794-346170): solo
+probes y documentos. El cambio a `scripts/check.sh` es portabilidad, no alcance.
+
+**Qué salió mal en el camino.**
+- **Elegí mal el estímulo para medir drift, y costó 30 minutos de corrida.** Las ráfagas
+  tonales tienen ~1,25 ms de resolución por su ancho de banda; con la cama de ruido encima,
+  la dispersión subió a 25 ms y el resultado quedó inservible. Lo cuantifiqué después en
+  `experimentos/06`: ruido de banda ancha es ~170 veces más preciso. **La lección general:
+  la resolución de una medición de retardo va como 1/ancho de banda, así que un tono es
+  siempre mal estímulo para esto.**
+- **El umbral de confianza del estimador no detectaba sus propios fallos.** Estaba en 3;
+  con ruido de sala 30 veces la señal daba confianza 5,8 —"confiable"— y 256 ms de error.
+  Se subió a 15 con el barrido a la vista.
+- **Llamar a la extracción de ambiente por bloque no funciona.** Una STFT no se parte sin
+  dejar los bordes sin reconstruir: con bloques de 1024 muestras la salida difería **642 %**
+  de la correcta. Hizo falta un extractor con estado de trama, que además tiene 43 ms de
+  latencia propia y obliga a retrasar el camino directo lo mismo.
+- **Agregar `[tool.ruff.lint.per-file-ignores]` al pyproject reemplaza la tabla de hatch en
+  vez de extenderla**, y aparecieron 127 errores por usar `assert` en los tests. Hay que
+  repetir las exenciones de hatch; quedó anotado en el propio archivo.
+- **El estimador de nivel suponía ortogonalidad perfecta** y devolvía 1,38 donde la
+  respuesta era 1,0. Los filtros del banco son *casi* ortogonales. Se reemplazó por mínimos
+  cuadrados conjuntos. **Lo encontró un test**, no una escucha.
+- **La primera comparación de calibraciones estaba sesgada a favor del método sin
+  interpolación:** los retardos de prueba caían casi sobre muestras enteras. Se movieron a
+  media muestra y se aplicaron con rampa de fase en vez de desplazamiento entero.
+- **Se afirmó que el AX210 "va por USB, no PCIe", y el usuario lo corrigió.** Las dos
+  cosas son ciertas: la tarjeta se conecta por PCIe y expone dos interfaces, Wi-Fi
+  por PCIe y **Bluetooth por USB**. Lo detectó el usuario, no un comando. Ahora el
+  probe captura la topología (`/sys/…/usb1/1-6` para el BT y `26:00.0` para el
+  Wi-Fi) para que no dependa de la memoria de nadie.
+- `scripts/check.sh` falló en Linux por la **colación del locale**: `sort` ordena
+  `cli.py` antes de `__init__.py`, al revés que en macOS, así que la lista cerrada
+  de archivos no coincidía. Se fijó `LC_ALL=C sort`.
+- El primer `01-capacidades.sh` mostraba el firmware del **Wi-Fi** en vez del del
+  Bluetooth, porque el `grep` no filtraba por `hci0:`. Lo delató la salida.
+- **El gate de sudo de los dos probes probaba con `sudo -n true`, y `true` no está en
+  la regla**, así que daba "falta la regla" incluso con la regla instalada. Ahora
+  prueba con `sudo -n btmgmt info`.
+- **El analizador de E6 falló dos veces, y las dos las destaparon los parlantes, no la
+  síntesis.** (a) Contaba **13 ráfagas donde había 6** con una espuria de −145 ms: la
+  envolvente ondula dentro del tono y vuelve a disparar. (b) Con un desfase real de
+  ~55 ms leía **−82 ms**: la ventana tomaba 150 ms *antes* del disparo y alcanzaba la
+  cola de la ráfaga anterior; ahora son 60 ms antes y 450 ms después, con mediana y MAD
+  informadas. El test pasó a tener casos reverberantes de 40, 55 y 120 ms, que es el
+  régimen donde aparecieron. **La primera tanda de 3 corridas quedó descartada por
+  esto**, y se guardó para que se vea la diferencia.
+- **Se afirmó que PipeWire no deja compartir un códec entre dos dispositivos**, a partir
+  del error `endpoint … in use`. **Es falso:** después se midió al Tune y al Charge 6
+  los dos en AAC. Lo que falla es el cambio de códec **en caliente**. Corregido en
+  `experimentos/05`.
+- **Quedaron 3 procesos `pw-cli -m` huérfanos** de corridas anteriores, creando sinks
+  `jbl_combine` duplicados, porque los `pkill` fallidos no los habían matado. Se
+  limpiaron. Además tanto cambio de perfil dejó los transportes A2DP trabados y hubo
+  que reiniciar WirePlumber y reconectar los parlantes.
+- `bluetoothctl` → `menu gatt` → `list-attributes <dirección>` imprime la ayuda en vez
+  de enumerar. La enumeración confiable es `busctl tree org.bluez`.
+- **El instrumento de 4 canales tuvo un defecto grave y silencioso.** Se eligieron tonos
+  de 1000/2000/3000/4000 Hz, o sea en relación armónica. Cuando el Go 4 Blue se quedó sin
+  transporte, su banda de 3000 Hz captó el **3.er armónico** de los 1000 Hz del Black y la
+  medición devolvió un falso **+0,15 ms con MAD 0,3 ms**: el resultado *más limpio* de la
+  tanda era el de un parlante que no sonaba. Se arregló (a) buscando frecuencias sin
+  relación armónica —(2350, 3250, 4150, 5200), verificado por programa— y (b) comprobando
+  el **nivel relativo de cada canal**, que ahora avisa "NO SUENA". El test sintético
+  original no lo cubría; se le agregaron casos de canal mudo.
+- **Se probaron dos mejoras del estimador de arranque y las dos fueron peores**, y queda
+  anotado para no repetirlas: medir el **pico** en vez del flanco sube el error con
+  reverberación de 2,2 a 7,6 ms, y restar la base o subir el umbral al 50 % no mejora
+  (3,7 ms). La precisión se declaró honestamente en dos regímenes: <0,05 ms con señal
+  limpia y ~2,2 ms en sala reverberante.
+- Un `pkill -f`/`pgrep -f` con patrón amplio mató el propio shell del agente **tres
+  veces**: el patrón aparece en la línea de comandos del propio shell. Con `timeout` en
+  primer plano, o con `pgrep -x`, no pasa.
+- **El socket ISO no se activó en el primer intento, en silencio.** `main.conf` tenía
+  `KernelExperimental = <uuid>   # comentario`, y **BlueZ lee el comentario como parte
+  del UUID** y descarta el valor (`Invalid KernelExperimental UUID`). El servicio
+  arranca igual. Lo detectó el paso de verificación del probe, que mira
+  `/proc/net/protocols` en vez de confiar en que el reinicio alcanzó. Quedó anotado en
+  `research/02` §2, porque le va a pasar a cualquiera.
+- `sudo btmgmt exp` se fue a modo interactivo y colgó 2 minutos hasta el timeout.
+  `btmgmt` sin un subcomando válido abre una shell.
+
+**Qué quedó pendiente.**
+- **El sistema quedó cambiado a propósito:** `/etc/bluetooth/main.conf` tiene
+  `Experimental = true` y el socket ISO activado, porque E8 lo necesita. Se revierte
+  con `probes/e1-iso/03-revertir.sh` (verifica por md5). La regla de sudo sigue
+  instalada: `sudo rm /etc/sudoers.d/bluetooth-sync`.
+- **E8 quedó A medias:** el tono **sí se oyó** (confirmado por el usuario), pero falta
+  capturar desde el cambio de perfil para tener frecuencia de muestreo y
+  **presentation delay medidos** (se infirieron del SDU), y leer el firmware de los
+  Tune.
+- **El drift sigue sin medirse.** Hay que repetir la corrida con ruido decorrelado de banda
+  ancha, que además es continuo por sí mismo y no necesita la cama de ruido que causó el
+  problema.
+- **Toda la comparación de calibraciones es SIMULADA, no medida.** Falta validarla con
+  parlantes, y con eso revisar el umbral de confianza.
+- **El usuario pidió (2026-09-28) avisar y consultar antes de cualquier prueba con audio.**
+- **`aurasync run` nunca se corrió con parlantes.** El sink virtual sí se comprobó (aparece
+  y desaparece), pero el lazo completo —sistema → proceso → 3 parlantes— no se probó.
+- **De P1 falta la mitad del Mac** (el process tap) y el criterio de terminado formal:
+  comprobar que tras un `kill -9` en plena captura no queda nada.
+- **No hay modo de ajuste en vivo** (i-7c8794-bdb678) ni lazo de recalibración continua: el
+  segundo depende de medir el drift, que sigue pendiente.
+- **`calibrate` y `play` nunca se corrieron con parlantes.** La calibración sí se validó,
+  pero a través del probe `probes/calibracion/medir_real.py`, no del comando.
+- **La decisión parcial NO se registró.** El usuario la eligió (registrar que se construye
+  el núcleo con A2DP como primer backend, dejando abierto Auracast hasta E4), pero después
+  pidió seguir con las pruebas. **Hasta que se registre en `docs/decisions.md` y se saque
+  la lista cerrada de `scripts/check.sh`, no se puede escribir código de producto**
+  (d-7c8794-346170). Es el bloqueo del MVP.
+- **E7 (Charge 6 por USB-C) subió de prioridad:** es la forma más barata de tener un cuarto
+  canal sin pelear con el techo de 3 streams A2DP.
+- **Otro cambio al sistema, reversible:** el perfil de la tarjeta del fifine pasó de
+  `input:iec958-stereo` (entrada digital, graba silencio) a `input:analog-stereo`. Se
+  revierte con `pactl set-card-profile`.
+- No se leyó el firmware de ningún JBL.
+- **E2, E3, E4 y E5 quedan bloqueados por hardware** hasta que lleguen las SuperMini.
+  No requiere decidir ninguna compra.
+- **La enumeración GATT no se corrió:** los parlantes estaban apagados (un `scan le`
+  de 15 s no vio ninguno). `experimentos/02` está escrito con datos de la caché de
+  BlueZ, no de una conexión.
+- No se decidió cómo se le va a dar `CAP_NET_ADMIN` a Bumble. Se dejó fuera de la
+  regla de sudo a propósito: cualquier forma de correr Python como root sin
+  contraseña equivale a root, y no vale decidirlo antes de saber si el bit 30 existe.
+- Apareció un candidato para leer el firmware desde Linux: el UUID
+  `df21fe2c-2515-4fdb-8886-f12c4d67927c`, común a los cuatro JBL.
+
+**Desvío del plan.** Ninguno. El roadmap pedía empezar la Fase 1 por el inventario
+del equipo Linux, y es lo que se hizo. `experimentos/02` es un archivo que el
+roadmap no previó: salió de mirar los emparejamientos y adelanta parte de E4.
+
+**No verificado.**
+- **`research/09` §1–§10 sigue siendo REPORTADO**, de resúmenes de búsqueda. **§11 es
+  VERIFICADO**, de dos papers leídos enteros. **Bradley y Soulodre sigue sin leerse**
+  (paywall): no se sabe si el nivel lateral tardío se puede estimar con un micrófono común.
+- Kendall no se pudo leer (ResearchGate 403); se sustituyó por Potard y Burnett, que para
+  implementar es mejor porque da números.
+- Que los parlantes no expongan BASS ni PACS: `bluetoothctl info` devuelve **la
+  caché de BlueZ** y el emparejamiento fue por BR/EDR. Se cierra conectando por LE
+  con los parlantes encendidos.
+- **Que el tono de E8 se haya oído.** Lo medido es que el CIS se estableció y que los
+  paquetes salieron; nadie tenía los audífonos puestos.
+- Que la frecuencia negociada en E8 sea 32 kHz: se deduce del SDU de 60 B en 7,5 ms
+  (preset `32_1`) y de que el `bluez_input` reporta 32000 Hz. La configuración del ASE
+  se había hecho antes de empezar la captura.
+- Que la tarjeta sea un adaptador PCIe con módulo M.2 y cable USB: INFERIDO de que
+  la placa (MSI B450M PRO-VDH MAX) no tiene ranura M.2 key E.
+- Que los últimos bytes del UUID `excelpoint.` (`2001`, `2002`, `2014`) sean un
+  índice de unidad o un rol en el par estéreo.
+
+**Medido.**
+- **El motor procesado por bloques coincide con procesarlo de una vez**: exacto muestra a
+  muestra sin extracción de ambiente, y por debajo del 5 % con ella. Antes de escribir el
+  extractor con estado, la diferencia era del **642 %**, o sea un clic por bloque.
+- **Drift, 30 min, 3 Go 4:** 180 ráfagas; Go 4 Red mediana −8,36 ms con **MAD 25,01 ms**;
+  Go 4 Blue −7,30 ms con MAD 9,03 ms. **El número de deriva que sale de ahí (+55,3 ms/h) no
+  se reporta como resultado**, porque el instrumento no daba para eso.
+- **LE Features del AX210 (firmware `202-5.26`): `ff 59 01 3c ae 00 00 00`.** Bits
+  28 y 29 presentes; **30, 31 y 13 ausentes**. `btmgmt info` coincide:
+  `cis-central cis-peripheral`, sin `iso-broadcaster` ni `sync-receiver`. La traza de
+  `btmon` del arranque da **0** comandos de Periodic Advertising o de BIG.
+- El socket ISO del kernel: `BTPROTO_ISO` (8) da `EPROTONOSUPPORT` sin la bandera y
+  abre bien con ella. Este kernel no tiene ningún `CONFIG_BT_*ISO*`.
+- Códecs sobre LE CIS: de 6 códecs locales, el único con "Codec supported over LE
+  CIS" es `Transparent (0x03)`, así que LC3 va en software.
+- **E8:** CIG con 2 CIS (handles 2304 y 2305), CIG Synchronization Delay **4632 µs**,
+  CIS sync delay 4632 y 3702 µs, ISO interval **7,50 ms**, PHY **LE 2M**, 3
+  subeventos, BN/FT 1/1, MTU **60 B**, **2214 paquetes `LE-CIS`** salientes con
+  `slen 60`. 60 B cada 7,5 ms = **64 kbps por canal**.
+- **E6:** el instrumento valida en **14 casos sintéticos** entre −6 y +120 ms, con y
+  sin reverberación, con **error máximo 0,04 ms** y el conteo de ráfagas correcto en
+  todos. Con parlantes, 4 reproducciones: medianas **+60,23 / +47,39 / +50,80 /
+  +60,25 ms**, MAD **2,03 a 3,81 ms**, rangos 6,17 a 10,01 ms, 9 de 10 ráfagas medidas
+  en cada corrida. **Variación entre reproducciones: 12,9 ms.**
+- `scripts/check.sh` pasa en Linux con `PY=python3.14`: 9 tests en 0,27 s, con hatch
+  1.16.2 armando su entorno en Python 3.12.12.
+- El Bluetooth del AX210 negocia **12 Mbps (USB full-speed)** en el puerto `1-6` del
+  xHCI del chipset AMD `[1022:43d5]`.
+- Un `scan le` de 15 s con los parlantes apagados: **0 JBL** entre ~30 dispositivos.
+- `decodifica-le-features.py` se probó con tres vectores sintéticos (solo bit 30;
+  bits 12/13/28; una línea de debugfs) y acertó los tres veredictos.
+
+---
+
 ## 2026-09-26 · s-7c8794-32c631 — Estructura base: paquete aurasync con hatch, tests de humo y plan de estructura
 
 **Qué.**
