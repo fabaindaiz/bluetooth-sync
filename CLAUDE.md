@@ -9,7 +9,8 @@ las limitaciones de la app de JBL.
 (d-7c8794-9afee2). Lo que lo desbloqueó es que **E4 resultó imposible con el hardware
 actual** —el AX210 no puede transmitir ni escuchar un BIS— y que **A2DP con 2 o 3
 parlantes iguales alinea a pocos milisegundos**. La decisión sobre Auracast sigue
-abierta hasta que lleguen las SuperMini.
+abierta hasta que lleguen las SuperMini. **Lo próximo (2026-09-29):** el servicio de control
+(d-7c8794-74b639), con la spec escrita y pendiente de revisión.
 
 Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
 solo el BIS de Auracast que les corresponde) solo se responde con los parlantes en la
@@ -104,6 +105,14 @@ es lo único que avisa a la siguiente.
 
 - Documentos propios en español; identificadores, comandos y rutas tal cual. Lo que
   está dentro de `.agents/` sigue en inglés.
+- **El código nuevo del host va en inglés** (d-7c8794-7b3093): módulos, identificadores,
+  docstrings, rutas REST, campos del contrato y la documentación de la API. Lo existente
+  queda en español hasta su migración (i-7c8794-f30928); al editar un archivo en español
+  se mantiene su idioma y la lógica nueva va, si se puede, a un módulo nuevo en inglés.
+- **Hay tres equipos** (`docs/research/experimentos/00-inventario-*.md`): el Mac,
+  `PC-Ryzen5` (el de las pruebas con parlantes, con el micrófono fifine) y el portátil
+  `HP-O16` (mismo AX210; por ahora solo desarrollo, sin pruebas de audio). Cada
+  medición anota en qué equipo se hizo.
 - Explicar los trade-offs y preguntar antes de cambios estructurales o de gastos
   (hardware). Extender un documento existente antes de crear otro.
 
@@ -124,6 +133,7 @@ es lo único que avisa a la siguiente.
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |
+| ¿Cómo se diseñó una pieza antes de construirla? | `docs/superpowers/specs/` (en inglés) |
 | ¿Cómo está organizado el código y qué va en cada módulo? | `docs/research/08-integracion-y-plan.md` §6.1, `host/README.md`, `firmware/README.md` |
 | ¿Qué sigue y con qué choca? | `docs/roadmap.md` |
 | ¿Qué hizo cada sesión? | `.claude/logs/agent-changelog.md` |

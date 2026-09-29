@@ -985,7 +985,30 @@ desde el principio y que la herramienta **avise** en vez de dejar probar algo qu
 inestable — hoy `doctor` ya lo avisa.
 
 ### Modo difusión en vivo: ajuste interactivo de niveles y retardos · i-7c8794-bdb678
-**Estado: es lo próximo (2026-09-29), y ya no es una comodidad.** La primera escucha con
+**Diseño cerrado (2026-09-29, tarde), spec escrita y pendiente de revisión; sin código.**
+La spec está en
+[superpowers/specs/2026-09-29-control-service-design.md](superpowers/specs/2026-09-29-control-service-design.md)
+(en inglés, d-7c8794-7b3093), y la decisión en d-7c8794-74b639. Lo que cambió respecto de
+lo que sigue abajo, a pedido del usuario:
+- **no es un servidor dentro de `run` sino un programa persistente** (`aurasync service`),
+  que se inicia y se apaga a mano y sigue vivo aunque falle una sesión de audio. El audio
+  existe solo entre `start` y `stop`;
+- **el control es un contrato JSON independiente del transporte** (`control.py`). REST es
+  el primer transporte; **serie** será el segundo (i-7c8794-a9f161), pensando en la Fase 3;
+- **la interfaz se decide después**: esta entrega es solo la API. El A/B ciego y la
+  interfaz son la segunda entrega (i-7c8794-f3ddf8);
+- en la red local con **token**, guardado en `service.json` (`0600`); los ajustes viven en
+  memoria y se escriben solo con `save` o `preset_save`;
+- **dos hallazgos del código que el diseño resuelve:** `pan` y `ambiente` no tienen rampa
+  hoy (moverlos en vivo sería un salto), y apagar el extractor o el decorrelador **corre la
+  señal en el tiempo** (43 ms y ~1–2 ms). El extractor sigue corriendo con un factor de
+  mezcla; el decorrelador y los presets cambian con un fundido a silencio de 80 + 80 ms;
+- de paso resuelve el **micrófono fijado en el código** que encontró el inventario de
+  `HP-O16`: `--microfono` → `service.json` → el default de PipeWire.
+
+**Lo próximo:** que el usuario revise la spec, y después el plan de implementación.
+
+**Estado anterior (2026-09-29, mañana): era lo próximo, y ya no una comodidad.** La primera escucha con
 parlantes lo dejó claro: el efecto *"se siente algo pero no tanto como esperaba"*, y sin poder
 mover los parámetros mientras suena, cada prueba cuesta un reinicio y la comparación queda en
 la memoria del oyente, que para diferencias sutiles no sirve
@@ -1031,6 +1054,24 @@ cambiables en caliente, lo que conviene saber antes de diseñarlo.
 **Qué la favorece:** la misma tradición dice algo útil para este proyecto: en el
 Acousmonium los parlantes son **de timbres y tamaños distintos a propósito**. O sea que el
 Charge 6 al lado de tres Go 4 no es un defecto a igualar, sino una voz distinta.
+
+### A/B ciego e interfaz para el servicio de control · i-7c8794-f3ddf8
+**Estado:** Planificado. Segunda entrega del servicio de control; depende de la primera
+(i-7c8794-bdb678).
+
+**Qué es:** dos cosas sobre la API que deja la primera entrega:
+- **A/B ciego:** el programa sortea cuál de dos presets es X, la persona elige cuál prefiere
+  sin saberlo, y al final se muestra cuántas veces eligió cada uno. Queda en el registro de
+  la sesión. La primera entrega ya deja lo que esto necesita: `preset_load` hace el fundido
+  **aunque no cambie nada**, así la presencia del corte no delata la respuesta;
+- **una interfaz** para usarla desde el teléfono. Cuál (web servida por el mismo programa,
+  una app, otra cosa) lo decide el usuario después de usar la API.
+
+**Por qué el modo ciego:** el proyecto ya descartó tres criterios que *parecían* bien
+(`CLAUDE.md`), y saber qué preset suena sesga lo que se oye. Es la misma regla aplicada a la
+escucha.
+
+**Con qué choca:** con nada; es un cliente de la API.
 
 ### Calibrar el retardo sin un micrófono central · i-7c8794-4745b4
 **Estado:** Planificado. Pedido del usuario el 2026-09-29. El detalle técnico, con el estado de
@@ -1213,7 +1254,44 @@ Python, pero no cuesta nada.
 **Qué hay que decidir antes:** Pico 2 W o Pi Zero 2 W. Lo decide P3(a): si 4
 codificadores LC3 caben en el RP2350.
 
+### Transporte serie para el contrato de control · i-7c8794-a9f161
+**Estado:** Planificado, solo en el roadmap. Depende del servicio de control
+(i-7c8794-bdb678) y de la elección de la Fase 3.
+
+**Qué es:** llevar el mismo contrato JSON del servicio de control por una línea serie: un
+mensaje por línea, con `id` para emparejar respuestas. No hay nada más que diseñar: la ruta
+`POST /v1/command` ya recibe el mensaje crudo tal como iría por serie, y los tests de la
+primera entrega comprueban que cada ruta REST da lo mismo que ese mensaje.
+
+**Para qué, según la variante de la Fase 3:**
+- **con la Pico 2 W,** el servicio queda en el PC (la Pico es C y no corre el núcleo Python),
+  y la serie es el enlace entre el servicio y el firmware, que tiene un control propio chico
+  (el BIG, el volumen por canal, su estado);
+- **con la Pi Zero 2 W,** el servicio entero se muda a la Pi, y la serie es otro camino para
+  que una interfaz le hable, por un puerto serie USB del gadget.
+
+**Con qué choca:** con nada del núcleo. En la Pico, parsear JSON en C cuesta RAM y código;
+si no cabe, el contrato admite una codificación más compacta **con los mismos nombres y
+códigos de error**.
+
 ## Proceso y herramientas
+
+### Migrar el código existente del host al inglés · i-7c8794-f30928
+**Estado:** Planificado. Pedido del usuario el 2026-09-29 (d-7c8794-7b3093).
+
+**Qué es:** traducir al inglés los identificadores, docstrings y comentarios de lo que ya
+existe en `host/` (`motor.py`, `config.py`, `medicion.py`, `sincronia.py`, `sonido.py`,
+`dsp/`, `cli.py`) y los campos de `instalacion.json`, con migración del archivo que ya tiene
+el usuario.
+
+**Cómo:** en un cambio aparte, **sin mezclar funcionalidad con renombres**, para que el diff
+sea revisable y los 167 tests prueben que nada cambió de comportamiento. Al terminar, el
+mapa de nombres de `control.py` se vuelve la identidad y se borra.
+
+**Con qué choca:** con cualquier rama abierta que toque esos archivos. Conviene hacerlo
+entre entregas, no en medio de una. Los datos crudos de `docs/research/experimentos/datos/`
+(por ejemplo el registro del lazo, con clases como `ajuste`) no se reescriben: son
+históricos.
 
 ### Primer commit de la preparación · i-7c8794-c28668
 **Estado:** Hecho (2026-09-25).

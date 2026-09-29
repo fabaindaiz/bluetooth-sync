@@ -7,6 +7,79 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-29 · s-7c8794-5439d5 — Inventario del portátil HP-O16 y diseño del servicio de control
+
+**Qué.** Dos partes, las dos sin tocar audio ni Bluetooth (el usuario pidió no hacer pruebas
+en este equipo).
+- **El inventario de un tercer equipo**, el portátil `HP-O16` (HP OMEN 16, i5-11400H,
+  CachyOS 7.2.8), con una tabla que lo compara con el Mac y `PC-Ryzen5`. Tiene el **mismo
+  Intel AX210 con el mismo firmware** (SHA1 `0x2925677d`) y las mismas versiones de BlueZ,
+  PipeWire y WirePlumber. `btmgmt info`, leído sin root, no tiene `iso-broadcaster` ni
+  `sync-receiver`. `scripts/check.sh` pasa (167 tests). El probe del inventario ahora sirve
+  en cualquier equipo Linux: lee `btmgmt info` sin sudo, lista `rfkill` y encuentra la
+  tarjeta Wi-Fi sin direcciones PCI fijas.
+- **El diseño del servicio de control** (i-7c8794-bdb678), con la spec escrita y revisada,
+  **sin código**. Un programa persistente (`aurasync service`), que se inicia y se apaga a
+  mano y sigue vivo aunque falle una sesión de audio. Su control es un contrato JSON
+  independiente del transporte (`control.py`): REST ahora y serie en la Fase 3. Audio a
+  pedido, token en la red local, presets guardados a pedido, un solo escritor del motor.
+  Dos decisiones nuevas: d-7c8794-74b639 (el servicio y el contrato) y d-7c8794-7b3093
+  (**el código nuevo va en inglés**). Tres entradas nuevas en el roadmap: i-7c8794-a9f161
+  (transporte serie), i-7c8794-f30928 (migrar el código existente al inglés) e
+  i-7c8794-f3ddf8 (A/B ciego e interfaz).
+
+**Archivos.** `docs/research/experimentos/00-inventario-hp-o16.md` y
+`datos/00/hp-o16-inventario.txt` (nuevos), `docs/research/experimentos/00-inventario-linux.md`
+(una corrección), `probes/00-inventario-linux/inventario.sh`,
+`docs/superpowers/specs/2026-09-29-control-service-design.md` (nuevo), `docs/decisions.md`,
+`docs/roadmap.md`, `CLAUDE.md`.
+
+**Por qué.** El usuario retomó desde un tercer equipo, pidió su inventario junto al de los
+otros dos, y después seguir con el roadmap. Lo próximo era i-7c8794-bdb678. El usuario
+cambió su forma durante el diseño: de un servidor dentro de `run` a un programa persistente,
+con un contrato que pueda viajar por serie a la Raspberry de la Fase 3, y con la interfaz
+decidida más adelante.
+
+**Arquitectura.** ✅ Cumple. El contrato (`control.py`) y las rampas (`dsp/ramps.py`) no
+hacen E/S, que es la regla de `docs/research/08` §6.1. La decisión se tomó con el usuario,
+parte por parte (arquitectura, contrato, motor, errores y tests), antes de escribir la spec.
+
+**Qué salió mal en el camino.**
+- El primer `btmgmt info` colgó el comando 2 minutos: después de imprimir se queda en modo
+  interactivo. Va con `timeout 5`.
+- Propuse primero el servidor **dentro de `run`** (la opción A), siguiendo lo que decía el
+  roadmap. El usuario quería otra cosa: un programa persistente con un contrato portable.
+  Después interpreté "persistente" como un servicio de systemd, y tampoco era eso.
+- **Dos afirmaciones de la spec que no tenían respaldo, corregidas en la revisión:** que el
+  costo de CPU del motor "cabe de sobra en un núcleo" (no está medido; solo el de la
+  calibración, en `experimentos/08`) y que `run` "detecta" al servicio, sin decir cómo.
+
+**Qué quedó pendiente.**
+- **Que el usuario revise la spec**, y después el plan de implementación (`writing-plans`).
+  No hay código escrito.
+- **El micrófono sigue fijo en el código** (`MICROFONO_POR_DEFECTO` en `cli.py`, el fifine de
+  `PC-Ryzen5`). La spec lo resuelve (§4.3), pero hasta implementarla, en cualquier otro equipo
+  hay que pasar `--microfono`.
+- **`doctor` no avisa** de lo que impediría una prueba en `HP-O16`: Bluetooth bloqueado por
+  `rfkill` y micrófono por defecto silenciado.
+- **El sink por defecto guardado en WirePlumber de `HP-O16` son unos Sony WH-CH520.** Es el
+  mecanismo de `experimentos/09`: no tenerlos encendidos durante una prueba en ese equipo.
+- Ningún JBL está emparejado con `HP-O16`, y su Bluetooth está bloqueado por `rfkill`
+  (no se tocó).
+- **Medir el costo en tiempo real del motor**, el primer paso de la implementación (spec §12).
+
+**Desvío del plan.** El roadmap describía un servidor dentro de `run`. La spec lo reemplaza
+por un programa persistente, a pedido del usuario; la entrada del roadmap conserva la versión
+anterior debajo, marcada como tal.
+
+**No verificado.** Que A2DP con 3 Go 4 se comporte en `HP-O16` como en `PC-Ryzen5`
+(INFERIDO por chip y firmware idénticos). Los bits de LE Features de `HP-O16` (necesitan
+`btmon` con root, y ahí no hay sudo). Que la tarjeta de `HP-O16` sea un M.2 reemplazable. Todo
+el diseño del servicio es papel: nada se probó.
+
+**Medido.** Firmware BT 202-5.26 con SHA1 idéntico al de `PC-Ryzen5`; `supported settings`
+sin `iso-broadcaster`; 167 tests en 3,01 s; Wi-Fi de `HP-O16` en 5 GHz, canal 153.
+
 ## 2026-09-29 · s-7c8794-1d3f53 — Del lazo de recalibración a la primera escucha con parlantes: dos errores del estimador y uno del sistema de audio
 
 **Qué.**
