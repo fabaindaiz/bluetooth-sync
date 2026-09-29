@@ -85,6 +85,9 @@ as proposed.
    work, a changelog entry not written, documents a change made false — I will
    close it first and then harvest it. Say if you want it left alone instead,
    and I will harvest only what is already recorded and name what I skipped.
+   Closing and harvesting end in commits only as this repository's own commit
+   rules allow: where they say commits are offered, or made only when asked,
+   I offer them and stop.
 
 4. Scope. I will write only proposals in `.agents/proposals/` and
    `harvested_through`, and put process friction that belongs to this
@@ -123,7 +126,9 @@ down.** For each repository, run the closing review of the session loop (`prompt
 3. **Write the changelog entry**, including what the first attempt got wrong and what caught it. That
    entry is most of what the harvest will read.
 4. **Run the gate** and report which selection ran.
-5. **Commit**, in that repository's own style, so the harvest's writes stand apart from the session's.
+5. **Commit**, in that repository's own style and under its own commit rules and bar (its gate, its
+   changelog entry), so the harvest's writes stand apart from the session's. Where those rules say commits
+   are offered, or made only when asked, offer it and stop; the harvest never commits past them.
 
 **Proposals already in `.agents/proposals/` and not committed** are an earlier harvest in flight, and
 this repository's own: list them with `bundle.py proposals`, commit them as they are in step 5 (a
@@ -169,7 +174,8 @@ uncommitted diff is their work.
    method candidate.
 7. **Check and commit**: set `harvested_through` in `carrier.toml` to the last date read; then
    `bundle.py privacy`, `bundle.py verify` and `bundle.py check-local .` pass; then one commit in this
-   repository's own style. An allowance the privacy check lists exists only because the user asked for
+   repository's own style, under its own commit rules and bar: offered and left to the user where those
+   rules say so. An allowance the privacy check lists exists only because the user asked for
    it. A proposal is never edited: if one is wrong, delete it before it is committed, or write a second
    one that says what the first got wrong. An outbox from 0.0.22 or 0.0.23 still in `tracking/` is
    converted first, with `bundle.py proposals --from-outbox`.

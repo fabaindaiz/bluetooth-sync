@@ -9,6 +9,34 @@ version it holds with `bundle.py changelog --since <its version>`.
 
 ## [Unreleased]
 
+## [0.0.25] - 2026-09-29
+
+A review of every carrier's own procedures against 0.0.24, read by one agent per repository, found no
+conflict in what an agent does by default, and four places where the bundle's words could override a
+repository's own procedure when a method prompt is pasted. This release closes them.
+
+### Changed
+
+- **A repository's own procedures win over the method's, and the root file says so.** The bootstrap's
+  Phase 4 and the root-file template add a third line beside the knowledge and privacy lines: a
+  procedure in `.agents/method/` never overrides the repository's own; where it names a file, a format, a
+  step, a work item or a commit rule the repository defines differently (its task tracker, its plans, its
+  review, its logs, its numbering), the repository's wins, and `carrier.toml` `adapted` records the
+  mapping. **A carrier updating to 0.0.25 adds that line to its root file**, in its own words (update
+  step 3b now names it).
+- **The harvest commits only as the repository's commit rules allow.** Closing work in flight and the
+  harvest's own commit run under the repository's commit rules and bar (its gate, its changelog entry);
+  where those rules say commits are offered or made only when asked, the harvest offers and stops. The
+  pre-flight says so.
+- **Append-only history is not repaired.** The update's step that follows inbound links to removed files
+  leaves a changelog, a session log or any record the repository declares never rewritten as it was
+  written; a path there is history.
+
+### Fixed
+
+- `knowledge/INDEX.md` said a learning not yet admitted is a row in `tracking/candidates.md`, the outbox
+  0.0.24 removed; it now says a proposal in `proposals/`, written by `bundle.py propose`.
+
 ## [0.0.24] - 2026-09-29
 
 What a carrier learns now travels as proposals, and this release is the first to take them in: twenty

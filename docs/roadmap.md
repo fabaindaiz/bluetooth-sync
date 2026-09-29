@@ -11,6 +11,8 @@ qué choca**, qué la favorece y qué hay que decidir antes.
 - Una entrada se cierra en el mismo cambio que la termina.
 - Los ids se generan con `bundle.py id i "<idea>"` y no cambian aunque cambie el
   texto.
+- El título de cada entrada tiene la forma `### <Idea> · i-7c8794-…`, con el id
+  después del punto medio: es lo que `bundle.py ids` lee como definición.
 
 La base de todo es [docs/research/README.md](research/README.md).
 

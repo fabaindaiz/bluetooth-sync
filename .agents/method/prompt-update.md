@@ -199,7 +199,8 @@ repository's own artifacts, which do not take the practice up.
 
    **3b. Refresh the reviewer**: copy `.agents/agents/knowledge-reviewer.md` into the assistant's
    agent folder again (Claude Code: `.claude/agents/knowledge-reviewer.md`), and make the root file's
-   knowledge line the one `prompt-bootstrap.md` Phase 4 words. The installed copy is never edited:
+   knowledge line, its privacy line and its line that this repository's procedures win the ones
+   `prompt-bootstrap.md` Phase 4 words, in this repository's own words. The installed copy is never edited:
    every release regenerates it; adapt it through the root file, and record the adaptation in
    `adapted`.
 4. **Empty `incoming/`**, keeping its `README.md`. A copy left there is a second
@@ -230,7 +231,11 @@ and reported.
 3. **Follow every inbound link:** the root instruction file, documents,
    scripts, CI, settings, the audit's skip lists. Every pointer is updated or
    removed in the same change; a dead pointer is the most common breakage an
-   update causes.
+   update causes. **Append-only history is the exception**: a changelog, a
+   session log or any record this repository declares never rewritten keeps
+   what it said when it was written; a pointer there is history, not a link to
+   repair, and the audit that checks paths exempts it rather than the entry
+   being edited.
 4. **Report the table and wait.** Then remove, and record in the changelog
    entry what happened to each file's content.
 

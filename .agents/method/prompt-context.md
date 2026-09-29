@@ -1043,7 +1043,11 @@ here, and where this repository states an invariant that contradicts a note,
 follow the repository and say so. Only when the user asks for a review in a fresh
 context or names the reviewer does the diff go to the `knowledge-reviewer`
 subagent; a change that deletes or rewrites stored data, moves money or touches
-authentication offers one in its report when none was asked for.
+authentication offers one in its report when none was asked for. Another row: a
+procedure in `.agents/method/` never overrides this repository's own; where it
+names a file, a format, a step, a work item or a commit rule this repository
+defines differently, this repository's wins, and `.agents/carrier.toml`
+`adapted` records the mapping.
 ```
 
 **What does not go here:** any number that has an owner document, anything the

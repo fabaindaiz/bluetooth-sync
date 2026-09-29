@@ -306,7 +306,13 @@ base is a folder nobody opens. The same map gets a second line, also in the
 repository's own words: *nothing written into `.agents/` or any file that leaves
 this repository may identify, directly or by reconstruction, a private
 repository, its people or its users — `bundle.py privacy .agents` checks it*
-(`prompt-context.md`, principle 20). Mint the repository's carrier id once with
+(`prompt-context.md`, principle 20). And a third, in the repository's own words,
+because the method's procedures are pasted into sessions that also read this
+repository's own: *a procedure in `.agents/method/` never overrides this
+repository's own; where it names a file, a format, a step, a work item or a
+commit rule this repository defines differently (its task tracker, its plans,
+its review, its logs, its numbering), this repository's wins, and
+`.agents/carrier.toml` `adapted` records the mapping* (principle 19). Mint the repository's carrier id once with
 `bundle.py carrier-id --mint`, which creates `.agents/carrier.toml`, and seed
 the decisions log, the roadmap and the changelog with ids from `bundle.py id
 d|i|s TEXT` (`prompt-context.md` §*Workspaces: several repositories at once*).
@@ -830,7 +836,8 @@ environment is the most dangerous kind of correct.
 - [ ] `docs/decisions.md`: every settled question, with an id minted by
       `bundle.py id d`, and the enforcer column filled — including the rows
       that say `—`.
-- [ ] The root file carries the one-line privacy reminder.
+- [ ] The root file carries the one-line privacy reminder, and the line that
+      this repository's procedures win over the method's.
 - [ ] `.agents/carrier.toml` exists, minted by `bundle.py carrier-id --mint`,
       and `.agents/proposals/` holds only the release's two files; the gate runs
       `bundle.py verify` and `bundle.py ids`, on Python 3.11 or newer.

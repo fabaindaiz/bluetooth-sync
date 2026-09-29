@@ -7,6 +7,42 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-29 · s-7c8794-48c25e — Actualizar el paquete de guías de 0.0.24 a 0.0.25
+
+**Qué.** El paquete de `.agents/` pasó de 0.0.24 a 0.0.25, copiado por el repositorio de
+origen en una sesión de sincronización. La versión nueva dice que los procedimientos propios
+de un repositorio ganan sobre los del método, y pide que el archivo raíz lo diga.
+- **`CLAUDE.md` tiene una fila nueva** en la tabla de documentos, junto a las del
+  conocimiento y la privacidad: un procedimiento de `.agents/method/` nunca manda sobre los
+  de este repositorio; donde nombra un archivo, un formato, un paso o una regla de commits
+  que aquí se define distinto, gana lo de aquí, y `carrier.toml` `adapted` anota la
+  equivalencia. Ningún procedimiento propio cambió.
+- **`docs/roadmap.md` §*Cómo mantenerlo*** anota la forma de los títulos
+  (`### <Idea> · i-7c8794-…`, id después del punto medio), que ya se usaba y solo estaba
+  escrita en `adapted`.
+- **El revisor** se volvió a copiar de `.agents/agents/`; en 0.0.25 no cambió, así que la
+  copia quedó igual.
+- Ninguna propuesta pendiente: no había nada que podar.
+
+**Archivos.** `.agents/` (la versión nueva), `CLAUDE.md`, `docs/roadmap.md`, este registro.
+
+**Por qué.** La sincronización de 0.0.25 alcanzó a este repositorio, y su paso 3b de la
+actualización pide la línea nueva del archivo raíz.
+
+**Arquitectura.** ✅ Cumple. No toca código del host. `.agents/` no se editó a mano. Solo se
+agregó texto que apunta y ordena precedencias.
+
+**Qué salió mal en el camino.** Nada.
+
+**Qué quedó pendiente.** Nada nuevo.
+
+**No verificado.** Que el revisor funcione en una revisión real: no se pidió ninguna.
+
+**Medido.** `bundle.py verify` pasa (0.0.25 verificado) y `PY=python3.14 scripts/check.sh`
+pasa (60 ids definidos, 0 errores; 167 tests).
+
+---
+
 ## 2026-09-29 · s-7c8794-e67950 — Actualizar el paquete de guías de 0.0.22 a 0.0.24
 
 **Qué.** El paquete de `.agents/` pasó de 0.0.22 a 0.0.24, copiado por el repositorio de

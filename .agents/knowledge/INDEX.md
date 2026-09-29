@@ -103,7 +103,7 @@ Each area index lists every note's two answers. A note is `measured` only when a
 
 ## Keeping it usable
 
-What is bounded is attention, not the number of notes: every note is reachable (under its topic, in at least one phase above, and in at least one *about to do* row of its area), and the build refuses one that is not. A learning not yet admitted is a row in `../tracking/candidates.md`, this repository's outbox; `OPEN.md` lists the ones the home is still waiting on.
+What is bounded is attention, not the number of notes: every note is reachable (under its topic, in at least one phase above, and in at least one *about to do* row of its area), and the build refuses one that is not. A learning not yet admitted goes back as a proposal, one file in `../proposals/` written by `bundle.py propose` (`../proposals/README.md`), never as an edit here; `OPEN.md` lists the ones the home is still waiting on.
 
 ## What is deliberately not here
 
