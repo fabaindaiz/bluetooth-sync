@@ -5,7 +5,9 @@
 # Uso:  probes/00-inventario-linux/inventario.sh > salida.txt
 #
 # `btmgmt info` es la lectura que decide E1 (busca `iso-broadcaster` en
-# `supported settings`) y necesita root. Sin root, el script sigue y lo anota.
+# `supported settings`). Se lee sin root: el kernel acepta lecturas en un socket
+# mgmt no privilegiado (medido en HP-O16, 2026-09-29). Va con `timeout` porque,
+# después de imprimir, btmgmt se queda en modo interactivo.
 set -uo pipefail
 
 seccion() { printf '\n===== %s =====\n' "$1"; }
@@ -32,7 +34,10 @@ correr sh -c 'for d in /sys/bus/usb/devices/*/; do
   esac
 done'
 correr sh -c 'readlink -f /sys/class/bluetooth/hci0'
-correr sh -c 'lspci -nn -s 16:00.0; lspci -nn -s 26:00.0'
+correr sh -c 'for d in /sys/bus/pci/devices/*; do
+  [ "$(cat "$d/class")" = 0x028000 ] && echo "Wi-Fi  $(readlink -f "$d")"; true
+done'
+correr rfkill list
 
 seccion "Versiones del stack"
 correr bluetoothctl --version
@@ -49,12 +54,8 @@ seccion "Controlador según BlueZ (sin root)"
 correr bluetoothctl show
 correr sh -c 'grep -nE "^[^#]*(Experimental|KernelExperimental)" /etc/bluetooth/main.conf'
 
-seccion "Capacidades mgmt (necesita root) — la lectura que decide E1"
-if sudo -n btmgmt info >/dev/null 2>&1; then
-  correr sudo -n btmgmt info
-else
-  printf '\n(sin root: `btmgmt info` no se pudo leer)\n'
-fi
+seccion "Capacidades mgmt — la lectura que decide E1"
+correr timeout 5 btmgmt info
 
 seccion "PipeWire: BAP y LC3"
 correr sh -c 'ls /usr/lib/spa-0.2/bluez5/'

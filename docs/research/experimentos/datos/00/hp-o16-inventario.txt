@@ -1,0 +1,293 @@
+# Inventario Linux — 2026-09-29T12:25:36-03:00
+
+===== Sistema =====
+
+$ uname -a
+Linux HP-O16 7.2.8-1-cachyos #1 SMP PREEMPT_DYNAMIC Sat, 26 Sep 2026 22:46:02 +0000 x86_64 GNU/Linux
+
+$ sh -c cat /etc/os-release
+NAME="CachyOS Linux"
+PRETTY_NAME="CachyOS"
+ID=cachyos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;23;147;209"
+HOME_URL="https://cachyos.org/"
+DOCUMENTATION_URL="https://wiki.cachyos.org/"
+SUPPORT_URL="https://discuss.cachyos.org/"
+BUG_REPORT_URL="https://github.com/cachyos"
+PRIVACY_POLICY_URL="https://terms.archlinux.org/docs/privacy-policy/"
+LOGO=cachyos
+
+===== Chip Bluetooth =====
+
+$ sh -c lspci -nn | grep -iE "network|wireless|bluetooth"
+0000:2e:00.0 Network controller [0280]: Intel Corporation Wi-Fi 6E(802.11ax) AX210/AX1675* 2x2 [Typhoon Peak] [8086:2725] (rev 1a)
+
+$ sh -c lsusb | grep -i bluetooth
+Bus 003 Device 005: ID 8087:0032 Intel Corp. AX210 Bluetooth
+
+$ sh -c journalctl -k -b | grep -iE "bluetooth|btusb" 
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: Core ver 2.22
+sep 29 10:15:59 HP-O16 kernel: NET: Registered PF_BLUETOOTH protocol family
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: HCI device and connection manager initialized
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: HCI socket layer initialized
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: L2CAP socket layer initialized
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: SCO socket layer initialized
+sep 29 10:15:59 HP-O16 kernel: usbcore: registered new interface driver btusb
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Firmware timestamp 2026.5 buildtype 1 build 82122
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Firmware SHA1: 0x2925677d
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: No support for _PRR ACPI method
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Found device firmware: intel/ibt-0041-0041.sfi
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Boot Address: 0x100800
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Firmware Version: 202-5.26
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Firmware already loaded
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Fseq status: Success (0x00)
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Fseq executed: 00.00.02.42
+sep 29 10:15:59 HP-O16 kernel: Bluetooth: hci0: Fseq BT Top: 00.00.02.41
+sep 29 10:16:00 HP-O16 kernel: Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+sep 29 10:16:00 HP-O16 kernel: Bluetooth: BNEP filters: protocol multicast
+sep 29 10:16:00 HP-O16 kernel: Bluetooth: BNEP socket layer initialized
+sep 29 10:16:00 HP-O16 kernel: Bluetooth: MGMT ver 1.23
+sep 29 10:16:06 HP-O16 kernel: Bluetooth: RFCOMM TTY layer initialized
+sep 29 10:16:06 HP-O16 kernel: Bluetooth: RFCOMM socket layer initialized
+sep 29 10:16:06 HP-O16 kernel: Bluetooth: RFCOMM ver 1.11
+
+===== Topología: por dónde entra cada función de la tarjeta combo =====
+
+$ sh -c for d in /sys/bus/usb/devices/*/; do
+  [ -f "$d/idVendor" ] || continue
+  case "$(cat "$d/idVendor"):$(cat "$d/idProduct")" in
+    8087:*) echo "BT  $(cat "$d/idVendor"):$(cat "$d/idProduct")  $(cat "$d/speed") Mbps  $(readlink -f "$d")" ;;
+  esac
+done
+BT  8087:0032  12 Mbps  /sys/devices/pci0000:00/0000:00:14.0/usb3/3-7
+
+$ sh -c readlink -f /sys/class/bluetooth/hci0
+/sys/devices/pci0000:00/0000:00:14.0/usb3/3-7/3-7:1.0/bluetooth/hci0
+
+$ sh -c lspci -nn -s 16:00.0; lspci -nn -s 26:00.0
+
+===== Versiones del stack =====
+
+$ bluetoothctl --version
+bluetoothctl: 5.87
+
+$ pipewire --version
+pipewire
+Compiled with libpipewire 1.6.9
+Linked with libpipewire 1.6.9
+
+$ wireplumber --version
+wireplumber
+Compiled with libwireplumber 0.5.17
+Linked with libwireplumber 0.5.17
+
+$ sh -c pacman -Q bluez bluez-utils bluez-libs liblc3 pipewire wireplumber 2>/dev/null
+bluez 5.87-2.1
+bluez-utils 5.87-2.1
+bluez-libs 5.87-2.1
+liblc3 1.1.3-2.1
+pipewire 1:1.6.9-1
+wireplumber 0.5.17-2.1
+
+===== Kernel: opciones de Bluetooth y socket ISO =====
+
+$ sh -c zgrep -E "^CONFIG_BT(_LE|_ISO|=)" /proc/config.gz
+CONFIG_BT=m
+CONFIG_BT_LE=y
+CONFIG_BT_LE_L2CAP_ECRED=y
+CONFIG_BT_LEDS=y
+
+$ sh -c grep -c iso /proc/net/protocols
+0
+(rc=1)
+
+$ sh -c cat /proc/net/protocols | grep -iE "^(ISO|L2CAP|SCO)"
+SCO        904      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+L2CAP      888      0      -1   NI       0   no   bluetooth   n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n  n
+
+===== Controlador según BlueZ (sin root) =====
+
+$ bluetoothctl show
+Controller BC:09:1B:FE:C7:3D (public)
+	Manufacturer: 0x0002 (2)
+	Version: 0x0d (13)
+	Name: HP-O16
+	Alias: HP-O16
+	Class: 0x00000000 (0)
+	Powered: no
+	PowerState: off-blocked
+	Discoverable: no
+	DiscoverableTimeout: 0x000000b4 (180)
+	Pairable: yes
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: Handsfree Audio Gateway   (0000111f-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Source              (0000110a-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (03b80e5a-ede8-4b33-a751-6ce34ec4c700)
+	UUID: Handsfree                 (0000111e-0000-1000-8000-00805f9b34fb)
+	Modalias: usb:v1D6Bp0246d0557
+	Discovering: no
+	Roles: central
+	Roles: peripheral
+Advertising Features:
+	ActiveInstances: 0x00 (0)
+	SupportedInstances: 0x0c (12)
+	SupportedIncludes: tx-power
+	SupportedIncludes: appearance
+	SupportedIncludes: local-name
+	SupportedSecondaryChannels: 1M
+	SupportedSecondaryChannels: 2M
+	SupportedSecondaryChannels: Coded
+	SupportedCapabilities.MinTxPower: 0xffffffde (-34)
+	SupportedCapabilities.MaxTxPower: 0x0007 (7)
+	SupportedCapabilities.MaxAdvLen: 0xfb (251)
+	SupportedCapabilities.MaxScnRspLen: 0xfb (251)
+	SupportedFeatures: CanSetTxPower
+	SupportedFeatures: HardwareOffload
+
+$ sh -c grep -nE "^[^#]*(Experimental|KernelExperimental)" /etc/bluetooth/main.conf
+(rc=1)
+
+===== Capacidades mgmt (necesita root) — la lectura que decide E1 =====
+
+(sin root: `btmgmt info` no se pudo leer)
+
+===== PipeWire: BAP y LC3 =====
+
+$ sh -c ls /usr/lib/spa-0.2/bluez5/
+libspa-bluez5.so
+libspa-codec-bluez5-aac.so
+libspa-codec-bluez5-aptx.so
+libspa-codec-bluez5-faststream.so
+libspa-codec-bluez5-g722.so
+libspa-codec-bluez5-hfp-cvsd.so
+libspa-codec-bluez5-hfp-lc3-a127.so
+libspa-codec-bluez5-hfp-lc3-swb.so
+libspa-codec-bluez5-hfp-msbc.so
+libspa-codec-bluez5-lc3.so
+libspa-codec-bluez5-ldac.so
+libspa-codec-bluez5-opus-g.so
+libspa-codec-bluez5-opus.so
+libspa-codec-bluez5-sbc.so
+
+$ sh -c ldconfig -p | grep -i lc3
+	liblc3.so.1 (libc6,x86-64) => /usr/lib/liblc3.so.1
+	liblc3.so (libc6,x86-64) => /usr/lib/liblc3.so
+
+===== Python y hatch =====
+
+$ python3 --version
+Python 3.14.7
+
+$ sh -c hatch --version
+Hatch, version 1.16.2
+
+===== Extra (fuera del script, 2026-09-29) =====
+
+$ hostnamectl (sin Machine/Boot ID)
+ Static hostname: HP-O16
+       Icon name: computer-laptop
+         Chassis: laptop 💻
+Operating System: CachyOS
+          Kernel: Linux 7.2.8-1-cachyos
+    Architecture: x86-64
+ Hardware Vendor: HP
+  Hardware Model: OMEN by HP Laptop 16-b0xxx
+    Hardware SKU: 4P618LA#AKH
+Hardware Version: 86.43
+Firmware Version: F.46
+   Firmware Date: Fri 2023-10-13
+    Firmware Age: 2y 11month 2w 3d
+
+$ timeout 5 btmgmt info   (sin root: el kernel permite lecturas en un socket mgmt no privilegiado)
+Index list with 1 item
+hci0:	Primary controller
+	addr BC:09:1B:FE:C7:3D version 13 manufacturer 2 class 0x000000
+	supported settings: powered connectable fast-connectable discoverable bondable link-security ssp br/edr le advertising secure-conn debug-keys privacy configuration static-addr phy-configuration wide-band-speech cis-central cis-peripheral ll-privacy 
+	current settings: bondable ssp br/edr le secure-conn wide-band-speech cis-central cis-peripheral ll-privacy 
+	name HP-O16
+	short name 
+hci0:	Configuration options
+	supported options: public-address 
+	missing options: 
+
+$ rfkill list
+0: hci0: Bluetooth
+	Soft blocked: yes
+	Hard blocked: no
+1: phy0: Wireless LAN
+	Soft blocked: no
+	Hard blocked: no
+
+$ lscpu (modelo)
+CPU(s):                                  12
+Model name:                              11th Gen Intel(R) Core(TM) i5-11400H @ 2.70GHz
+CPU(s) scaling MHz:                      68%
+
+$ free -h
+               total        used        free      shared  buff/cache   available
+Mem:            30Gi        12Gi       827Mi       1,2Gi        18Gi        18Gi
+
+$ lspci -nn (USB, Thunderbolt, audio)
+0000:00:07.0 PCI bridge [0604]: Intel Corporation Tiger Lake-H Thunderbolt 4 PCI Express Root Port #0 [8086:9a2b] (rev 05)
+0000:00:0d.0 USB controller [0c03]: Intel Corporation Tiger Lake-H Thunderbolt 4 USB Controller [8086:9a17] (rev 05)
+0000:00:0d.2 USB controller [0c03]: Intel Corporation Tiger Lake-H Thunderbolt 4 NHI #0 [8086:9a1f] (rev 05)
+0000:00:14.0 USB controller [0c03]: Intel Corporation 500 Series Chipset Family USB 3.2 Gen 2x2 (20 Gbs) xHCI Host Controller [8086:43ed] (rev 11)
+0000:00:1f.3 Multimedia audio controller [0401]: Intel Corporation 500 Series Chipset Family HD Audio [8086:43c8] (rev 11)
+0000:01:00.1 Audio device [0403]: NVIDIA Corporation GA106 High Definition Audio Controller [10de:228e] (rev a1)
+
+$ readlink -f /sys/bus/pci/devices/0000:2e:00.0
+/sys/devices/pci0000:00/0000:00:1c.7/0000:2e:00.0
+
+$ iw dev (canal)
+	Interface wlan0
+		channel 153 (5765 MHz), width: 40 MHz, center1: 5755 MHz
+
+$ wpctl status (Audio)
+Audio
+ ├─ Devices:
+ │      43. GA106 High Definition Audio Controller [alsa]
+ │      44. 500 Series Chipset Family HD Audio  [alsa]
+ │  
+ ├─ Sinks:
+ │      48. GA106 High Definition Audio Controller Digital Stereo (HDMI) [LF24T450F] [vol: 0.00 MUTED]
+ │      52. 500 Series Chipset Family HD Audio HDMI / DisplayPort 3 Output [vol: 1.00]
+ │      53. 500 Series Chipset Family HD Audio HDMI / DisplayPort 2 Output [vol: 1.00]
+ │      54. 500 Series Chipset Family HD Audio HDMI / DisplayPort 1 Output [vol: 1.00]
+ │  *   55. 500 Series Chipset Family HD Audio Speaker [vol: 0.00 MUTED]
+ │  
+ ├─ Sources:
+ │      56. 500 Series Chipset Family HD Audio Stereo Microphone [vol: 1.00]
+ │  *   57. 500 Series Chipset Family HD Audio Digital Microphone [vol: 1.00 MUTED]
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+
+Video
+
+$ grep default.configured ~/.local/state/wireplumber/default-nodes
+default.configured.audio.sink=bluez_output.14_06_A7_6B_E3_F0.1
+default.configured.audio.source=bluez_input.14:06:A7:6B:E3:F0
+
+$ cd host && hatch run aurasync doctor
+== parlantes Bluetooth ==
+  ninguno conectado
+
+== micrófono ==
+  500 Series Chipset Family HD Audio Digital Microphone alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source
+  500 Series Chipset Family HD Audio Stereo Microphone alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic2__source
+  nota: el micrófono por defecto (alsa_input.usb-3142_fifine_Microphone-00.analog-stereo) no está; usá --microfono
+
+== instalación ==
+  /home/fadiaz/.config/aurasync/instalacion.json: no existe
+
+== veredicto ==
+  ✗ no hay parlantes conectados

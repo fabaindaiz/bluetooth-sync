@@ -54,6 +54,12 @@ corresponde.
   [experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md)). Le faltan los
   bits 30, 31 y 13, así que no transmite ni escucha un BIS. **Sí sirve para unicast
   (CIS central y peripheral) y para A2DP**, o sea para E8, E6, E7 y P1.
+- Un portátil con Linux (`HP-O16`, HP OMEN 16, i5-11400H, CachyOS, kernel 7.2.8),
+  agregado el 2026-09-29 ([experimentos/00-inventario-hp-o16.md](research/experimentos/00-inventario-hp-o16.md)).
+  **El mismo Intel AX210 con el mismo firmware** que `PC-Ryzen5` y las mismas versiones
+  de BlueZ y PipeWire: no transmite Auracast (MEDIDO, sin `iso-broadcaster`), sirve para
+  A2DP y CIS. Ningún JBL emparejado todavía, el Bluetooth está bloqueado por `rfkill` y
+  no hay micrófono USB. Lo que aporta es que **se puede llevar al centro de la pieza**.
 - Este Mac (Apple Silicon, macOS 27), que es la estación de trabajo.
 - **5× SuperMini nRF52840** (clon de nice!nano), compradas el 2026-09-26 y aún no
   recibidas (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
@@ -129,6 +135,11 @@ la fecha.
   Intel AX210 (firmware BT `202-5.26`), BlueZ 5.87, PipeWire 1.6.9 con LC3,
   WirePlumber 0.5.17, kernel 7.2.7. `scripts/check.sh` pasa acá con
   `PY=python3.14`, lo que cierra el pendiente de i-7c8794-f7f5b2.
+- **Hecho el portátil `HP-O16`** (2026-09-29, en
+  [experimentos/00-inventario-hp-o16.md](research/experimentos/00-inventario-hp-o16.md),
+  con la tabla de los tres equipos): mismo AX210 y mismo firmware (SHA1 idéntico), sin
+  `iso-broadcaster`. `scripts/check.sh` pasa. `btmgmt info` se lee **sin root**; el probe
+  del inventario ya no usa sudo y sirve en cualquier equipo Linux.
 - **Capacidades del controlador: medidas** y con su propio experimento, porque el
   resultado cierra E1 ([experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md)).
   La regla de sudo acotada está instalada y se quita con

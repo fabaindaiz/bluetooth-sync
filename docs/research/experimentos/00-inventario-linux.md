@@ -103,6 +103,10 @@ locale en Linux ordena `cli.py` antes de `__init__.py`, al revés que en macOS. 
 usa `LC_ALL=C sort`.
 
 ### Capacidades mgmt (`iso-broadcaster`): NO MEDIDO todavía
+**Corrección (2026-09-29):** no hacía falta root. `timeout 5 btmgmt info` se lee como
+usuario normal; se midió en `HP-O16` ([00-inventario-hp-o16.md](00-inventario-hp-o16.md)).
+Lo que sigue queda como se escribió.
+
 `btmgmt info` necesita root y este equipo no tiene sudo sin contraseña. **Es la
 lectura que decide E1** y queda pendiente.
 
