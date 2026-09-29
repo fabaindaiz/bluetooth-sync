@@ -62,8 +62,12 @@ cambia qué importa (`docs/research/09-…`).
 
 ## Archivos que no se editan a mano
 
-- `.agents/`, salvo `carrier.toml` y `tracking/`. El resto es de la versión del
-  paquete, y `scripts/check.sh` falla si cambia.
+- `.agents/`, salvo `carrier.toml` y las propuestas `proposals/p-*.md`. El resto es
+  de la versión del paquete, y `scripts/check.sh` falla si cambia. Lo que este
+  repositorio aprende para el paquete sale como propuesta, un archivo por cada una,
+  que escribe `bundle.py propose` y nunca se edita (`.agents/proposals/README.md`).
+- `.claude/agents/knowledge-reviewer.md`, que es una copia de
+  `.agents/agents/knowledge-reviewer.md` y se vuelve a copiar en cada actualización.
 
 ## Comandos
 
@@ -137,5 +141,5 @@ es lo único que avisa a la siguiente.
 | ¿Cómo está organizado el código y qué va en cada módulo? | `docs/research/08-integracion-y-plan.md` §6.1, `host/README.md`, `firmware/README.md` |
 | ¿Qué sigue y con qué choca? | `docs/roadmap.md` |
 | ¿Qué hizo cada sesión? | `.claude/logs/agent-changelog.md` |
-| Un cambio toca estado, un contrato, datos, seguridad o verificación | Antes de decidir el diseño y antes de darlo por terminado, consulta `.agents/knowledge/INDEX.md`. Aplica cada tarjeta a la que te lleve (qué afirma, dónde deja de aplicar, cómo se comprueba). Abre la nota completa solo si no está claro dónde deja de aplicar aquí. Si este repositorio fija una invariante que contradice una nota, sigue al repositorio y dilo |
+| Un cambio toca estado, un contrato, datos, seguridad o verificación | Antes de una decisión de diseño, búscalo en `.agents/knowledge/INDEX.md` y abre solo las tarjetas a las que te lleve. Decide cada una por su *Applies if* y su *Not when*, y corre su comprobación antes de darlo por terminado. Abre la nota completa solo si no está claro dónde deja de aplicar aquí. Si este repositorio fija una invariante que contradice una nota, sigue al repositorio y dilo. Solo cuando el usuario pide una revisión en un contexto nuevo, o nombra al revisor, pásale el diff al subagente `knowledge-reviewer` (`.claude/agents/`, copiado de `.agents/agents/` en cada actualización; no se edita) y espera su respuesta. Si el cambio borra o reescribe datos guardados, mueve dinero o toca autenticación y nadie pidió la revisión, ofrécela en el informe, en una línea |
 | Privacidad | Nada que se escriba en `.agents/` ni en un archivo que salga de este repositorio puede identificar, directamente o por deducción, un repositorio privado, a sus personas o a sus usuarios. `bundle.py privacy .agents` lo revisa (va dentro de `scripts/check.sh`). Los datos crudos de los dispositivos propios **sí** se guardan en `docs/research/experimentos/` mientras el repositorio sea privado, y se limpian antes de publicarlo (d-7c8794-8374e1) |

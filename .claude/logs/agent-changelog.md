@@ -7,6 +7,48 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-29 · s-7c8794-e67950 — Actualizar el paquete de guías de 0.0.22 a 0.0.24
+
+**Qué.** El paquete de `.agents/` pasó de 0.0.22 a 0.0.24, copiado por el repositorio de
+origen en una sesión de sincronización.
+- **El outbox se volvió propuestas.** Las tablas `.agents/tracking/candidates.md` y
+  `.agents/tracking/experiments.md` ya no existen: lo que este repositorio aprende para el
+  paquete sale como un archivo por propuesta en `.agents/proposals/`, escrito con
+  `bundle.py propose` y nunca editado. Las tres filas que había (tres candidatos, ningún
+  experimento) se convirtieron con `bundle.py proposals --from-outbox`, el origen las
+  recibió en 0.0.24 (una sumada como otra ocurrencia de una nota, dos en cola) y se
+  quitaron con `bundle.py proposals --prune`. Hoy no queda ninguna.
+- **`upstream` en `carrier.toml`** pasó de vacío (que quería decir "este es el origen") al
+  id de carrier del origen.
+- **Lo que 0.0.23 pedía y esta copia no había hecho:** el subagente revisor quedó en
+  `.claude/agents/knowledge-reviewer.md` (copia de `.agents/agents/`), y la fila de
+  `CLAUDE.md` para cambios que tocan estado, un contrato, datos, seguridad o verificación
+  ahora dice cómo usar las tarjetas nuevas (`knowledge/cards/`, desde `INDEX.md`) y cuándo
+  llamar al revisor: solo si el usuario lo pide, y ofrecerlo en una línea si el cambio
+  borra o reescribe datos guardados, mueve dinero o toca autenticación.
+- `CLAUDE.md` §*Archivos que no se editan a mano* nombraba `tracking/`; ahora nombra las
+  propuestas y la copia del revisor.
+
+**Archivos.** `.agents/` (la versión nueva), `.claude/agents/knowledge-reviewer.md` (nuevo),
+`CLAUDE.md`, este registro.
+
+**Por qué.** La sincronización de 0.0.24 alcanzó a este repositorio; la actualización a
+0.0.23 no había pasado por aquí, y su adaptación (el revisor y la fila del conocimiento)
+quedó para esta.
+
+**Arquitectura.** ✅ Cumple. No toca código del host. `.agents/` no se editó a mano.
+
+**Qué salió mal en el camino.** Nada.
+
+**Qué quedó pendiente.** Nada nuevo.
+
+**No verificado.** Que el revisor funcione en una revisión real: no se pidió ninguna.
+
+**Medido.** `bundle.py verify` pasa (0.0.24 verificado) y `PY=python3.14 scripts/check.sh`
+pasa (167 tests).
+
+---
+
 ## 2026-09-29 · s-7c8794-5439d5 — Inventario del portátil HP-O16 y diseño del servicio de control
 
 **Qué.** Dos partes, las dos sin tocar audio ni Bluetooth (el usuario pidió no hacer pruebas
