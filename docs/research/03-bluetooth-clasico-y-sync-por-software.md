@@ -162,7 +162,10 @@ Nada de esto se ha medido todavía con los parlantes propios.
   - BlueZ 5.83 tuvo una regresión en los delay reports cuando BlueZ actúa como
     receptor. No afecta al caso de un PC que emite. REPORTADO:
     https://github.com/bluez/bluez/issues/1541
-  - **No se sabe si el Go 4 y el Charge 6 envían delay reports.**
+  - **Los Go 4 y el Charge 6 NO envían delay reports: MEDIDO** (E6,
+    [experimentos/05](experimentos/05-e6-a2dp-un-canal-por-parlante.md)). Es lo que dejó
+    a la calibración con micrófono como único mecanismo disponible, no como una mejora
+    opcional.
 - **Connectionless Slave Broadcast (CSB, Core 4.1, usado por el 3D Synchronization
   Profile)**: un emisor transmite a muchos receptores. Qualcomm/CSR construyó
   encima su "Broadcast Audio". La capa de audio es propietaria y no se puede usar
@@ -179,6 +182,57 @@ Nada de esto se ha medido todavía con los parlantes propios.
   la app JBL Portable). REPORTADO:
   - https://www.soundguys.com/goodbye-jbl-partyboost-hello-auracast-134004/
   - https://www.whathifi.com/speakers/wireless-speakers/what-is-jbl-partyboost-is-it-the-same-as-connect-and-auracast
+
+## 3.1 Calibrar el retardo sin un micrófono central (i-7c8794-4745b4)
+
+**La pregunta, planteada por el usuario el 2026-09-29:** ¿hay forma de medir el desfase entre
+parlantes **sin depender de un micrófono en un punto**, usando lo que permitan los códecs o el
+propio stack?
+
+**Por qué importa, y no es solo comodidad.** La calibración con micrófono tiene dos problemas
+estructurales, los dos medidos:
+
+1. **alinea en el punto del micrófono y desalinea el resto de la pieza**, porque mide el
+   retardo total, que incluye el vuelo por el aire —34 cm son 1 ms—. Eso es lo contrario del
+   objetivo del proyecto ([09](09-efecto-ambiental-y-diseno-de-la-experiencia.md) §4, y
+   [experimentos/09](experimentos/09-primera-escucha-con-3-go-4.md) §7);
+2. **el parlante que más aporta al envolvimiento es el que peor se mide**, porque su señal es
+   la más decorrelacionada ([experimentos/09](experimentos/09-primera-escucha-con-3-go-4.md)
+   §5).
+
+Lo que se quiere medir es el desfase **electrónico**: el buffer de A2DP más el códec. Es igual
+en toda la pieza, y es lo único que tiene sentido corregir para un oyente que se mueve.
+
+### Las opciones, con lo que se sabe de cada una
+
+| Camino | Estado | Qué haría falta |
+|---|---|---|
+| **AVDTP Delay Report** | **cerrado: MEDIDO.** Estos JBL no lo mandan | nada; no hay por dónde |
+| **La contabilidad de latencia de PipeWire** | **sin probar, y es lo más barato** | leer `pw-dump` con los parlantes conectados |
+| **Códecs con latencia declarada** (aptX Adaptive, LC3plus) | **inaplicable acá: INFERIDO** | otros parlantes; los Go 4 dan SBC y AAC |
+| **LE Audio / Auracast** | **lo resuelve por construcción** | las SuperMini (E1 cerró el AX210) |
+| **Micrófono no central, en el teléfono** | viable, pero no elimina el micrófono | la interfaz web de i-7c8794-bdb678 |
+
+**El primero a probar es la contabilidad de PipeWire, porque no cuesta nada.** PipeWire calcula
+la latencia de cada sink Bluetooth —para eso usa el delay report cuando existe, y una
+estimación cuando no— y la expone en las propiedades del nodo. Si esa cifra difiere entre
+parlantes y es estable, **da el desfase electrónico sin emitir un solo sonido**. Es lo que hay
+que mirar primero:
+
+```bash
+pw-dump | grep -E "node.name|latency|delay"   # con los parlantes conectados
+```
+
+**Lo que hay que desconfiar, y conviene anotarlo antes de ilusionarse:** esa cifra puede ser el
+valor **nominal** del buffer configurado y no el real del enlace, en cuyo caso sería idéntica
+para los tres parlantes y no serviría para nada. **No se pudo comprobar el 2026-09-29** porque
+los parlantes estaban apagados. Es el primer paso de i-7c8794-4745b4, y se resuelve en un
+minuto.
+
+**Y una forma de validar cualquiera de estos caminos sin confiar en él:** compararlo contra la
+calibración con micrófono, que ya existe y ya mide. Si las dos coinciden, el camino sin
+micrófono sirve; si no, el micrófono sigue siendo la referencia. Esa comparación es gratis
+porque las dos piezas ya están construidas.
 
 ## 4. Diferencia con LE Audio / Auracast (en breve)
 

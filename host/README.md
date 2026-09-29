@@ -2,8 +2,24 @@
 
 El paquete Python que corre en el PC (Linux o macOS): la CLI `aurasync`.
 
-**Estado (2026-09-28):** el núcleo está construido, con **A2DP como primer backend
+**Estado (2026-09-29):** el núcleo está construido, con **A2DP como primer backend
 emisor** (d-7c8794-9afee2). Auracast sigue abierto hasta E4.
+
+**Probado con 3 JBL Go 4 el 2026-09-29, y suena de punta a punta**
+([experimentos/09](../docs/research/experimentos/09-primera-escucha-con-3-go-4.md)). El efecto
+envolvente se percibe pero más débil de lo esperado, aunque la única escucha fue a volumen muy
+bajo, que perjudica justamente el mecanismo que lo produce. El lazo de recalibración
+(`run --recalibrar`) aplica correcciones y sus filtros evitaron escribir hasta 11 ms de error,
+pero **no converge** en el parlante de `ambiente` alto. Sigue apagado por defecto.
+
+**Dos cosas que conviene saber antes de usarlo:**
+
+- **la calibración de `calibrate` muere con su stream.** Tres corridas seguidas dieron 15 ms de
+  diferencia entre sí, así que guardarla para la sesión siguiente no sirve; queda como
+  diagnóstico. La corrección útil es la que mide el lazo dentro del stream que reproduce;
+- **la calibración alinea en el punto del micrófono**, no en toda la pieza: mide el retardo
+  total, que incluye el vuelo por el aire (34 cm = 1 ms). Es un hueco conocido
+  ([experimentos/09](../docs/research/experimentos/09-primera-escucha-con-3-go-4.md) §7).
 
 ## Qué hay en cada módulo
 
@@ -12,10 +28,12 @@ emisor** (d-7c8794-9afee2). Auracast sigue abierto hasta E4.
 | `config.py` | la instalación: qué parlantes hay y cómo se corrige cada uno. Descritos por **coordenadas opcionales**, no por etiquetas de canal | [09](../docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §4 |
 | `dsp/decorrelate.py` | filtros todo-paso de fase aleatoria: lo que produce el envolvimiento | Potard y Burnett, [09](../docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §11.1 |
 | `dsp/ambience.py` | extracción de ambiente por coherencia entre canales, y su versión con estado para flujos | Avendaño y Jot, [09](../docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §11.2 |
-| `motor.py` | la cadena completa: estéreo → una señal por parlante | figura 9 de Avendaño y Jot |
+| `motor.py` | la cadena completa: estéreo → una señal por parlante, con retardos y ganancias que se pueden cambiar **mientras suena** | figura 9 de Avendaño y Jot |
+| `dsp/retardo.py` | retardo fraccionario con rampa de velocidad limitada: cambiar el retardo sin que se oiga un clic | 0,5 ms/s = 0,05 % de cambio de tono |
 | `estimulos.py` | las señales de calibración | [experimentos/06](../docs/research/experimentos/06-calibracion-rapida-y-recalibracion.md) |
 | `medicion.py` | GCC-PHAT, medición simultánea, niveles y calibración autónoma | [experimentos/06](../docs/research/experimentos/06-calibracion-rapida-y-recalibracion.md) |
-| `sonido.py` | la capa de PipeWire: descubrir parlantes, el **sink virtual** del sistema, reproducir a N y grabar | P1 del roadmap |
+| `sincronia.py` | el lazo cerrado: decide si una calibración vale y la escribe sin cortar el sonido | [experimentos/08](../docs/research/experimentos/08-lazo-de-recalibracion-en-simulacion.md) |
+| `sonido.py` | la capa de PipeWire: descubrir parlantes y micrófonos, el **sink virtual** del sistema, reproducir a N, grabar, el **micrófono continuo** en anillo y la **comprobación de ruteo** | P1 del roadmap, [experimentos/09](../docs/research/experimentos/09-primera-escucha-con-3-go-4.md) §2 |
 | `cli.py` | `doctor`, `sinks`, `init`, `calibrate`, `run`, `play` | — |
 
 ## Cómo se usa
@@ -26,7 +44,16 @@ aurasync init        # crea la instalación con los parlantes conectados
 aurasync calibrate   # mide retardo y ganancia con el micrófono
 aurasync run         # el modo de uso real (ver abajo)
 aurasync play tema.wav --sin-decorrelar   # el A/B que muestra el efecto
+aurasync run --recalibrar --volumen-db -12 --registro ~/lazo.jsonl   # sin validar todavía
 ```
+
+**`--recalibrar` corrige la alineación mientras suena**, midiendo contra el propio contenido:
+no interrumpe ni emite ningún estímulo. Cada cambio necesita confirmarse en dos mediciones
+seguidas antes de aplicarse, y el retardo se mueve con rampa para que el cambio no se oiga.
+**Está sin validar acústicamente** y por eso viene apagado; antes de usarlo, leer el
+protocolo en
+[experimentos/08](../docs/research/experimentos/08-lazo-de-recalibracion-en-simulacion.md).
+Al terminar imprime la **deriva estimada en ms/h**, que es INFERIDA.
 
 **`run` es el modo de uso real.** Crea un dispositivo de salida que el sistema muestra como
 cualquier otro; se lo elige como salida —o se le manda una aplicación sola— y todo lo que

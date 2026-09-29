@@ -28,7 +28,12 @@ cambia qué importa (`docs/research/09-…`).
   que parecían razonables (la nitidez del pico, la coincidencia entre ventanas iguales,
   el residuo de reconstrucción) porque cada uno informaba "todo bien" mientras la
   medición estaba equivocada. El que quedó es la **estabilidad ante cambios del
-  análisis** (`docs/research/experimentos/06-…`).
+  análisis** (`docs/research/experimentos/06-…`). **Y tampoco alcanza sola:** con
+  referencias correlacionadas entre sí, la estabilidad informó 0,01 ms mientras la
+  medición erraba 7,10 ms, porque los tres tamaños de ventana se equivocaban igual
+  (`docs/research/experimentos/08-…`). Lo que agrega el filtro que faltaba es la
+  **repetición entre mediciones independientes**: un desfase verdadero se ve dos veces
+  y un artefacto de correlación no.
 - **Todo hallazgo queda escrito en `docs/research/`**, con su fuente y su marca
   VERIFICADO, REPORTADO, INFERIDO o MEDIDO (d-7c8794-1253b0). Un resultado que solo
   queda en el chat se pierde. Se revisa en cada revisión.
@@ -47,6 +52,12 @@ cambia qué importa (`docs/research/09-…`).
   puede cambiar un resultado, así que cada medición anota la versión.
 - **Los cambios en el sistema (`/etc/bluetooth/main.conf`, modos experimentales de
   BlueZ) se anotan junto con cómo revertirlos**, antes de hacerlos.
+- **Lo que el programa le pide al sistema de audio se verifica, no se supone.** Un
+  `pw-play --target` puede terminar en otro destino sin dar error: WirePlumber mueve el
+  stream si el sink por defecto cambia, aunque el target esté puesto. El síntoma fue un
+  parlante mudo y un lazo de realimentación, y **lo detectó el oído del usuario, no un
+  test** (`docs/research/experimentos/09-…`). Cada vez que se le pide algo a PipeWire,
+  después se comprueba que pasó.
 
 ## Archivos que no se editan a mano
 

@@ -381,8 +381,11 @@ Tune son audífonos unicast; no hay BIG ni BIS acá.
 **El resultado va a:** `docs/research/experimentos/`.
 
 ### Calibración rápida y recalibración continua · i-7c8794-33c4bd
-**Estado: diseñada y probada en simulación (2026-09-28); falta validarla con parlantes.**
-En [experimentos/06](research/experimentos/06-calibracion-rapida-y-recalibracion.md).
+**Estado: el lazo está construido y probado en simulación (2026-09-29); falta validarlo con
+parlantes.** El diseño de la calibración está en
+[experimentos/06](research/experimentos/06-calibracion-rapida-y-recalibracion.md) y el lazo
+cerrado en
+[experimentos/08](research/experimentos/08-lazo-de-recalibracion-en-simulacion.md).
 
 **Qué es:** medir retardo y ganancia de cada parlante correlacionando lo que capta el
 micrófono contra **la señal que se le mandó a cada uno**. Funciona porque el sistema ya le
@@ -394,7 +397,10 @@ el envolvimiento: **la condición del efecto es la condición de la medición**.
 - Es unas **170 veces más preciso que las ráfagas tonales** (0,00 contra 1,70 ms), porque
   la resolución va como 1/ancho de banda.
 - **Con música anda igual de bien que con ruido**, que es lo que habilita recalibrar
-  **sin interrumpir la reproducción ni reiniciar los streams**.
+  **sin interrumpir la reproducción ni reiniciar los streams**. *Matizado el 2026-09-29
+  ([experimentos/08](research/experimentos/08-lazo-de-recalibracion-en-simulacion.md)):
+  anda igual de bien **con segmentos de 10 s**. Con 4 s, dos de cada tres mediciones que
+  pasan el filtro de validez están mal por más de 1 ms, y el filtro no lo dice.*
 - Las ráfagas tonales **se rompen con ruido de conversación de fondo**; el ruido de banda
   ancha aguanta ruido de sala tan fuerte como la señal.
 
@@ -406,8 +412,56 @@ que es la única forma de saber si la calibración sirvió sin conocer la respue
 medido ya incluye el vuelo por el aire, y el nivel sale de la misma grabación por mínimos
 cuadrados. Las coordenadas quedan opcionales, solo para DBAP.
 
-**Qué falta:** validarla acústicamente, y con eso revisar el umbral de confianza, que hoy
-está calibrado en simulación.
+**El lazo cerrado (2026-09-29), en `host/src/aurasync/sincronia.py`:** recibe una
+calibración, decide si vale y la escribe **sin cortar el sonido**. Cinco filtros, cada uno
+contra un modo de falla del propio estimador: estabilidad, zona muerta (0,5 ms, por encima
+del MAD de 0,12 a 0,35 ms que midió E6), salto máximo, confirmación y ganancia de lazo de
+0,5. El `Controlador` no mide ni reproduce, así que se prueba entero sin parlantes: 23 tests.
+Escribir un retardo nuevo sin que se oiga es la otra mitad, y está en
+`host/src/aurasync/dsp/retardo.py` (retardo fraccionario con rampa de velocidad limitada,
+0,05 % de cambio de tono, 12 tests).
+
+**Un error encontrado y arreglado en el camino (2026-09-29):** `gcc_phat` buscaba el pico
+solo entre retardos no negativos, pero la medición fina corre contra referencias ya corridas
+por el desfase grueso, que es la mediana: el parlante que llega antes que la mediana tiene
+residuo negativo. Con tres parlantes a 0, 3,4 y 7,1 ms el error era de **7,10 ms informando
+estabilidad de 0,01 ms**, o sea pasando el filtro de validez. Está en
+[experimentos/08](research/experimentos/08-lazo-de-recalibracion-en-simulacion.md) §1.
+
+**Conectado a `aurasync run --recalibrar` el 2026-09-29.** Lo que faltaba era la captura
+continua del micrófono (`sonido.MicrofonoContinuo`, un anillo en memoria) y el buffer de lo
+emitido (`sincronia.VentanaDeEmision`). La medición corre en un hilo aparte
+(`sincronia.MedicionEnSegundoPlano`) porque cuesta **1,00 s de CPU** y en el hilo de audio
+eso vaciaría el buffer de los parlantes: un underrun de A2DP los resincroniza con otro
+desfase, o sea que medir habría destruido lo que se quería medir. La aritmética de las dos
+ventanas está probada de punta a punta con un micrófono simulado, y tolera hasta **1 s** de
+latencia de reproducción (a 900 ms alinea, a 1600 ms no).
+
+**Probado con parlantes el 2026-09-29, y el resultado es mixto**
+([experimentos/09](research/experimentos/09-primera-escucha-con-3-go-4.md) §5). En 644 s con
+música: 2 ajustes aplicados, 20 mediciones descartadas y 5 que no alinearon.
+
+- **Los filtros funcionan.** Las propuestas para el parlante de ambiente fueron +6,7 · +11,3 ·
+  +6,6 · +4,0 · +4,8 ms, todas distintas, y la confirmación las rechazó a todas. Sin ese
+  filtro se habrían escrito hasta **11 ms** de corrección equivocada.
+- **Pero el lazo no converge.** Los dos ajustes que se aplicaron fueron en la misma dirección
+  y las propuestas siguientes **crecieron**, cuando con ganancia 0,5 tendrían que encogerse.
+  Después el filtro de estabilidad rechazó todo lo que quedaba de sesión.
+- **Y el patrón señala al parlante de `ambiente` alto**, que es el más decorrelacionado y el
+  que menos se parece a un frente directo. O sea: **el parlante que más aporta al
+  envolvimiento es el que peor se mide.** La idea de que *la condición del efecto es la
+  condición de la medición* se rompe cuando el ambiente sube, y eso hay que entenderlo antes
+  de subir `ambiente`, que es lo que la escucha pide.
+
+**Y algo que esta entrada afirmaba y quedó refutado:** la variación entre arranques **existe y
+es grande**. Tres `calibrate` seguidos sin tocar nada dieron **15 ms** de diferencia, con
+estabilidad informada de 0,00 ms en las tres
+([experimentos/09](research/experimentos/09-primera-escucha-con-3-go-4.md) §6). No era el
+error de `gcc_phat`. Consecuencia: **la calibración de `calibrate` muere con su stream** y
+guardarla para la sesión siguiente no sirve; `calibrate` queda como diagnóstico.
+
+**Qué falta:** entender por qué no converge en el canal de ambiente, y repetir la escucha a
+nivel normal. Con eso se revisa `ESTABILIDAD_MAXIMA_MS`, hoy fijado en simulación.
 
 ### E9: el par estéreo de JBL como relé · i-7c8794-3e42af
 **Estado:** Planificado. **Se puede hacer ya**, con lo que hay. Idea del usuario
@@ -610,8 +664,15 @@ ese caso: si sus streams A2DP se suspendieran, al volver traerían un desfase di
 que acaba de medir la calibración, que es lo que se vio en
 [experimentos/05](research/experimentos/05-e6-a2dp-un-canal-por-parlante.md).
 
-**Qué falta de P1:** la mitad del Mac (el process tap), y el criterio de terminado formal
-—comprobar que tras un `kill -9` en plena captura no queda nada—, que no se ejecutó.
+**El criterio de terminado, cumplido (2026-09-29)**, en
+[experimentos/07](research/experimentos/07-p1-la-captura-no-deja-huella.md): tras un
+`kill -9` en plena captura, el dispositivo desaparece solo, la salida por defecto no se
+mueve y los 5 archivos de estado de WirePlumber quedan **byte a byte iguales**.
+
+**Qué falta de P1:** la mitad del Mac (el process tap, que no se puede hacer desde este
+equipo), y repetir la comprobación **con audio fluyendo**: en la que se hizo, el nodo estuvo
+suspendido porque no había ninguna aplicación ruteada, y con un stream activo WirePlumber
+tiene más razones para tocar su estado.
 
 **Qué es:** comprobar que la captura del audio del sistema funciona sin instalar
 drivers y sin dejar nada al terminar
@@ -884,8 +945,65 @@ vez de medirse, y la calibración con micrófono solo tiene que corregir lo elec
 [07](research/07-software-de-audio-en-el-pc.md) §4.5 (quad, 3/1). Las distribuciones
 quedan como presets sobre el modelo de coordenadas, no como el modelo en sí.
 
+### Lo que el usuario pidió el 2026-09-29, y cómo encaja
+
+**1. Ubicar los parlantes en una cuadrícula, de forma aproximada, relativa a la persona o a
+la pieza.** Encaja directo: es una forma de **entrar** las coordenadas que ya existen, sin
+cinta métrica. Y "aproximada" es suficiente: 34 cm son 1 ms, así que una cuadrícula de medio
+metro da el retardo acústico con medio milisegundo de error, que está por debajo de la zona
+muerta del lazo (0,5 ms). La decisión de diseño a tomar: **el origen es la persona o la
+pieza**. Conviene la pieza, con la persona como un punto más que se puede mover, porque el
+objetivo es que funcione mientras el oyente camina: si el origen es la persona, moverla
+obliga a reescribir todas las coordenadas.
+
+**2. Modo surround con LF, RF, RR, LR y config por parlante.** Encaja **como preset**, que es
+lo que este documento ya decía. Pero hay que decir en voz alta la tensión: `config.py` está
+escrito argumentando **contra** las etiquetas de canal, porque suponen un *sweet spot*, y el
+proyecto persigue lo contrario. La reconciliación honesta es que el preset LF/RF/RR/LR **fija
+coordenadas, `pan` y `ambiente`** de una vez, como punto de partida cómodo y reconocible, y
+después se ajusta. No reemplaza el modelo.
+
+**Y un choque medido que hay que mirar antes de diseñar esto:** LF/RF/RR/LR son **cuatro**
+parlantes, y E6 midió que **con cuatro streams A2DP el enlace se desestabiliza** (dispersión
+de 2 a 30 ms, saltos dentro de una misma reproducción,
+[experimentos/05](research/experimentos/05-e6-a2dp-un-canal-por-parlante.md)). Con el
+hardware de hoy, un surround de cuatro por A2DP **no es alcanzable**. Las salidas posibles:
+tres parlantes en una disposición triangular (que para envolvimiento puede alcanzar de sobra),
+un segundo adaptador, o esperar a Auracast. Conviene que el modelo de datos soporte cuatro
+desde el principio y que la herramienta **avise** en vez de dejar probar algo que se sabe
+inestable — hoy `doctor` ya lo avisa.
+
 ### Modo difusión en vivo: ajuste interactivo de niveles y retardos · i-7c8794-bdb678
-**Estado:** Planificado.
+**Estado: es lo próximo (2026-09-29), y ya no es una comodidad.** La primera escucha con
+parlantes lo dejó claro: el efecto *"se siente algo pero no tanto como esperaba"*, y sin poder
+mover los parámetros mientras suena, cada prueba cuesta un reinicio y la comparación queda en
+la memoria del oyente, que para diferencias sutiles no sirve
+([experimentos/09](research/experimentos/09-primera-escucha-con-3-go-4.md) §1).
+
+**La mitad difícil ya está construida.** `motor.actualizar()` relee la instalación sin cortar
+el sonido, y `dsp/retardo.py` mueve los retardos con rampa para que el cambio no se oiga. Lo
+que falta es **exponerlo**: hoy los parámetros se leen del JSON al arrancar y nada los vuelve
+a leer.
+
+**La forma que pidió el usuario (2026-09-29):** una **API de Python con una web de interfaz**,
+en vez de teclas en la terminal. Lo importante de esa forma es la separación: **la API es la
+costura y la web es un cliente**. Eso permite que la misma API la usen después la interfaz, un
+script de pruebas A/B y el propio lazo, y que probar una idea no obligue a tocar la web. Y hace
+la pregunta de portabilidad (i-7c8794-a848a0) más barata: la API no toca audio, así que cruza a
+macOS sin cambios. Razones suyas: poder ajustar desde el
+teléfono mientras camina por la pieza —que es justo donde hay que juzgar el efecto— y poder
+mostrárselo a otra persona. Consecuencias de diseño a decidir antes de escribir:
+- **qué expone:** `ambiente`, `pan` y `ganancia_db` por parlante, `retardo_traseros_ms`
+  global, y los interruptores de decorrelación y de extracción. El `retardo_ms` por parlante
+  lo escribe el lazo, así que la interfaz lo **muestra** pero no lo edita;
+- **cómo llega al motor:** el proceso de `run` es el que tiene el motor, así que el servidor
+  vive dentro de ese proceso o le habla por un socket. Lo primero es más simple y no agrega
+  estado que sobreviva al proceso, que es la propiedad de P1 que conviene no perder;
+- **sin dependencias nuevas si se puede:** `http.server` de la biblioteca estándar alcanza
+  para servir una página y aceptar cambios; el proyecto evita dependencias nativas a propósito
+  (`host/pyproject.toml`);
+- **presets**, para poder comparar A/B de verdad: guardar dos configuraciones y alternarlas,
+  que es lo que la memoria auditiva no puede hacer sola.
 
 **Qué es:** un modo donde se ajustan nivel, retardo y decorrelación de cada parlante
 **mientras suena**, y no editando un archivo.
@@ -902,6 +1020,77 @@ cambiables en caliente, lo que conviene saber antes de diseñarlo.
 **Qué la favorece:** la misma tradición dice algo útil para este proyecto: en el
 Acousmonium los parlantes son **de timbres y tamaños distintos a propósito**. O sea que el
 Charge 6 al lado de tres Go 4 no es un defecto a igualar, sino una voz distinta.
+
+### Calibrar el retardo sin un micrófono central · i-7c8794-4745b4
+**Estado:** Planificado. Pedido del usuario el 2026-09-29. El detalle técnico, con el estado de
+evidencia de cada camino, está en
+[03](research/03-bluetooth-clasico-y-sync-por-software.md) §3.1.
+
+**Qué es:** medir el desfase **electrónico** entre parlantes sin depender de un micrófono
+puesto en un punto, usando lo que digan el stack o los códecs.
+
+**Por qué, y son dos razones medidas, no comodidad:** la calibración con micrófono **alinea en
+el punto del micrófono y desalinea el resto de la pieza** (mide el retardo total, que incluye
+34 cm = 1 ms), y **el parlante que más aporta al envolvimiento es el que peor se mide**, porque
+su señal es la más decorrelacionada
+([experimentos/09](research/experimentos/09-primera-escucha-con-3-go-4.md) §5 y §7).
+
+**Lo que ya está cerrado:** los Go 4 y el Charge 6 **no mandan AVDTP Delay Report** (MEDIDO en
+E6). Ese era el mecanismo obvio y no está.
+
+**El primer paso, que cuesta un minuto y decide el resto:** con los parlantes conectados,
+`pw-dump | grep -E "node.name|latency|delay"`. PipeWire calcula una latencia por sink
+Bluetooth; si difiere entre parlantes y es estable, **da el desfase electrónico sin emitir
+sonido**. **Lo que hay que desconfiar:** que sea el valor nominal del buffer configurado y por
+lo tanto idéntico para los tres, en cuyo caso no sirve. No se pudo comprobar el 2026-09-29
+porque los parlantes estaban apagados.
+
+**Cómo se valida sin confiar en él:** comparándolo contra la calibración con micrófono, que ya
+existe y ya mide. Las dos piezas están construidas, así que la comparación es gratis.
+
+**Con qué choca:** con nada; es aditivo. Si funciona, la calibración con micrófono queda como
+referencia y verificación, no como el mecanismo de todos los días.
+
+### Portabilidad del host a macOS · i-7c8794-a848a0
+**Estado:** Planificado. Pedido del usuario el 2026-09-29, junto con los controles en vivo.
+
+**Qué es:** correr `aurasync` en el Mac (Apple Silicon, macOS 27), que es la estación de
+trabajo, y saber **qué parte del código sirve igual y qué hay que escribir de nuevo**.
+
+**Lo que ya se sabe que cambia, sin tocar nada:** todo `sonido.py`. Está escrito sobre las
+herramientas de PipeWire —`pw-dump`, `pw-play`, `pw-record`, más `pactl` para reparar el
+ruteo— y ninguna existe en macOS. Concretamente hay que rehacer: descubrir parlantes y
+micrófonos, reproducir a N destinos, grabar, el **sink virtual** y la **comprobación de
+ruteo**.
+
+**Lo que debería servir sin cambios, y es la mayor parte:** `dsp/` (decorrelador, extracción
+de ambiente, línea de retardo), `motor.py`, `medicion.py`, `sincronia.py`, `config.py` y
+`estimulos.py`. **No hacen E/S** —es la regla de [08](research/08-integracion-y-plan.md) §6.1—
+y sus 167 tests corren sin radio ni parlantes, así que en el Mac deberían pasar tal cual. Eso
+es la hipótesis a comprobar primero, y es barata: instalar y correr `hatch test`.
+
+**Con qué choca, y conviene saberlo antes de entusiasmarse:**
+- **el sink virtual es lo más difícil.** En Linux sale de una línea de `pw-record` con
+  `media.class=Audio/Sink` y **no deja huella**. En macOS no hay equivalente: un dispositivo
+  de audio virtual pide una extensión del sistema (`AudioServerPlugin` / CoreAudio driver),
+  que se **instala**, o depender de algo de terceros como BlackHole. Eso rompe la propiedad de
+  P1, y hay que decidir si se acepta. La mitad de P1 en Mac (i-7c8794-fd5f03) es justamente
+  esta pregunta y sigue abierta;
+- **A2DP en macOS no da un stream por parlante.** macOS no expone varios sinks Bluetooth
+  independientes con el control que da BlueZ, así que el camino "un `pw-play` por parlante"
+  puede no tener traducción. **Esto podría hacer que el MVP entero no sea portable por A2DP**,
+  y que en Mac haya que esperar a Auracast (las SuperMini) — donde el emisor es el mismo
+  código en los dos sistemas porque habla por serie con el controlador.
+
+**Qué la favorece:** el error de ruteo de
+[experimentos/09](research/experimentos/09-primera-escucha-con-3-go-4.md) §2 es un argumento
+a favor de portar **después** y no antes: la capa de audio del sistema es donde están los
+problemas que ningún test encuentra, y conviene tener la experiencia de una plataforma antes
+de abrir la segunda. El usuario lo dijo así: *"cuando tenga el stack, desarrollar con la
+experiencia obtenida sobre eso"*.
+
+**Primer paso concreto, que no cuesta nada:** clonar en el Mac, `hatch test`, y anotar qué
+falla. Eso ya separa el núcleo portable de la capa que no lo es, con un número.
 
 ### Upmix de estéreo a 4.0 · i-7c8794-c7ccb9
 **Estado:** Planificado. Depende del emisor.
@@ -934,7 +1123,25 @@ La opción 3.1 con el Charge 6 como LFE queda descartada en la práctica, porque
 ninguno de los parlantes es subwoofer.
 
 ### Calibración de la alineación con micrófono · i-7c8794-1ab281
-**Estado:** Planificado.
+**Estado: construida, y con un hueco de diseño encontrado el 2026-09-29.**
+
+**El hueco: la calibración fabrica un sweet spot, que es lo contrario del objetivo.**
+`gcc_phat` mide el retardo **total**, que incluye el vuelo por el aire —**34 cm son 1 ms**—, y
+la calibración escribe ese total. Así alinea en el punto donde está el micrófono y **desalinea
+el resto de la pieza**, cuando el objetivo declarado es parlantes en los bordes y oyente
+caminando ([09](research/09-efecto-ambiental-y-diseno-de-la-experiencia.md) §4).
+
+Lo que conviene corregir es el desfase **electrónico**, que es igual en toda la pieza.
+`config.py` ya tiene `retardo_acustico_ms` para poder restarlo, pero la calibración **no lo
+usa**: solo lo usa `alinear_por_geometria`, que nadie llama. Hace falta las coordenadas de los
+parlantes y del micrófono, hoy opcionales y vacías (va con i-7c8794-26c302).
+
+**Y hay un número que lo vuelve urgente:** E6 midió 2,7 ms entre dos Go 4 y notó que son
+**compatibles con 92 cm de diferencia de camino**
+([experimentos/05](research/experimentos/05-e6-a2dp-un-canal-por-parlante.md)). Si el desfase
+electrónico es casi nulo, corregir el total puede ser **peor que no corregir nada** para
+alguien que se mueve. Está en
+[experimentos/09](research/experimentos/09-primera-escucha-con-3-go-4.md) §7.
 
 **Qué es:** reproducir un pulso por canal, grabarlo con un micrófono y calcular el
 desfase de cada parlante. Con ese dato se ajusta la posición (retardo acústico por

@@ -548,9 +548,21 @@ bluetooth-sync/
 - **Sin dobles de prueba de Bumble** mientras no haya un test de contrato (tarjeta
   *test-double-fidelity*). Si hace falta un controlador falso, el candidato es el
   controlador virtual del propio Bumble. Que soporte BIG está sin verificar.
-- **Hasta la decisión de seguir,** `scripts/check.sh` solo acepta en
+- ~~**Hasta la decisión de seguir,** `scripts/check.sh` solo acepta en
   `host/src/aurasync/` los archivos de *hoy* (d-7c8794-f619c4). Un módulo nuevo lo
-  pone en rojo.
+  pone en rojo.~~ **Levantado el 2026-09-28** con d-7c8794-9afee2: se construye el
+  núcleo compartido con A2DP como primer backend emisor, así que el límite ahora es
+  esa decisión y no el script.
+
+**Lo que se construyó de verdad, y en qué se aparta de este árbol (2026-09-29).** El
+núcleo quedó plano en vez de dividido en `core/`, `capture/` y `emit/`: hay un
+`motor.py`, un `medicion.py`, un `sonido.py` y un paquete `dsp/`. La razón es que con
+un solo backend de captura (el sink de PipeWire) y uno de emisión (A2DP), las
+carpetas de backends serían una interfaz sin segundo implementador. Se dividen cuando
+aparezca el segundo, que es cuando la interfaz se puede diseñar sabiendo contra qué.
+La regla que sí se respetó es la que importa: **`dsp/`, `motor.py`, `medicion.py` y
+`sincronia.py` no hacen E/S**, y por eso los 139 tests corren en `check.sh` sin radio
+ni parlantes. La lista real de módulos está en `host/README.md`.
 
 ## 7. Plan de investigación y desarrollo
 

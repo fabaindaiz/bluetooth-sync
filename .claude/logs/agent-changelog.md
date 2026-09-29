@@ -7,6 +7,196 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-09-29 · s-7c8794-1d3f53 — Del lazo de recalibración a la primera escucha con parlantes: dos errores del estimador y uno del sistema de audio
+
+**Qué.**
+- **P1 cerrado del lado de Linux** (i-7c8794-fd5f03): el sink virtual de `aurasync run`
+  desaparece solo tras un `kill -9`, sin tocar la lista de salidas ni los 5 archivos de
+  estado de WirePlumber. MEDIDO, en `experimentos/07`. No se reprodujo audio: solo se creó
+  el nodo y se lo mató.
+- **`dsp/retardo.py`**: retardo fraccionario por parlante que se puede cambiar **mientras
+  suena**, con rampa de velocidad limitada a 0,5 ms/s (0,05 % de cambio de tono, unos 0,9
+  centésimos de semitono). 12 tests; el que justifica el módulo compara el mayor salto
+  entre muestras contra el de la propia señal, y contra el salto instantáneo.
+- **`motor.py` usa esas líneas** y gana `actualizar()`, `retardos_actuales_ms()` y rampa de
+  ganancia en dB/s. Cambiar retardo o nivel ya no exige reiniciar la reproducción.
+- **`sincronia.py`, el lazo cerrado**: recibe una calibración, decide si vale y la escribe.
+  Cinco filtros, cada uno contra un modo de falla del estimador (estabilidad, zona muerta de
+  0,5 ms, salto máximo, confirmación, ganancia de lazo 0,5), más `deriva_ms_h`, que estima
+  la deriva a partir de lo que el lazo tuvo que corregir. No mide ni reproduce: 23 tests sin
+  parlantes.
+- **`experimentos/08` y `probes/lazo-simulado/simular.py`**, con la semilla reiniciada por
+  prueba para que los números se repitan.
+- **El lazo quedó conectado a `aurasync run --recalibrar`** (segunda mitad de la sesión, a
+  pedido del usuario: *corregí los pendientes para realizar una prueba de audio*). Lo que
+  faltaba: `sonido.MicrofonoContinuo` (grabación que no termina, en un anillo en memoria),
+  `sincronia.VentanaDeEmision` (lo emitido, que es la referencia) y
+  `sincronia.MedicionEnSegundoPlano`. Nuevas opciones de `run`: `--recalibrar`, `--microfono`,
+  `--cada`, `--medir`, `--registro` (JSON Lines), `--guardar` y `--volumen-db`. **Apagado por
+  defecto.**
+- **`doctor` ahora lista los micrófonos** y avisa si el de por defecto no está: es el
+  instrumento de `calibrate` y del lazo, y el nombre del nodo es largo y fácil de equivocar.
+- **El protocolo de la prueba con parlantes**, en `experimentos/08`: precondiciones, los
+  comandos, qué significa cada clase de línea del registro y los tres modos de falla
+  previsibles con su diagnóstico.
+
+**Y después, la prueba de audio de verdad** (tercera parte de la sesión, con consentimiento
+explícito del usuario y a volumen bajo: amplitud 0,1–0,2 y `run --volumen-db -12`). Está todo
+en `experimentos/09-primera-escucha-con-3-go-4.md`, con el registro crudo en
+`experimentos/datos/09-lazo-primera-sesion.jsonl`.
+- **El sistema suena de punta a punta:** 3 Go 4, un canal distinto en cada uno, audio del
+  sistema entrando por un dispositivo virtual. Eso queda demostrado.
+- **El efecto se percibe pero más débil de lo esperado**, y la escucha fue a volumen muy bajo,
+  que perjudica selectivamente la energía lateral tardía —o sea el mecanismo del
+  envolvimiento—. No concluyente.
+- **Arreglado el ruteo de streams** (`sonido.destinos_reales`, `mal_ruteados`,
+  `reparar_ruteo`), el reparto por defecto de `init` (ningún parlante en ambiente puro), el
+  falso *"no suena"* de `calibrate` y `--guardar` bajo SIGTERM.
+- **`doctor` lista los micrófonos.** Nuevas opciones de `run`: `--volumen-db` entre ellas.
+
+**Archivos.** `host/src/aurasync/{sincronia.py,motor.py,medicion.py,sonido.py,cli.py}`,
+`host/src/aurasync/dsp/retardo.py`,
+`host/tests/{test_sincronia.py,test_retardo.py,test_motor.py,test_medicion.py,test_sonido.py,test_cli.py}`,
+`docs/research/experimentos/{07-…,08-…}.md`, `probes/{p1-huella,lazo-simulado}/`,
+`docs/roadmap.md`, `docs/research/08-integracion-y-plan.md`, `host/README.md`, `CLAUDE.md`.
+
+**Por qué.** El usuario pidió avanzar en todo lo que se pudiera **sin probar audio**
+(instrucción vigente: avisar y consultar antes de volver a pruebas de audio). El lazo de
+recalibración era el hueco que sostenía el diseño: si la alineación se mueve durante la
+sesión, hay que corregirla sin cortar.
+
+**Corrección a lo que esta misma entrada decía antes:** se justificó el lazo diciendo que
+*"E6 midió que cada arranque de A2DP trae un desfase distinto"*. **E6 mide lo contrario** —con
+2 o 3 Go 4, repetible a 0,1 ms entre reproducciones, *"sin necesidad de recalibrar en cada
+arranque"*—. La variación de 4,5 ms en un canal sale de `experimentos/06`, que la deja como
+pregunta abierta, y **se midió con el error de retardos negativos arreglado hoy**, cuya firma
+coincide exactamente. O sea que puede no existir. Queda como lo primero que tiene que resolver
+la prueba de audio: dos `calibrate` seguidos y comparar.
+
+**Arquitectura.** ✅ Cumple. `sincronia.py` y `dsp/retardo.py` no hacen E/S y se prueban con
+arrays, que es la regla de `docs/research/08` §6.1. La lista cerrada de archivos de
+`host/src/aurasync/` ya no existe (se quitó con d-7c8794-9afee2); se corrigieron los dos
+lugares que todavía decían lo contrario.
+
+**Qué salió mal en el camino.**
+- **Un error real en `gcc_phat`, y es el hallazgo de la sesión.** Buscaba el pico solo entre
+  retardos no negativos, con la premisa de que el micrófono no capta antes de que se emita.
+  Cierto contra la referencia cruda; **falso** contra la referencia ya corrida por el desfase
+  grueso, que es la *mediana* entre parlantes: el que llega antes que la mediana tiene
+  residuo negativo por construcción. Con tres parlantes a 0, 3,4 y 7,1 ms el error era de
+  **7,10 ms con reverberación y 43,82 ms sin ella**. Lo detectó la simulación, no una
+  medición: como ahí el retardo verdadero se conoce, se puede ver el error.
+- **Y el filtro de validez no lo cazaba:** informaba estabilidad de **0,01 ms** y
+  `confiable=True`. Los tres tamaños de ventana se equivocaban igual. Es exactamente el modo
+  de falla que el docstring de `calibrar` ya advertía, ahora con un caso concreto.
+- Primer intento de medir con el contenido: concluí "no funciona" viendo errores de 3 a
+  16 ms. Era el error de arriba contaminando todo. El caso de control —ruido independiente,
+  la configuración que E6 validó— también fallaba, y **eso** fue lo que acusó al código en
+  vez de a la idea.
+- Un diagnóstico intermedio usó `np.correlate(..., "full")` sobre 20 s: O(n²), no terminó en
+  10 minutos. Se rehízo por FFT.
+- **La primera versión de las ventanas del lazo estaba mal y no habría dado ningún error.**
+  Había elegido tomar del micrófono `medir + 2 s` con un margen de 0,5 s, lo que deja la
+  referencia a ~1,8 s del inicio de la grabación; `alineacion_gruesa` busca solo hasta
+  **1500 ms**, así que el lazo no habría alineado nunca y en una prueba con parlantes se
+  habría visto como *"el lazo no hace nada"*. Se corrigió a margen de 1,0 s y tajada de
+  `medir + 1,5 s`, y se agregó un test de punta a punta con micrófono simulado. Comprobado
+  después: con 900 ms de latencia de reproducción alinea, con 1600 ms no.
+- Primer intento de medir el costo de `calibrar` con `hatch run python -c`: hatch interpreta
+  las llaves del código como campos de plantilla (*Unknown context field `n`*). Se pasó a un
+  archivo.
+- **El error que más costó, y que ningún test podía encontrar:** un parlante no sonaba porque
+  su stream de `pw-play` entraba al **propio sink virtual de `aurasync`**, cerrando un lazo de
+  realimentación. WirePlumber tenía guardado `default.configured.audio.sink=aurasync` de una
+  vez que el usuario lo eligió, así que cada aparición del sink lo vuelve el default y
+  **mueve** el stream que apuntaba al default anterior, *con su `target.object` puesto*. No
+  hay error, ni log, ni excepción: el parlante se calla. **Lo detectó el usuario escuchando.**
+- **Y dos intentos fallidos de arreglarlo, los dos por apurarme a escribir antes de mirar:**
+  (1) la comprobación corría **antes** de crear el sink virtual, cuando el desvío ocurre justo
+  al crearlo, así que no veía nada; (2) la detección buscaba el `pid` en el objeto Node cuando
+  está en el **Client**, así que informó *"ningún destino"* para los tres parlantes — una
+  ausencia falsa producida por la comprobación hecha para detectar ausencias falsas. Recién el
+  tercer intento, después de volcar `pw-dump` y mirar los objetos de verdad, funcionó.
+- **Mi hipótesis del turno anterior era equivocada y lo dije como si fuera probable.** Había
+  propuesto que la variación entre arranques de `experimentos/06` era el error de retardos
+  negativos. Tres `calibrate` seguidos la refutaron: 15 ms de variación con el error ya
+  arreglado.
+
+**Qué quedó pendiente.** En el orden en que conviene tomarlo:
+1. **Controles en vivo (i-7c8794-bdb678), que pasó a ser lo próximo.** El usuario pidió un
+   **servidor con interfaz** para mover `ambiente`, `pan` y ganancias mientras suena, y poder
+   ajustar desde el teléfono caminando por la pieza. La mitad difícil ya está
+   (`motor.actualizar()` y la rampa de `dsp/retardo.py`); falta exponerla. Sin esto no se puede
+   iterar sobre la experiencia: cada prueba cuesta un reinicio.
+2. **Repetir la escucha a nivel normal**, con `ambiente` más alto. La única que hay se hizo a
+   volumen muy bajo y eso ataca justo el mecanismo del efecto.
+3. **Entender por qué el lazo no converge en el parlante de `ambiente` alto.** Es el que más
+   aporta al envolvimiento y el que peor se mide: la idea de que *la condición del efecto es la
+   condición de la medición* se rompe cuando el ambiente sube.
+4. **Restar el camino acústico de la calibración** (i-7c8794-1ab281). Hoy alinea en el punto del
+   micrófono y desalinea el resto de la pieza, que es lo contrario del objetivo. Necesita
+   coordenadas (i-7c8794-26c302).
+5. **Calibrar sin micrófono central (i-7c8794-4745b4)**, entrada nueva. El primer paso cuesta
+   un minuto y decide el resto: `pw-dump | grep -E "node.name|latency|delay"` con los parlantes
+   conectados. **Queda sin hacer porque los parlantes se apagaron**; era lo último que intenté.
+   El AVDTP Delay Report ya está descartado (MEDIDO en E6).
+6. **La cuadrícula de coordenadas y el preset LF/RF/RR/LR** (dentro de i-7c8794-26c302). Ojo con
+   un choque medido: el preset son **cuatro** parlantes y E6 midió que con cuatro streams A2DP
+   el enlace se desestabiliza. Hay que decidir la salida antes de diseñarlo.
+7. **Portabilidad a macOS (i-7c8794-a848a0)**, entrada nueva. El núcleo debería pasar sus tests
+   tal cual; `sonido.py` hay que rehacerlo entero, y el sink virtual sin huella puede no tener
+   equivalente.
+8. **La deriva sigue sin medir.** `run --recalibrar` la estima al cerrar, pero es INFERIDO, y en
+   esta sesión no llegó a imprimirse por el defecto de SIGTERM.
+9. Mitad de P1 en Mac; DBAP (i-7c8794-26c302); E9.
+
+**Las ideas que el usuario dejó anotadas al cerrar (2026-09-29), todas en el roadmap.** No se
+escribió código para ninguna: el desarrollo empieza mañana. Lo que la sesión sí hizo fue
+anotarlas con **el choque que cada una tiene**, que es lo que se pierde si solo se anota la
+idea: el preset de cuatro canales contra el techo de tres streams de A2DP; el origen de la
+cuadrícula en la pieza y no en la persona; la tensión entre las etiquetas LF/RF/RR/LR y el
+argumento de `config.py` contra ellas; y que el camino sin micrófono tiene su mecanismo obvio
+—el delay report— ya descartado por medición.
+
+**Desvío del plan.** Ninguno. El roadmap ya tenía i-7c8794-33c4bd con la recalibración
+continua; esta sesión la construye y matiza una afirmación suya (ver abajo).
+
+**No verificado.** Lo de `experimentos/08` sigue siendo **simulación** y no lo reemplaza la
+sesión con parlantes, que fue corta y a volumen muy bajo. Y queda sin verificar lo que más
+importa: **si el efecto envolvente funciona**, porque la única escucha se hizo en condiciones
+que lo perjudican. Tampoco se verificó si mover el retardo en caliente se oye: el lazo aplicó
+dos cambios y nadie estaba prestando atención a eso en ese momento. Sobre la simulación: la sala simulada no tiene la respuesta de un Go 4, ni su
+compresión, ni el ruido real de la pieza. Los números son cota optimista. En particular, que
+mover el retardo mientras suena **no se oiga** está acotado por diseño y comprobado como
+continuidad de la forma de onda, pero *inaudible* solo se comprueba escuchando.
+
+**Medido.**
+- `gcc_phat` con el mínimo en cero vs. en −120 ms, tres parlantes a 0 / 3,4 / 7,1 ms:
+  **43,82 → 0,01 ms** de error sin reverb, **7,10 → 0,01 ms** con reverb y ruido.
+- `calibrar` completo antes del arreglo: error 7,10 ms, **estabilidad 0,01 ms,
+  `confiable=True`**.
+- Contenido como referencia: a **10 s** el error es 0,01 ms; a **4 s**, dos de cada tres
+  mediciones que pasan el filtro están mal por más de 1 ms (la peor, 8,05 ms, informando
+  estabilidad 0,32). La discrepancia entre segmentos confiables consecutivos es 0,01 ms a
+  10 s y de 1,30 a 8,05 ms a 4 s: **el error no se repite y la confirmación lo filtra**.
+- La correlación entre referencias **no** predice el acierto: 0,85 falló y 0,94 acertó.
+- `medicion.calibrar` sobre 10 s y 3 parlantes: **1,00 s de CPU** en `PC-Ryzen5`. Es el
+  número que obliga a medir en un hilo aparte.
+- Las ventanas del lazo toleran hasta **~1 s** de latencia de reproducción: a 250, 500 y
+  900 ms alinea con 0,01 ms de error; a 1600 ms no alinea.
+- **Tres `calibrate` seguidos sin tocar nada: 15 ms de variación** (Black − Red: +8,57 · +4,72 ·
+  −6,46 ms), con estabilidad informada de 0,00 ms en las tres.
+- **El lazo con parlantes, 644 s:** 2 ajustes aplicados, 13 descartados por inestabilidad, 7 a
+  la espera de confirmación, 5 sin alinear. Las propuestas rechazadas para Blue fueron +6,7 ·
+  +11,3 · +6,6 · +4,0 · +4,8 ms.
+- `scripts/check.sh` pasa con `PY=python3`, **167 tests**.
+
+**Matiz a lo que ya estaba escrito.** El roadmap decía *"con música anda igual de bien que
+con ruido"*. Anda igual de bien **con segmentos de 10 s**; con 4 s no, y el filtro de validez
+no lo dice. Anotado en la entrada y en `experimentos/08` §2.
+
+---
+
 ## 2026-09-28 · s-7c8794-21e1f2 — Del inventario del AX210 al MVP: E1 cerrado, A2DP medido y el núcleo de aurasync construido
 
 **Qué.**
