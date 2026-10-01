@@ -58,6 +58,10 @@ primero A con el chip interno; si no sirve, la combinada o C.
   [08](research/08-integracion-y-plan.md) §6.1).
 - **Esqueleto** del paquete `aurasync` (i-7c8794-f7f5b2), permitido por
   d-7c8794-f619c4.
+- **Panel de control** sobre un motor simulado (i-7c8794-6d2195, 2026-10-01),
+  permitido por d-7c8794-b1eaac: `aurasync panel --demo`. Es **un solo panel**
+  (d-7c8794-9d9776), con servicios, logs y configuración del motor. Diseño en
+  [09](research/09-panel-de-control.md).
 
 **Siguiente paso:** Fase 1, empezando por el inventario del equipo Linux, y en
 paralelo P1 en el Mac y P3(a) en la Pico 2 W.
@@ -391,6 +395,52 @@ archivos de `host/src/aurasync/`.
 
 **Qué hay que decidir antes:** el umbral de desfase tolerable (ver E5).
 
+## Panel de control (con motor simulado)
+
+### Panel de control, etapa 1: vista de diagnóstico con motor simulado · i-7c8794-6d2195
+**Estado:** A medias (2026-10-01).
+- **Hecho sobre el motor simulado** (segunda iteración, 2026-10-01):
+  - parlantes y canales: plano de la sala, asignación, volumen, silencio,
+    retardo, ganancia, tono y búsqueda;
+  - **servicios** con estado, PID, tiempo activo, reinicios, último error, y las
+    acciones iniciar, detener, reiniciar y simular falla (d-7c8794-372a31);
+  - **logs** reales del proceso, con filtros, búsqueda, pausa y descarga;
+  - **configuración del motor**: upmix, retardo trasero, presentation delay,
+    bitrate, transporte y nombre;
+  - salud del enlace con la latencia por tramo, niveles y calibración aplicable.
+- **El bug del desplegable de canal en Firefox para macOS quedó arreglado**, con
+  un test de navegador ([09](research/09-panel-de-control.md) §7.4).
+- **Falta:** el motor real, que espera la decisión de seguir. Cuando exista, cada
+  ficha mostrará datos de la SuperMini y de los JBL, y "Guardar medición" escribirá
+  en `docs/research/experimentos/`.
+
+**Qué es:** la vista que acompaña los experimentos y los hitos M0–M2
+([09](research/09-panel-de-control.md) §7).
+
+**Con qué choca:** con d-7c8794-346170. Lo resolvió la segunda enmienda,
+d-7c8794-b1eaac.
+
+**Qué la favorece:** el contrato de estado y órdenes ya está fijado y probado
+(`state.py`, `engine/base.py`), así que el motor real se enchufa sin tocar la
+interfaz.
+
+**Qué hay que decidir antes del motor real:** nada nuevo; el motor real es M1–M2
+de la herramienta del MVP (i-7c8794-2fe665).
+
+### Panel de control, etapa 2: vista de uso diario · i-7c8794-61ae5d
+**Estado:** Planificado (2026-10-01). Se retiró del código: el usuario la probó
+y "no tenía ninguna opción" (d-7c8794-9d9776). Vuelve cuando tenga opciones
+propias que el panel único no ofrezca mejor.
+
+**Qué es:** transmitir y detener, la fuente, el modo ("Música y juegos" en quad,
+"Películas" en L-C-R-S), y el volumen general y por parlante, en una columna para
+el pulgar ([09](research/09-panel-de-control.md) §7).
+
+**Criterio de terminado (MEDIDO, con el motor real):** desde el teléfono, poner
+música en quad y bajar el volumen trasero toma menos de 10 segundos.
+
+**Con qué choca:** con nada más que la etapa 1.
+
 ## Fase 2: prototipo por el camino A (solo si la decisión es seguir)
 
 La arquitectura prevista, **sujeta a lo que muestren E3 y E4**:
@@ -597,5 +647,6 @@ en los documentos 00 y 01.
 | Calibración con micrófono | No, solo la verifica |
 | Herramienta CLI (MVP) | No. Un solo BIG; los 4 canales comparten remuestreador, así que el drift no los desalinea entre sí |
 | Emisor dedicado en una Pi (Fase 3) | No. Es el mismo BIG; solo cambia de dónde viene el audio |
+| Panel de control | No. Solo muestra el estado y manda órdenes validadas; no toca el audio |
 | Camino A2DP | **Sí**: no hay reloj común; es la mejor alineación posible |
 | Dos transmisiones independientes | **Sí**: descartado por d-7c8794-203de2 |

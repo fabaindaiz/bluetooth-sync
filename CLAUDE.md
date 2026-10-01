@@ -16,10 +16,12 @@ la mano, no leyendo.
 
 - **No se escribe código de producto hasta registrar la decisión de seguir o no**
   (d-7c8794-346170). Lo único que se programa antes son probes en `probes/` y la
-  estructura base de `host/` que permite d-7c8794-f619c4: esqueleto, tooling y
-  tests de humo, sin captura, DSP, reloj, emisor, parlantes ni calibración. Si
-  esto se rompe, el código queda construido sobre un camino que nadie validó.
-  `scripts/check.sh` falla si aparece un módulo nuevo en `host/src/aurasync/`.
+  estructura base de `host/` que permite d-7c8794-f619c4 (esqueleto, tooling y
+  tests de humo), y el panel de control con su motor simulado que permite
+  d-7c8794-b1eaac. No hay captura, DSP, reloj, emisor, parlantes ni calibración
+  reales. Si esto se rompe, el código queda construido sobre un camino que nadie
+  validó. `scripts/check.sh` falla si aparece un archivo nuevo en
+  `host/src/aurasync/`.
 - **Todo hallazgo queda escrito en `docs/research/`**, con su fuente y su marca
   VERIFICADO, REPORTADO, INFERIDO o MEDIDO (d-7c8794-1253b0). Un resultado que solo
   queda en el chat se pierde. Se revisa en cada revisión.
@@ -50,7 +52,9 @@ la mano, no leyendo.
 scripts/check.sh                                              # el chequeo: bundle, ids, archivos del host, lint y tests
 /opt/homebrew/bin/python3.14 .agents/tools/bundle.py id d "…"  # id de una decisión (i = roadmap, s = changelog)
 cd host && hatch test                                         # tests del paquete aurasync
-cd host && hatch fmt --check                                  # lint y formato (ruff, fijado por hatch)
+cd host && hatch check                                        # lint, formato y tipos (ruff y pyrefly, fijados por hatch)
+cd host && hatch run aurasync panel --demo [--lan]            # el panel de control sobre el motor simulado
+cd host && hatch run browser:test                             # el panel en Chromium y WebKit (Playwright; fuera del chequeo)
 cd host && hatch run aurasync --version
 ```
 
@@ -100,6 +104,7 @@ es lo único que avisa a la siguiente.
 | ¿Cómo se hace con un nRF5340 (opción C)? | `docs/research/06-opcion-c-nrf5340.md` |
 | ¿Qué software del PC captura, separa y hace upmix del audio, y con qué latencia? | `docs/research/07-software-de-audio-en-el-pc.md` |
 | ¿Cómo se integra todo en una herramienta, con qué stack y en qué orden? | `docs/research/08-integracion-y-plan.md` |
+| ¿Cómo es el panel de control, qué protege y qué órdenes acepta? | `docs/research/09-panel-de-control.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |

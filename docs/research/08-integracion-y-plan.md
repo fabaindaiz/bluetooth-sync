@@ -506,6 +506,10 @@ bluetooth-sync/
 │   ├── pyproject.toml             bumble==0.0.235, lc3py==1.1.3            hoy
 │   ├── src/aurasync/
 │   │   ├── __init__.py __main__.py cli.py                                  hoy
+│   │   ├── state.py               contrato de estado del panel (09 §4)     hoy
+│   │   ├── engine/                base.py (órdenes) y simulated.py         hoy
+│   │   ├── panel/                 servidor web, auth, QR, static/ (09)     hoy
+│   │   ├── logbuffer.py           log del proceso para el panel (09 §7.2)  hoy
 │   │   ├── profile.py             C8  perfil TOML, fail-closed             M1
 │   │   ├── supervise.py           C9  proceso padre que restaura el estado M2
 │   │   ├── core/                  sin E/S: se prueba con arrays
@@ -525,6 +529,7 @@ bluetooth-sync/
 │   └── tests/
 │       ├── test_cli.py test_stack.py                                       hoy
 │       └── hw/                    tests con hardware, fuera de check.sh    M1
+│   └── tests_browser/             el panel en Chromium y WebKit (Playwright, hatch run browser:test)   hoy
 ├── firmware/
 │   ├── supermini/                 overlays de hci_uart_iso_timesync        E1, P2
 │   └── pico/                      TinyUSB + BTstack + liblc3 (H2b)         P3, Fase 3

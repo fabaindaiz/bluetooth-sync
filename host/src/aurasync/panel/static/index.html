@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>aurasync · panel</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">aurasync</div>
+    <span id="engine-badge" class="badge badge-warning" hidden>
+      <span aria-hidden="true">⚠</span> SIMULADO
+    </span>
+    <span id="connection" class="connection" role="status">Conectando…</span>
+    <button type="button" id="pair-open" class="ghost push-right" hidden>Conectar teléfono</button>
+  </header>
+
+  <div id="disconnected" class="banner" role="alert" hidden>
+    Sin conexión con aurasync. Reintentando…
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <main>
+    <section class="card controls" aria-label="Transmisión">
+      <button type="button" id="run" class="primary big">Transmitir</button>
+      <div class="segmented" role="group" aria-label="Modo">
+        <button type="button" data-mode="quad">Música y juegos <small>quad</small></button>
+        <button type="button" data-mode="lcrs">Películas <small>L C R S</small></button>
+      </div>
+      <label class="field">
+        <span>Fuente</span>
+        <select id="source-kind">
+          <option value="system">Todo el sistema</option>
+          <option value="app">Una aplicación</option>
+          <option value="file">Un archivo</option>
+          <option value="tone">Tono de prueba</option>
+        </select>
+      </label>
+      <label class="field" id="source-name-field" hidden>
+        <span id="source-name-label">Nombre</span>
+        <input id="source-name" type="text" autocomplete="off">
+      </label>
+      <label class="field field-grow">
+        <span>Volumen general <output id="master-out" class="num"></output></span>
+        <input id="master" type="range" min="-60" max="0" step="1">
+      </label>
+      <div class="field">
+        <span>Latencia estimada</span>
+        <strong id="latency-total" class="latency"></strong>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card span-2" aria-labelledby="h-speakers">
+        <div class="card-head">
+          <h2 id="h-speakers">Parlantes y canales</h2>
+          <button type="button" id="scan">Buscar parlantes</button>
+        </div>
+        <div class="speakers-layout">
+          <div id="room" class="room" aria-label="Plano de la sala">
+            <div class="room-front">frente</div>
+          </div>
+          <div class="table-wrap">
+            <table class="table speakers-table">
+              <thead>
+                <tr><th>Parlante</th><th>Estado</th><th class="num">RSSI</th><th>Canal</th>
+                  <th>Volumen</th><th class="num">Retardo (ms)</th><th class="num">Ganancia (dB)</th><th></th></tr>
+              </thead>
+              <tbody id="speakers"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="card span-2" aria-labelledby="h-services">
+        <div class="card-head">
+          <h2 id="h-services">Servicios</h2>
+          <span class="muted small">Clic en un servicio para ver solo sus logs</span>
+        </div>
+        <div class="table-wrap">
+          <table class="table services-table">
+            <thead>
+              <tr><th>Servicio</th><th>Estado</th><th class="num">PID</th><th class="num">Activo</th>
+                <th class="num">Reinicios</th><th>Detalle</th><th></th></tr>
+            </thead>
+            <tbody id="services"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-link">
+        <h2 id="h-link">Salud del enlace</h2>
+        <div class="tiles">
+          <div class="tile"><div class="tile-label">Controlador</div><div id="t-controller" class="tile-value"></div><div id="t-controller-sub" class="tile-sub"></div></div>
+          <div class="tile"><div class="tile-label">BIG</div><div id="t-big" class="tile-value"></div><div id="t-big-sub" class="tile-sub"></div></div>
+          <div class="tile"><div class="tile-label">Cola hacia el controlador</div><div id="t-queue" class="tile-value"></div><div id="t-queue-sub" class="tile-sub"></div></div>
+          <div class="tile"><div class="tile-label">Cortes</div><div id="t-glitches" class="tile-value"></div><div class="tile-sub">falta de datos · exceso</div></div>
+        </div>
+        <div class="drift">
+          <div class="drift-head">
+            <span class="tile-label">Drift del reloj, último minuto (ppm)</span>
+            <span id="t-drift" class="drift-value"></span>
+          </div>
+          <div id="drift-chart" class="drift-chart"></div>
+        </div>
+        <table class="table latency-table">
+          <caption class="tile-label">Latencia estimada por tramo (no medida)</caption>
+          <tbody id="latency"></tbody>
+        </table>
+      </section>
+
+      <section class="card" aria-labelledby="h-levels">
+        <h2 id="h-levels">Niveles</h2>
+        <div id="meters" class="meters"></div>
+        <p class="muted small">RMS en la barra, pico en la marca. dBFS. Hay señal cuando corren la captura y el DSP, aunque el emisor esté detenido.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-config">
+        <h2 id="h-config">Configuración del motor</h2>
+        <div class="form-grid">
+          <label class="field">
+            <span>Upmix <small>en vivo</small></span>
+            <select data-config="upmix">
+              <option value="simple">simple: L→RL, R→RR</option>
+              <option value="psd">psd: traseros con L−R</option>
+              <option value="surround">surround: FFmpeg, por frecuencia</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Retardo trasero <output data-config-out="rear_delay_ms"></output> <small>en vivo</small></span>
+            <input type="range" data-config="rear_delay_ms" min="0" max="30" step="1">
+          </label>
+          <label class="field">
+            <span>Presentation delay <small>reinicia el emisor</small></span>
+            <select data-config="presentation_delay_us" data-number="1">
+              <option value="20000">20 ms</option>
+              <option value="40000">40 ms (obligatorio en Auracast)</option>
+              <option value="80000">80 ms (el Clip 5 lo necesitó)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Bitrate LC3 <small>reinicia el emisor</small></span>
+            <select data-config="bitrate_kbps" data-number="1">
+              <option value="80">80 kbps</option>
+              <option value="96">96 kbps</option>
+              <option value="124">124 kbps</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Transporte <small>reinicia el emisor</small></span>
+            <select data-config="transport">
+              <option value="low_latency">baja latencia (≤20 ms, RTN 2)</option>
+              <option value="high_reliability">alta confiabilidad (≤65 ms, RTN 4)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Nombre de la transmisión <small>reinicia el emisor</small></span>
+            <input type="text" data-config="broadcast_name" maxlength="32" autocomplete="off">
+          </label>
+          <div class="field">
+            <span>Datos de fabricante</span>
+            <strong>Harman <small>fijo: sin esto los JBL ignoran la transmisión</small></strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-cal">
+        <h2 id="h-cal">Calibración</h2>
+        <div class="row">
+          <button type="button" id="cal-run">Calibrar</button>
+          <button type="button" id="cal-apply">Aplicar a los parlantes</button>
+          <button type="button" id="cal-save" class="ghost">Guardar medición</button>
+        </div>
+        <div id="cal-progress" class="progress" hidden><div id="cal-bar" class="progress-bar"></div></div>
+        <p id="cal-note" class="muted small"></p>
+        <div class="table-wrap" id="cal-table" hidden>
+          <table class="table">
+            <thead><tr><th>Canal</th><th class="num">Retardo (ms)</th><th class="num">Ganancia (dB)</th><th class="num">Confianza</th></tr></thead>
+            <tbody id="cal-results"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card span-2" aria-labelledby="h-logs">
+        <div class="card-head">
+          <h2 id="h-logs">Logs</h2>
+          <span id="log-count" class="muted small"></span>
+        </div>
+        <div class="log-toolbar">
+          <label class="field"><span>Servicio</span><select id="log-service"><option value="">todos</option></select></label>
+          <label class="field"><span>Nivel mínimo</span>
+            <select id="log-level">
+              <option value="debug">debug</option>
+              <option value="info" selected>info</option>
+              <option value="warning">warning</option>
+              <option value="error">error</option>
+            </select>
+          </label>
+          <label class="field field-grow"><span>Buscar</span><input id="log-search" type="text" autocomplete="off"></label>
+          <button type="button" id="log-pause">Pausar</button>
+          <button type="button" id="log-clear" class="ghost">Limpiar vista</button>
+          <button type="button" id="log-download" class="ghost">Descargar .log</button>
+        </div>
+        <ol id="logs" class="logs" aria-live="off"></ol>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="pair-dialog">
+    <h2>Conectar el teléfono</h2>
+    <p>Escanea el código con la cámara del teléfono, conectado a la misma red.</p>
+    <img id="pair-qr" alt="Código QR con la dirección del panel" width="240" height="240">
+    <p class="muted small">El código cambia cada vez que se reinicia aurasync.</p>
+    <form method="dialog"><button type="submit">Cerrar</button></form>
+  </dialog>
+</body>
+</html>

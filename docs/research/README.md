@@ -23,6 +23,7 @@ depender de las limitaciones de la app de JBL.
 | [06-opcion-c-nrf5340.md](06-opcion-c-nrf5340.md) | Opción C en profundidad: placas Nordic y precios, entrada USB, varios BIS, datos de fabricante, licencias, timestamps y primeros pasos |
 | [07-software-de-audio-en-el-pc.md](07-software-de-audio-en-el-pc.md) | El software del PC antes del emisor: capturar todo el audio del sistema, qué fuentes traen multicanal, upmix a quad, ruteo de canales, latencia y lip-sync, y cómo se compara Linux, macOS y Windows |
 | [08-integracion-y-plan.md](08-integracion-y-plan.md) | Cómo juntar audio y Bluetooth en una herramienta que toque lo mínimo el sistema: huella por mecanismo, dónde vive el emisor (PC, Pi como tarjeta USB, nRF5340), el reloj, el stack y el plan de I+D (P1–P3, M0–M5, Fase 3) |
+| [09-panel-de-control.md](09-panel-de-control.md) | La spec del panel de control: propósito acordado, enfoques, arquitectura, modelo de estado, órdenes, seguridad (token, Host, Origin, QR), vistas de diagnóstico y de uso diario, y pruebas |
 
 **Qué significa cada marca:**
 - **VERIFICADO**: fuente primaria.

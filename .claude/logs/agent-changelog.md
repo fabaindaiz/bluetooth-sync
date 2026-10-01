@@ -7,6 +7,227 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-01 · s-7c8794-f652d2 — Panel único de diagnóstico: servicios, logs, configuración del motor y arreglo del desplegable en Firefox
+
+**Qué.**
+- **Un solo panel** (d-7c8794-9d9776): se retiró la vista de uso diario, y
+  i-7c8794-61ae5d vuelve a Planificado.
+- **Servicios** (d-7c8794-372a31):
+  - controlador, captura, DSP, emisor, BASS (no disponible), panel y los del
+    sistema (solo se observan);
+  - estado, PID, tiempo activo, reinicios, último error y dependencias;
+  - iniciar, detener en cascada, reiniciar y simular falla (solo en la demo);
+  - "Detener" corta todo.
+- **Logs reales del proceso:**
+  - `logbuffer.py`, un `logging.Handler` con `seq`;
+  - por WebSocket, con 500 líneas al conectar y después solo las nuevas, con
+    cursor por cliente;
+  - el servidor anota las órdenes, ejecutadas o rechazadas, y el motor las
+    transiciones;
+  - la vista filtra, busca, pausa, limpia y descarga.
+- **Configuración del motor:** `set_config` con dominio cerrado; los datos de
+  Harman son fijos; las claves de emisión reinician el emisor.
+- **Más opciones:** retardo y ganancia por parlante, aplicar la calibración, y
+  búsqueda de parlantes (aparece un Flip 7 simulado). La latencia por tramo se
+  muestra en el panel.
+- **Bug del desplegable de canal (Firefox en macOS):**
+  - el panel reescribía cada control 10 veces por segundo salvo que tuviera el
+    foco, y en Firefox para macOS un clic en un `<select>` no lo da;
+  - ahora un control se escribe solo cuando cambia en el motor, y nunca mientras
+    se edita.
+- **Tests:**
+  - 131 de unidad;
+  - **26 de navegador nuevos**, con Playwright 1.60.0 en Chromium y WebKit, bajo
+    el entorno `browser` de hatch.
+- **Memoria:** "usar hatch para todo el tooling".
+
+**Archivos.** `host/src/aurasync/` (state, engine/base, engine/simulated,
+logbuffer, panel/server, panel/static/*, cli), `host/tests/`,
+`host/tests_browser/`, `host/pyproject.toml` (entorno `browser`, ruff), `scripts/check.sh`,
+`docs/research/09-panel-de-control.md`, `docs/research/08-integracion-y-plan.md`,
+`docs/decisions.md`, `docs/roadmap.md`, `CLAUDE.md`, `host/README.md`,
+`.agents/tracking/candidates.md`.
+
+**Por qué.** El usuario probó la demo, encontró útil el diagnóstico y vacío el
+uso diario, no pudo asignar canales, y pidió:
+- un solo panel;
+- servicios con logs para el debug real;
+- más opciones del motor;
+- que la demo funcione entera.
+
+**Arquitectura.** ✅ Cumple con d-7c8794-b1eaac.
+- La lista cerrada del chequeo suma solo `logbuffer.py`; no hay motor real.
+- **Tarjetas aplicadas:**
+  - *kill-switch-reaches-every-path*: "Detener" corta los servicios, el tono y
+    la calibración, y la cascada de dependencias tiene tests;
+  - *retry-over-irreversible-effect*: iniciar es idempotente (con test);
+  - *cleanup-belongs-to-the-supervisor*: escrito para la captura real (09
+    §7.1); el panel desengancha su handler de log al cerrar (con test);
+  - *best-effort-side-channels*: un cliente lento se salta snapshots y recupera
+    los logs desde su cursor.
+
+**Qué salió mal en el camino.**
+- Primero intenté reproducir el bug en Firefox, por CDP y después por BiDi, y
+  Firefox nunca abrió su puerto. El usuario señaló que en `thom-music-player` ya
+  se había visto: el Firefox de Playwright no arranca en este Mac.
+- Instalé Playwright con npm; el usuario pidió hatch. Se borró y se pasó a un
+  entorno de hatch.
+- La reproducción con clic y teclado no servía: en headless, el teclado no
+  maneja el menú nativo ni siquiera en una página vacía (prueba de control). Se
+  reprodujo el mecanismo directamente: un valor elegido sin foco quedaba pisado
+  a los 600 ms.
+- Un test del servidor se colgó, porque `receive()` esperaba un tipo de mensaje
+  sin límite. Ahora falla tras 300 mensajes.
+- Bugs del harness:
+  - un atributo `_stop` le hacía sombra a `Thread._stop`, y cada test esperaba
+    5 s;
+  - un script llamado `bisect.py` le hacía sombra al módulo `bisect`.
+- `per-file-ignores` reemplazaba las excepciones de hatch para `tests/`; la
+  solución fue `extend-per-file-ignores`.
+
+**Qué quedó pendiente.**
+- Que el usuario confirme el arreglo en su Firefox.
+- Probar en un teléfono real y en Linux.
+- `browser:test` no está en `scripts/check.sh`: necesita el caché de navegadores.
+
+**No verificado.** Firefox real.
+
+**Divergencia con `origin/main` (descubierta al cerrar, 2026-10-01).**
+- Esta sesión y la del 2026-09-26 trabajaron sobre `f06fce4` sin hacer `git fetch`.
+  Mientras tanto, otra sesión empujó **16 commits** (2026-09-28 y 29):
+  - E1: el AX210 no transmite Auracast (MEDIDO);
+  - los JBL no exponen BASS ni PACS;
+  - E6: con A2DP, 3 parlantes quedan a pocos ms;
+  - un núcleo de `aurasync` con A2DP como primer backend;
+  - el diseño del **servicio de control**;
+  - el paquete de guías 0.0.25.
+- **Choca con esta rama en:**
+  - las enmiendas: d-7c8794-9afee2 arriba contra d-7c8794-b1eaac aquí;
+  - el idioma: arriba, d-7c8794-7b3093 dice que el código nuevo va en inglés, y
+    aquí los docstrings y textos están en español;
+  - el control: arriba, `control.py` con REST (d-7c8794-74b639); aquí, el
+    WebSocket del panel;
+  - `cli.py`, `pyproject.toml`, `scripts/check.sh`, `decisions.md`, el roadmap,
+    `CLAUDE.md` y `candidates.md`, que en 0.0.25 ya no existe porque pasó a
+    propuestas.
+- **Qué se hizo:** todo esto quedó en la rama **`panel-demo`**, subida a `origin`
+  **sin fusionar** con `main`, y `main` local avanzó hasta `origin/main`. La
+  integración es una decisión de diseño del usuario.
+- **Propuesta:** que el panel sea la interfaz del servicio de control
+  (i-7c8794-f3ddf8). Sus órdenes y su snapshot pasarían al contrato de
+  `control.py`; el motor simulado quedaría como backend de demostración del
+  servicio; y el código se traduciría al inglés.
+- **Aprendizaje:** este repositorio se trabaja desde varios equipos y sesiones
+  en paralelo. Hay que hacer `git fetch` **al empezar** y **antes de cada
+  commit**.
+
+**Medido.**
+- `scripts/check.sh` pasa (131 tests).
+- `hatch run browser:test`: 26 de 26 en 94 s.
+- Antes del arreglo, el valor de un desplegable sin foco volvía a `''` en menos
+  de 600 ms (Chromium).
+
+---
+
+## 2026-10-01 · s-7c8794-2a5052 — Panel de control de aurasync: spec, motor simulado y vistas de diagnóstico y uso diario
+
+**Qué.**
+- **Diagnóstico de este Mac**, a pedido del usuario: la app no transmite.
+  - La lógica real está bloqueada hasta E4.
+  - El chip interno no sirve para Bumble.
+  - Falta el firmware de la SuperMini y su toolchain.
+  - Quedó en `host/README.md`, "Qué funciona hoy en este Mac".
+- **Diseño del panel con el usuario** (skill de brainstorming), por pasos:
+  propósito (diagnóstico y uso diario, por etapas), acceso (el PC y el teléfono),
+  contenido (las cuatro áreas) y la nota de entendimiento aprobada. Después el
+  usuario pidió implementarlo de forma autónoma.
+- **Spec nueva** en `docs/research/09-panel-de-control.md`: enfoques, arquitectura,
+  snapshot, órdenes, seguridad, vistas, errores, pruebas y estado de la
+  implementación.
+- **Decisiones registradas:**
+  - d-7c8794-b1eaac, la segunda enmienda a d-7c8794-346170: panel con motor
+    simulado, que el usuario eligió en una pregunta explícita;
+  - d-7c8794-d2fd15: web local con aiohttp y sin build, token siempre, Host y
+    Origin, localhost por defecto, `--lan` con QR.
+- **Código en `host/`:**
+  - `state.py`;
+  - `engine/base.py` (validación fail-closed de órdenes) y `engine/simulated.py`
+    (derivado de un reloj inyectado; nunca guarda mediciones);
+  - `panel/auth.py`, `pairing.py`, `server.py` y `static/` (`index.html`,
+    `styles.css`, `app.js`);
+  - `cli.py`: `aurasync panel --demo [--lan] [--port] [--open]`;
+  - dependencias exactas nuevas: `aiohttp==3.14.3` y `segno==1.6.6`.
+- **79 tests**, escritos antes del código en cada paso.
+- **`scripts/check.sh`:**
+  - la lista cerrada se amplió exactamente a los 14 archivos permitidos, y se
+    ordena con `LC_ALL=C`;
+  - `hatch fmt` pasó a `hatch check` (ruff, formato y tipos con pyrefly).
+- **Roadmap:** sección nueva "Panel de control" (i-7c8794-6d2195 e
+  i-7c8794-61ae5d, A medias), y la tabla de la invariante.
+- **Otros documentos:** `CLAUDE.md`, `decisions.md` (y d-7c8794-c23c20 actualizada
+  por `hatch check`), 08 §6.1, el README de investigación y `host/README.md`.
+
+**Archivos.** `host/` (src, tests, pyproject, README), `scripts/check.sh`,
+`docs/research/09-panel-de-control.md`, `docs/research/08-integracion-y-plan.md`,
+`docs/research/README.md`, `docs/decisions.md`, `docs/roadmap.md`, `CLAUDE.md`.
+
+**Por qué.** El usuario preguntó si la app funciona en este PC y qué
+restricciones hay, y pidió mejorar y diseñar el panel de control. Después pidió
+implementar lo más posible de forma autónoma.
+
+**Arquitectura.** ⚠️ Desvío autorizado.
+- Es código antes de la decisión de seguir. Se cubrió con una pregunta explícita
+  (d-7c8794-b1eaac) y lo hace cumplir la lista cerrada de `check.sh`, que se vio
+  fallar con un `capture/pipewire.py` plantado.
+- **Tarjetas aplicadas:**
+  - *fail-closed-defaults*: solo localhost; sin `--demo` no arranca; las órdenes
+    incompletas se rechazan;
+  - *a-default-scope-is-the-widest-one*: no hay un "todos" implícito en volumen,
+    silencio ni tono;
+  - *best-effort-side-channels*: el envío de estado no puede detener al motor
+    (con test);
+  - *in-process-guarantees*: la premisa de un solo proceso está escrita en
+    `server.py`;
+  - *derive-state-from-one-clock*: el motor simulado se deriva de un reloj (con
+    test);
+  - *absence-is-a-third-value*: `iso_broadcaster` puede ser null (con test);
+  - *same-answer-or-refuse*: un solo JSON por tick para todos los clientes;
+  - *test-double-fidelity*: el motor real tendrá que pasar los mismos tests de
+    órdenes;
+  - *a-check-must-be-seen-to-fail*: el test del `xmlns` se vio rojo antes del
+    arreglo, y la lista cerrada se vio fallar.
+
+**Qué salió mal en el camino.**
+- Las capturas headless con `--virtual-time-budget` se colgaron, porque el
+  WebSocket nunca deja que el tiempo virtual se asiente. Se resolvió manejando
+  Brave por el protocolo de DevTools (`probe` desechable en el scratchpad, que no
+  quedó en el repo).
+- **La verificación visual encontró 6 bugs que los tests no veían**: el flush de
+  la URL, `hidden` contra `display`, el `#hash`, el ancho en el teléfono (dos
+  veces), el SVG sin `xmlns` y la hora UTC de los eventos. Todos están corregidos.
+- `hatch fmt` está deprecado en hatch 1.18.1; el aviso salió recién esta sesión.
+- El test de tipos encontró `AppKey` con tipo `object`.
+
+**Qué quedó pendiente.**
+- Probar el panel en un teléfono real por la red local, y en el equipo Linux.
+- El motor real (M1–M2): las fichas mostrarán la SuperMini y los JBL reales.
+- El token es por ejecución: el teléfono tiene que volver a escanear el QR tras
+  cada reinicio. Un token persistente (N3) queda para cuando moleste.
+- La interfaz no tiene tests automáticos, porque no hay toolchain de JS (por
+  diseño). Las capturas fueron manuales.
+
+**No verificado.**
+- El QR escaneado por un teléfono real.
+- El comportamiento en Safari o Firefox: solo se probó Brave (Chromium).
+
+**Medido.**
+- `scripts/check.sh` pasa: 79 tests en ~0,5 s, `hatch check` sin errores, y
+  también con `LC_ALL=en_US.UTF-8`.
+- Con el servidor real: 401 sin token, 302 con token, 403 con un Host ajeno, y la
+  URL de la red local 192.168.100.53 con su QR.
+
+---
+
 ## 2026-09-26 · s-7c8794-32c631 — Estructura base: paquete aurasync con hatch, tests de humo y plan de estructura
 
 **Qué.**
