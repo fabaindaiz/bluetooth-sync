@@ -1,0 +1,59 @@
+# The panel as a PWA on GitHub Pages (d-7c8794-37f9bc): built from host/web and the panel's files,
+# published at https://fabaindaiz.github.io/bluetooth-sync/. The site is public and carries no data
+# of any device: `npm run build:pwa` fails if it finds a MAC, a private address or a token
+# (host/web/pwa/privacy.ts). Activating it is the owner's step: Settings → Pages → Source:
+# GitHub Actions (host/README.md). Actions pinned to the commit of their release.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "host/web/**"
+      - "host/src/aurasync/panel/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: host/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.10.0"
+          cache: npm
+          cache-dependency-path: host/web/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build:pwa
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: host/web/dist-pwa
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

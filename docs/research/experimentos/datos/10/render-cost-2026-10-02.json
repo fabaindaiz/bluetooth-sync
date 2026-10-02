@@ -1,0 +1,725 @@
+{
+  "corridas": [
+    {
+      "etiqueta": "antes",
+      "cuando": "2026-10-02T14:26:26-03:00",
+      "equipo": "Fabians-MacBook-Neo.local",
+      "entorno": "Darwin 27.0.0, arm64, Chromium de Playwright headless",
+      "vista": "390×844, DPR 3, táctil, tarjeta Niveles visible, sesión simulada sonando",
+      "segundos_por_fila": 10,
+      "filas": [
+        {
+          "cpu_x": 1,
+          "fps": 60.0,
+          "p95_ms": 17.4,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 7.3,
+            "LayoutDuration": 17.1,
+            "RecalcStyleDuration": 22.6,
+            "TaskDuration": 89.9
+          },
+          "layouts_por_s": 420.6,
+          "recalc_por_s": 420.6
+        },
+        {
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 23.4,
+            "LayoutDuration": 58.8,
+            "RecalcStyleDuration": 68.7,
+            "TaskDuration": 269.0
+          },
+          "layouts_por_s": 420.5,
+          "recalc_por_s": 420.5
+        },
+        {
+          "cpu_x": 6,
+          "fps": 59.9,
+          "p95_ms": 17.6,
+          "max_ms": 33.5,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 37.5,
+            "LayoutDuration": 90.2,
+            "RecalcStyleDuration": 115.1,
+            "TaskDuration": 443.6
+          },
+          "layouts_por_s": 419.2,
+          "recalc_por_s": 419.2
+        }
+      ]
+    },
+    {
+      "cuando": "2026-10-02T15:53:35-03:00",
+      "equipo": "Fabians-MacBook-Neo.local",
+      "entorno": "Darwin 27.0.0, arm64, Chromium de Playwright headless",
+      "carga_del_equipo_al_terminar": [
+        6.8,
+        8.5,
+        9.4
+      ],
+      "vista": "390×844, DPR 3, táctil, tarjeta Niveles visible, sesión simulada sonando",
+      "segundos_por_fila": 10,
+      "nota": "final: panel con los arreglos del paquete D contra f44efb2, intercalados",
+      "medianas": [
+        {
+          "panel": "actual",
+          "cpu_x": 1,
+          "n": 2,
+          "fps": 60.05,
+          "layouts_por_s": 16.15,
+          "recalc_por_s": 34.75,
+          "hilo_ms_por_s": 34.25,
+          "script_ms_por_s": 6.45,
+          "layout_ms_por_s": 3.0,
+          "estilo_ms_por_s": 2.55
+        },
+        {
+          "panel": "actual",
+          "cpu_x": 4,
+          "n": 2,
+          "fps": 60.1,
+          "layouts_por_s": 16.9,
+          "recalc_por_s": 36.0,
+          "hilo_ms_por_s": 97.1,
+          "script_ms_por_s": 13.350000000000001,
+          "layout_ms_por_s": 10.55,
+          "estilo_ms_por_s": 7.55
+        },
+        {
+          "panel": "actual",
+          "cpu_x": 6,
+          "n": 2,
+          "fps": 60.05,
+          "layouts_por_s": 17.299999999999997,
+          "recalc_por_s": 36.0,
+          "hilo_ms_por_s": 103.65,
+          "script_ms_por_s": 12.8,
+          "layout_ms_por_s": 12.4,
+          "estilo_ms_por_s": 7.2
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "cpu_x": 1,
+          "n": 2,
+          "fps": 60.05,
+          "layouts_por_s": 421.79999999999995,
+          "recalc_por_s": 421.79999999999995,
+          "hilo_ms_por_s": 120.25,
+          "script_ms_por_s": 11.2,
+          "layout_ms_por_s": 23.5,
+          "estilo_ms_por_s": 31.85
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "cpu_x": 4,
+          "n": 2,
+          "fps": 59.95,
+          "layouts_por_s": 420.9,
+          "recalc_por_s": 420.9,
+          "hilo_ms_por_s": 326.35,
+          "script_ms_por_s": 29.35,
+          "layout_ms_por_s": 67.2,
+          "estilo_ms_por_s": 85.55
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "cpu_x": 6,
+          "n": 2,
+          "fps": 59.85,
+          "layouts_por_s": 421.4,
+          "recalc_por_s": 421.4,
+          "hilo_ms_por_s": 568.9000000000001,
+          "script_ms_por_s": 52.95,
+          "layout_ms_por_s": 126.2,
+          "estilo_ms_por_s": 141.65
+        }
+      ],
+      "filas": [
+        {
+          "panel": "actual",
+          "vuelta": 1,
+          "cpu_x": 1,
+          "fps": 60.1,
+          "p95_ms": 17.5,
+          "max_ms": 17.9,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 7.4,
+            "LayoutDuration": 3.2,
+            "RecalcStyleDuration": 2.9,
+            "TaskDuration": 37.9
+          },
+          "layouts_por_s": 15.4,
+          "recalc_por_s": 34.8
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "vuelta": 1,
+          "cpu_x": 1,
+          "fps": 60.0,
+          "p95_ms": 17.5,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 10.2,
+            "LayoutDuration": 22.1,
+            "RecalcStyleDuration": 30.5,
+            "TaskDuration": 116.3
+          },
+          "layouts_por_s": 420.9,
+          "recalc_por_s": 420.9
+        },
+        {
+          "panel": "actual",
+          "vuelta": 2,
+          "cpu_x": 1,
+          "fps": 60.0,
+          "p95_ms": 17.4,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 5.5,
+            "LayoutDuration": 2.8,
+            "RecalcStyleDuration": 2.2,
+            "TaskDuration": 30.6
+          },
+          "layouts_por_s": 16.9,
+          "recalc_por_s": 34.7
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "vuelta": 2,
+          "cpu_x": 1,
+          "fps": 60.1,
+          "p95_ms": 17.5,
+          "max_ms": 17.8,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 12.2,
+            "LayoutDuration": 24.9,
+            "RecalcStyleDuration": 33.2,
+            "TaskDuration": 124.2
+          },
+          "layouts_por_s": 422.7,
+          "recalc_por_s": 422.7
+        },
+        {
+          "panel": "actual",
+          "vuelta": 1,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 14.8,
+            "LayoutDuration": 11.9,
+            "RecalcStyleDuration": 8.6,
+            "TaskDuration": 107.9
+          },
+          "layouts_por_s": 17.4,
+          "recalc_por_s": 35.9
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "vuelta": 1,
+          "cpu_x": 4,
+          "fps": 59.8,
+          "p95_ms": 17.5,
+          "max_ms": 33.9,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 36.7,
+            "LayoutDuration": 82.5,
+            "RecalcStyleDuration": 108.5,
+            "TaskDuration": 408.9
+          },
+          "layouts_por_s": 420.5,
+          "recalc_por_s": 420.5
+        },
+        {
+          "panel": "actual",
+          "vuelta": 2,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.6,
+          "max_ms": 17.8,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 11.9,
+            "LayoutDuration": 9.2,
+            "RecalcStyleDuration": 6.5,
+            "TaskDuration": 86.3
+          },
+          "layouts_por_s": 16.4,
+          "recalc_por_s": 36.1
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "vuelta": 2,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.5,
+          "max_ms": 17.8,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 22.0,
+            "LayoutDuration": 51.9,
+            "RecalcStyleDuration": 62.6,
+            "TaskDuration": 243.8
+          },
+          "layouts_por_s": 421.3,
+          "recalc_por_s": 421.3
+        },
+        {
+          "panel": "actual",
+          "vuelta": 1,
+          "cpu_x": 6,
+          "fps": 60.1,
+          "p95_ms": 17.5,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 14.6,
+            "LayoutDuration": 13.4,
+            "RecalcStyleDuration": 8.0,
+            "TaskDuration": 108.1
+          },
+          "layouts_por_s": 17.4,
+          "recalc_por_s": 36.2
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "vuelta": 1,
+          "cpu_x": 6,
+          "fps": 60.1,
+          "p95_ms": 17.6,
+          "max_ms": 17.8,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 45.4,
+            "LayoutDuration": 108.5,
+            "RecalcStyleDuration": 119.0,
+            "TaskDuration": 487.6
+          },
+          "layouts_por_s": 422.1,
+          "recalc_por_s": 422.1
+        },
+        {
+          "panel": "actual",
+          "vuelta": 2,
+          "cpu_x": 6,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 11.0,
+            "LayoutDuration": 11.4,
+            "RecalcStyleDuration": 6.4,
+            "TaskDuration": 99.2
+          },
+          "layouts_por_s": 17.2,
+          "recalc_por_s": 35.8
+        },
+        {
+          "panel": "antes (f44efb2)",
+          "vuelta": 2,
+          "cpu_x": 6,
+          "fps": 59.6,
+          "p95_ms": 17.6,
+          "max_ms": 50.5,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 60.5,
+            "LayoutDuration": 143.9,
+            "RecalcStyleDuration": 164.3,
+            "TaskDuration": 650.2
+          },
+          "layouts_por_s": 420.7,
+          "recalc_por_s": 420.7
+        }
+      ]
+    },
+    {
+      "cuando": "2026-10-02T16:36:52-03:00",
+      "equipo": "Fabians-MacBook-Neo.local",
+      "entorno": "Darwin 27.0.0, arm64, Chromium de Playwright headless",
+      "carga_del_equipo_al_terminar": [
+        11.1,
+        13.4,
+        13.3
+      ],
+      "vista": "390×844, DPR 3, táctil, tarjeta levels/chain visible, sesión simulada sonando",
+      "segundos_por_fila": 10,
+      "nota": "paquete F: la pantalla Cadena (Preact) junto a Niveles, misma carga",
+      "medianas": [
+        {
+          "panel": "actual · chain",
+          "cpu_x": 1,
+          "n": 2,
+          "fps": 60.1,
+          "layouts_por_s": 2.2,
+          "recalc_por_s": 6.65,
+          "hilo_ms_por_s": 32.75,
+          "script_ms_por_s": 17.25,
+          "layout_ms_por_s": 0.6,
+          "estilo_ms_por_s": 0.5
+        },
+        {
+          "panel": "actual · chain",
+          "cpu_x": 4,
+          "n": 2,
+          "fps": 60.1,
+          "layouts_por_s": 3.15,
+          "recalc_por_s": 7.6,
+          "hilo_ms_por_s": 113.6,
+          "script_ms_por_s": 64.0,
+          "layout_ms_por_s": 3.2,
+          "estilo_ms_por_s": 2.15
+        },
+        {
+          "panel": "actual · levels",
+          "cpu_x": 1,
+          "n": 2,
+          "fps": 60.05,
+          "layouts_por_s": 16.95,
+          "recalc_por_s": 35.05,
+          "hilo_ms_por_s": 47.9,
+          "script_ms_por_s": 9.15,
+          "layout_ms_por_s": 4.0,
+          "estilo_ms_por_s": 3.3499999999999996
+        },
+        {
+          "panel": "actual · levels",
+          "cpu_x": 4,
+          "n": 2,
+          "fps": 60.1,
+          "layouts_por_s": 16.6,
+          "recalc_por_s": 35.7,
+          "hilo_ms_por_s": 172.8,
+          "script_ms_por_s": 31.15,
+          "layout_ms_por_s": 17.35,
+          "estilo_ms_por_s": 14.05
+        }
+      ],
+      "filas": [
+        {
+          "panel": "actual · levels",
+          "vuelta": 1,
+          "cpu_x": 1,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 33.3,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 11.4,
+            "LayoutDuration": 4.8,
+            "RecalcStyleDuration": 4.1,
+            "TaskDuration": 58.5
+          },
+          "layouts_por_s": 16.4,
+          "recalc_por_s": 35.0
+        },
+        {
+          "panel": "actual · chain",
+          "vuelta": 1,
+          "cpu_x": 1,
+          "fps": 60.1,
+          "p95_ms": 17.4,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 18.8,
+            "LayoutDuration": 0.6,
+            "RecalcStyleDuration": 0.6,
+            "TaskDuration": 36.4
+          },
+          "layouts_por_s": 2.1,
+          "recalc_por_s": 6.3
+        },
+        {
+          "panel": "actual · levels",
+          "vuelta": 2,
+          "cpu_x": 1,
+          "fps": 60.1,
+          "p95_ms": 17.4,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 6.9,
+            "LayoutDuration": 3.2,
+            "RecalcStyleDuration": 2.6,
+            "TaskDuration": 37.3
+          },
+          "layouts_por_s": 17.5,
+          "recalc_por_s": 35.1
+        },
+        {
+          "panel": "actual · chain",
+          "vuelta": 2,
+          "cpu_x": 1,
+          "fps": 60.1,
+          "p95_ms": 17.4,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 15.7,
+            "LayoutDuration": 0.6,
+            "RecalcStyleDuration": 0.4,
+            "TaskDuration": 29.1
+          },
+          "layouts_por_s": 2.3,
+          "recalc_por_s": 7.0
+        },
+        {
+          "panel": "actual · levels",
+          "vuelta": 1,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 30.4,
+            "LayoutDuration": 18.7,
+            "RecalcStyleDuration": 13.8,
+            "TaskDuration": 170.3
+          },
+          "layouts_por_s": 17.7,
+          "recalc_por_s": 36.0
+        },
+        {
+          "panel": "actual · chain",
+          "vuelta": 1,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.5,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 54.4,
+            "LayoutDuration": 4.3,
+            "RecalcStyleDuration": 1.9,
+            "TaskDuration": 103.6
+          },
+          "layouts_por_s": 4.5,
+          "recalc_por_s": 7.2
+        },
+        {
+          "panel": "actual · levels",
+          "vuelta": 2,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.5,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 31.9,
+            "LayoutDuration": 16.0,
+            "RecalcStyleDuration": 14.3,
+            "TaskDuration": 175.3
+          },
+          "layouts_por_s": 15.5,
+          "recalc_por_s": 35.4
+        },
+        {
+          "panel": "actual · chain",
+          "vuelta": 2,
+          "cpu_x": 4,
+          "fps": 60.1,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 73.6,
+            "LayoutDuration": 2.1,
+            "RecalcStyleDuration": 2.4,
+            "TaskDuration": 123.6
+          },
+          "layouts_por_s": 1.8,
+          "recalc_por_s": 8.0
+        }
+      ]
+    },
+    {
+      "cuando": "2026-10-02T16:38:30-03:00",
+      "equipo": "Fabians-MacBook-Neo.local",
+      "entorno": "Darwin 27.0.0, arm64, Chromium de Playwright headless",
+      "carga_del_equipo_al_terminar": [
+        17.1,
+        14.3,
+        13.6
+      ],
+      "vista": "390×844, DPR 3, táctil, tarjeta levels visible, sesión simulada sonando",
+      "segundos_por_fila": 10,
+      "nota": "paquete F: Niveles con y sin cadena.js (la pantalla Cadena oculta), intercalado",
+      "medianas": [
+        {
+          "panel": "actual",
+          "cpu_x": 4,
+          "n": 3,
+          "fps": 60.0,
+          "layouts_por_s": 16.7,
+          "recalc_por_s": 34.9,
+          "hilo_ms_por_s": 200.7,
+          "script_ms_por_s": 35.5,
+          "layout_ms_por_s": 19.7,
+          "estilo_ms_por_s": 16.8
+        },
+        {
+          "panel": "sin cadena.js",
+          "cpu_x": 4,
+          "n": 3,
+          "fps": 60.0,
+          "layouts_por_s": 16.6,
+          "recalc_por_s": 35.9,
+          "hilo_ms_por_s": 210.9,
+          "script_ms_por_s": 38.0,
+          "layout_ms_por_s": 19.9,
+          "estilo_ms_por_s": 18.0
+        }
+      ],
+      "filas": [
+        {
+          "panel": "actual",
+          "vuelta": 1,
+          "cpu_x": 4,
+          "fps": 59.9,
+          "p95_ms": 17.6,
+          "max_ms": 33.3,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 38.4,
+            "LayoutDuration": 21.6,
+            "RecalcStyleDuration": 16.8,
+            "TaskDuration": 215.6
+          },
+          "layouts_por_s": 16.7,
+          "recalc_por_s": 34.9
+        },
+        {
+          "panel": "sin cadena.js",
+          "vuelta": 1,
+          "cpu_x": 4,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 38.0,
+            "LayoutDuration": 21.2,
+            "RecalcStyleDuration": 20.0,
+            "TaskDuration": 220.7
+          },
+          "layouts_por_s": 15.7,
+          "recalc_por_s": 35.2
+        },
+        {
+          "panel": "actual",
+          "vuelta": 2,
+          "cpu_x": 4,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 35.5,
+            "LayoutDuration": 19.4,
+            "RecalcStyleDuration": 17.6,
+            "TaskDuration": 200.7
+          },
+          "layouts_por_s": 15.9,
+          "recalc_por_s": 34.7
+        },
+        {
+          "panel": "sin cadena.js",
+          "vuelta": 2,
+          "cpu_x": 4,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 33.2,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 38.1,
+            "LayoutDuration": 19.9,
+            "RecalcStyleDuration": 18.0,
+            "TaskDuration": 210.9
+          },
+          "layouts_por_s": 16.6,
+          "recalc_por_s": 35.9
+        },
+        {
+          "panel": "actual",
+          "vuelta": 3,
+          "cpu_x": 4,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 17.8,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 35.3,
+            "LayoutDuration": 19.7,
+            "RecalcStyleDuration": 15.5,
+            "TaskDuration": 200.1
+          },
+          "layouts_por_s": 17.8,
+          "recalc_por_s": 36.3
+        },
+        {
+          "panel": "sin cadena.js",
+          "vuelta": 3,
+          "cpu_x": 4,
+          "fps": 60.0,
+          "p95_ms": 17.6,
+          "max_ms": 17.7,
+          "long_tasks": 0,
+          "long_ms": 0,
+          "ms_por_s": {
+            "ScriptDuration": 34.0,
+            "LayoutDuration": 18.7,
+            "RecalcStyleDuration": 16.8,
+            "TaskDuration": 196.8
+          },
+          "layouts_por_s": 16.8,
+          "recalc_por_s": 36.4
+        }
+      ]
+    }
+  ]
+}

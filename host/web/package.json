@@ -1,0 +1,22 @@
+{
+  "name": "aurasync-panel",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "La aplicación web del panel de aurasync (d-7c8794-6da524). `npm run build` escribe el panel local en ../src/aurasync/panel/ (se versiona); `npm run build:pwa`, la PWA en dist-pwa/ (no se versiona; la publica .github/workflows/pages.yml).",
+  "scripts": {
+    "build": "vite build",
+    "build:pwa": "vite build --config vite.pwa.config.ts",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "preact": "11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2",
+    "vite": "8.3.2",
+    "vitest": "5.0.3"
+  }
+}

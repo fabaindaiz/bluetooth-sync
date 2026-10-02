@@ -12,18 +12,24 @@ import json
 import re
 import threading
 import urllib.request
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Browser, Page, Playwright, expect, sync_playwright
+from playwright.sync_api import Browser, Page, expect
 
+from aurasync.bt_volume import BluetoothVolume
 from aurasync.config import Instalacion, Parlante
 from aurasync.logbuffer import LogBuffer
 from aurasync.rest import make_server
 from aurasync.service import Service
 from aurasync.session import SessionOptions
-from aurasync.simulated import SimulatedObserver, SimulatedSession
+from aurasync.simulated import (
+    SimulatedObserver,
+    SimulatedRadio,
+    SimulatedSession,
+    SimulatedVolumes,
+    simulated_log_level,
+)
 
 TOKEN = "prueba-de-navegador-0123456789-abcdefghijk"
 BROWSERS = ("chromium", "firefox")
@@ -40,6 +46,12 @@ class Running:
             ]
         )
         inst.guardar(tmp / "instalacion.json")
+        # As `aurasync service --simular` builds it (cli.py): the radio log and the speakers'
+        # volume are simulated too, so the panel's radio lanes and AVRCP volume can be tried.
+        self.log_level = simulated_log_level(tmp / "cambios-de-sistema.txt")
+        self.radio = SimulatedRadio(
+            lambda: [p.sink for p in inst.parlantes], lambda: self.log_level.mode is not None, drop_every_s=3.0, seed=7
+        )
         self.service = Service(
             tmp / "instalacion.json",
             tmp / "presets.json",
@@ -49,6 +61,9 @@ class Running:
             simulated=True,
             log=lambda _: None,
             logs=LogBuffer(),
+            log_level=self.log_level,
+            radio=self.radio,
+            bt_volume=BluetoothVolume(SimulatedVolumes()),
         )
         self.engine = threading.Thread(target=self.service.run, daemon=True)
         self.engine.start()
@@ -61,6 +76,21 @@ class Running:
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
+    def command(self, op: str, **args) -> dict:
+        """One raw message, as the panel sends it; the reply's `result` (asserts `ok`)."""
+        body = json.dumps({"v": 1, "op": op, **args}).encode()
+        request = urllib.request.Request(
+            f"{self.url}/v1/command", data=body, headers={"Authorization": f"Bearer {TOKEN}"}, method="POST"
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            reply = json.loads(response.read())
+        assert reply["ok"], reply
+        return reply["result"]
+
+    def stage(self, stage_id: str) -> dict:
+        """One stage of the `chain` reply."""
+        return next(s for s in self.command("chain")["stages"] if s["id"] == stage_id)
+
     def state(self) -> dict:
         request = urllib.request.Request(f"{self.url}/v1/state", headers={"Authorization": f"Bearer {TOKEN}"})
         with urllib.request.urlopen(request, timeout=5) as response:
@@ -72,48 +102,6 @@ class Running:
         self.httpd.shutdown()
         self.httpd.server_close()
         self.service.close()
-
-
-@pytest.fixture(scope="session")
-def playwright() -> Iterator[Playwright]:
-    with sync_playwright() as p:
-        yield p
-
-
-@pytest.fixture(scope="session", params=BROWSERS)
-def browser(request, playwright: Playwright) -> Iterator[Browser]:
-    browser = getattr(playwright, request.param).launch()
-    yield browser
-    browser.close()
-
-
-@pytest.fixture
-def svc(tmp_path) -> Iterator[Running]:
-    running = Running(tmp_path)
-    yield running
-    running.stop()
-
-
-@pytest.fixture
-def page(browser: Browser, svc: Running) -> Iterator[Page]:
-    context = browser.new_context(viewport={"width": 1366, "height": 900})
-    page = context.new_page()
-    page.goto(f"{svc.url}/?t={TOKEN}")
-    expect(page.locator("#connection")).to_have_text(re.compile("En vivo|Consultando"))
-    expect(page.locator("body[data-ready='1']")).to_be_attached()
-    yield page
-    context.close()
-
-
-@pytest.fixture
-def browser_page_without_stream(browser: Browser, svc: Running) -> Iterator[Page]:
-    """A browser where `/v1/stream` never connects, as behind a proxy that buffers it."""
-    context = browser.new_context(viewport={"width": 1366, "height": 900})
-    page = context.new_page()
-    page.route("**/v1/stream*", lambda route: route.abort())
-    page.goto(f"{svc.url}/?t={TOKEN}")
-    yield page
-    context.close()
 
 
 def start(page: Page) -> None:
@@ -276,8 +264,9 @@ def test_a_service_name_filters_the_logs(page: Page):
 
 
 def test_decorrelation_off_warns(page: Page, svc: Running):
-    go(page, "Ajustes")
-    page.locator('[data-card=config] [data-global="decorrelate"]').uncheck()
+    # Ajustes → Sonido moved into Cadena (spec 2026-10-02 §7.1): the decorrelation's algorithm.
+    go(page, "Cadena")
+    page.locator('[data-stage="decorrelate"] [data-algorithm="off"]').click()
     expect(page.locator("#warnings")).to_contain_text("decorrelación encendida")
     assert svc.state()["global"]["decorrelate"] is False
 
@@ -286,12 +275,12 @@ def test_a_restart_setting_is_marked_pending(page: Page, svc: Running):
     start(page)
     go(page, "Ajustes")
     page.locator('[data-card=config] [data-global="block_size"]').select_option("2048")
-    expect(page.locator('[data-pending="block_size"]')).to_have_text("pendiente: reiniciá la sesión")
+    expect(page.locator('[data-restart="block_size"]')).to_have_text("pendiente: reiniciá la sesión")
     go(page, "Diagnóstico")
     row = page.locator("#services tr", has_text="Sesión de audio")
     row.get_by_role("button", name="Reiniciar").click()
     go(page, "Ajustes")
-    expect(page.locator('[data-pending="block_size"]')).to_have_text("al reiniciar", timeout=10000)
+    expect(page.locator('[data-restart="block_size"]')).to_have_text("al reiniciar", timeout=10000)
 
 
 # -- calibration ----------------------------------------------------------------------
@@ -359,6 +348,8 @@ def test_the_pairing_qr_is_an_svg(page: Page, svc: Running):
     svc.service.pairing = {
         "urls": [f"http://127.0.0.1:{svc.port}", f"http://127.0.0.1:{svc.port}".replace("127.0.0.1", "localhost")]
     }
+    # The QR is the PWA's pairing link (rest.pairing_link), which needs HTTPS: say it is on.
+    svc.service.access.tls = {"enabled": True, "port": 8443, "root_sha256": "AB:CD"}
     expect(page.locator("#pair-open")).to_be_visible()
     page.locator("#pair-open").click()
     expect(page.locator("#pair-qr")).to_have_js_property("complete", True)
@@ -388,6 +379,7 @@ def test_every_organisation_reaches_every_card(browser: Browser, svc: Running, l
         "presets",
         "quick",
         "ab",
+        "chain",
         "room",
         "speakers",
         "devices",
@@ -482,7 +474,10 @@ def test_the_main_screen_has_the_everyday_controls(page: Page, svc: Running):
         expect(now.locator(".toggle", has_text=label)).to_be_visible()
     start(page)
     now.locator(".toggle", has_text="Separar parlantes").locator("input").uncheck()
-    expect(page.locator("[data-card=config] [data-global=decorrelate]")).not_to_be_checked(timeout=5000)
+    # The same knob as the chain's decorrelation: Cadena follows it.
+    go(page, "Cadena")
+    expect(page.locator('[data-stage="decorrelate"] [data-algorithm="off"] input')).to_be_checked(timeout=5000)
+    go(page, "Escuchar")
     expect(page.locator("#now-facts")).to_contain_text("sonando")
 
 

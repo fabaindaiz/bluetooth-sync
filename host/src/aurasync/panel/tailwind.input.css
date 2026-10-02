@@ -4,6 +4,8 @@
    esta carpeta. El modo oscuro sigue al sistema (`prefers-color-scheme`). */
 @import "tailwindcss";
 @source "./";
+/* Las pantallas en Preact (d-7c8794-6da524): sus clases están en las fuentes de host/web. */
+@source "../../../web/src";
 
 @theme {
   --color-s1: #2a78d6;
@@ -15,6 +17,8 @@
 }
 
 :root {
+  /* Los controles nativos (deslizadores, listas, barras de desplazamiento) siguen al tema. */
+  color-scheme: light dark;
   --s1: #2a78d6; --s2: #d06d1b; --s3: #1f9e6e; --s4: #8a5cd1; --s5: #c43f8e; --s6: #6b7a11;
 }
 
@@ -32,11 +36,13 @@
   .btn-big { @apply min-h-12 px-5 text-base; }
   .ghost, .btn-ghost { @apply border-transparent bg-transparent shadow-none hover:bg-zinc-100 dark:bg-transparent dark:hover:bg-zinc-800; }
   /* 44 px en el teléfono (Apple HIG, WCAG 2.5.8); más compacto con puntero fino. */
+  /* Pausar en la cabecera de una tarjeta: 24 px, el mínimo de WCAG 2.5.8 sin otro blanco cerca. */
+  .pause-btn { @apply min-h-6 px-2 py-0 text-xs; }
   .small-btn { @apply min-h-11 px-3 py-1 text-xs sm:min-h-8 sm:px-2; }
   .btn:focus-visible, .input:focus-visible, .seg:focus-visible, .nav-tab:focus-visible, input:focus-visible, select:focus-visible { @apply outline-2 outline-offset-2 outline-sky-600; }
   .q-mute[aria-pressed="true"] { @apply border-amber-500 bg-amber-400 text-zinc-900 hover:bg-amber-300 dark:bg-amber-400 dark:text-zinc-900; }
   .danger { @apply text-rose-600 dark:text-rose-400; }
-  .link-btn { @apply cursor-pointer border-0 bg-transparent p-0 text-left font-semibold text-zinc-800 underline decoration-zinc-300 underline-offset-4 hover:decoration-sky-500 dark:text-zinc-100 dark:decoration-zinc-600; }
+  .link-btn { @apply min-h-6 cursor-pointer border-0 bg-transparent p-0 text-left font-semibold text-zinc-800 underline decoration-zinc-300 underline-offset-4 hover:decoration-sky-500 dark:text-zinc-100 dark:decoration-zinc-600; }
   button[aria-pressed="true"].seg { @apply bg-sky-50 font-semibold text-sky-700 shadow-[inset_0_-3px_0_var(--s1)] dark:bg-sky-950 dark:text-sky-300; }
   .seg { @apply min-h-11 flex-1 rounded-none border-0 bg-transparent px-3 text-sm; }
   .segmented { @apply inline-flex overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700; }
@@ -50,18 +56,34 @@
   /* Zona táctil de 44 px aunque el riel se vea fino. */
   input[type="range"] { @apply h-11 w-full cursor-pointer accent-sky-600 sm:h-7; }
   input[type="checkbox"] { @apply h-5 w-5 accent-sky-600; }
-  .check { @apply inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300; }
-  .inline { @apply flex flex-nowrap items-center gap-2; }
+  .check { @apply inline-flex min-h-11 items-center gap-2 text-sm text-zinc-600 sm:min-h-6 dark:text-zinc-300; }
+  /* Los selectores sueltos de las tablas, con la misma zona táctil que los botones. */
+  .table select { @apply min-h-11 sm:min-h-8; }
+  /* Antes se llamaba `.inline`, y la utilidad `inline` de Tailwind (display: inline) le ganaba:
+     los botones de cada parlante quedaban uno debajo del otro (2026-10-02). */
+  .hstack { @apply flex flex-nowrap items-center gap-2; }
   .row { @apply flex flex-wrap items-end gap-2; }
+  /* La pantalla de conexión de la PWA y la administración de clientes (host/web/src/connect/). */
+  .connect-screen { @apply fixed inset-0 z-40 overflow-y-auto bg-zinc-100 dark:bg-zinc-950; }
+  .connect-screen[hidden] { @apply hidden; }
+  .device-card { @apply flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800; }
+  .device-card[data-active] { @apply border-sky-400 dark:border-sky-700; }
+  .access-list { @apply flex flex-col gap-2; }
+  .access-row { @apply flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 p-2 text-sm dark:border-zinc-800; }
+  .fingerprint code { @apply text-xs; }
 
   .table { @apply w-full border-collapse text-sm; }
   .table th { @apply border-b border-zinc-200 px-2 py-1 text-left text-xs font-medium whitespace-nowrap text-zinc-500 dark:border-zinc-800; }
-  .input-bars { @apply flex h-24 items-end gap-px rounded bg-zinc-100 p-1 dark:bg-zinc-900; }
-  .input-bar { @apply flex-1 rounded-t-sm bg-sky-500 transition-[height] duration-75 dark:bg-sky-400; }
+  .input-bars { @apply flex h-24 items-end gap-px rounded bg-zinc-100 p-1 dark:bg-zinc-900; contain: strict; }
+  /* Altura completa y scaleY desde abajo: se mueve en el compositor, sin layout. */
+  .input-bar { @apply h-full flex-1 origin-bottom rounded-t-sm bg-sky-500 dark:bg-sky-400; transform: scaleY(0); }
   .input-axis { @apply mt-1 flex justify-between; }
   .corr { @apply flex items-center gap-2; }
-  .corr-track { @apply relative h-3 flex-1 rounded bg-gradient-to-r from-red-300 via-zinc-200 to-emerald-300 dark:from-red-900 dark:via-zinc-800 dark:to-emerald-900; }
-  .corr-marker { @apply absolute -top-1 h-5 w-1 -translate-x-1/2 rounded bg-zinc-900 dark:bg-zinc-100; }
+  /* overflow-x: clip: la capa corrida no ensancha la página y el marcador sobresale arriba y abajo. */
+  .corr-track { overflow-x: clip; @apply relative h-3 flex-1 rounded bg-gradient-to-r from-red-300 via-zinc-200 to-emerald-300 dark:from-red-900 dark:via-zinc-800 dark:to-emerald-900; }
+  /* Capa de ancho completo corrida con translateX(%): el marcador va en su borde izquierdo. */
+  .corr-pos { @apply pointer-events-none absolute inset-0; }
+  .corr-marker { @apply absolute -top-1 left-0 h-5 w-1 -translate-x-1/2 rounded bg-zinc-900 dark:bg-zinc-100; }
   .meter-limit { @apply ml-1 text-xs text-amber-600 dark:text-amber-400; }
   .now-facts { @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm; }
   .now-facts dt { @apply text-zinc-500 dark:text-zinc-400; }
@@ -71,6 +93,8 @@
   .toggle span { @apply flex flex-col; }
   .toggle small { @apply text-xs text-zinc-500 dark:text-zinc-400; }
   .link { @apply text-sky-700 underline dark:text-sky-400; }
+  /* Un enlace que es un botón (p. ej. los cortes en Ahora): 24 px de alto, el mínimo de WCAG 2.5.8. */
+  button.link { @apply inline-flex min-h-6 items-center; }
   .setting-group { @apply mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 first:mt-0 dark:text-zinc-400; }
   .settings { @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3; }
   .setting { @apply flex flex-col gap-1 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800; }
@@ -86,11 +110,14 @@
   .cuts-timeline { @apply relative mt-3 h-6 rounded bg-zinc-100 dark:bg-zinc-900; }
   .cuts-timeline .cut-dot { @apply absolute top-1.5 -translate-x-1/2; }
   .cuts-axis { @apply mt-1 flex justify-between; }
-  .cut-dot { @apply inline-block h-3 w-3 rounded-full; }
-  .cut-fault { @apply bg-red-500; }
-  .cut-xrun { @apply bg-amber-500; }
-  .cut-input { @apply bg-sky-500; }
-  .cut-fade { @apply bg-zinc-400; }
+  /* Una forma por tipo de corte, no solo un color (WCAG 1.4.1): círculo, cuadrado, triángulo,
+     anillo y rombo. */
+  .cut-dot { @apply inline-block h-3 w-3; }
+  .cut-fault { @apply rounded-full bg-red-500; }
+  .cut-xrun { @apply rounded-none bg-amber-500; }
+  .cut-input { @apply rounded-none bg-sky-500; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .cut-fade { @apply rounded-full border-2 border-zinc-500 bg-transparent; }
+  .cut-radio { @apply rounded-none bg-violet-500; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
   .facts { @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm; }
   .facts dt { @apply text-zinc-500 dark:text-zinc-400; }
   .facts dd { @apply m-0; }
@@ -108,6 +135,8 @@
   .service-error { @apply text-xs text-rose-600; }
 
   .chip { @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 px-2 py-0.5 text-xs whitespace-nowrap text-zinc-600 dark:border-zinc-700 dark:text-zinc-300; }
+  /* Un chip que se toca mide al menos 24 px (WCAG 2.5.8). */
+  button.chip { @apply min-h-6 cursor-pointer; }
   .chip-ok { @apply border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300; }
   .chip-warn { @apply border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300; }
   .chip-bad { @apply border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300; }
@@ -130,20 +159,23 @@
   .slot-channel { @apply text-sm font-bold; }
   .slot-name { @apply break-words text-zinc-600 dark:text-zinc-300; }
 
-  .meters { @apply flex flex-col gap-2; }
-  .meter { @apply grid grid-cols-[5.5rem_1fr_3.5rem_1.25rem] items-center gap-2; }
+  /* Lo que cambia cada cuadro no invalida el layout del resto de la página. */
+  .meters { @apply flex flex-col gap-2; contain: layout paint; }
+  .meter { @apply grid grid-cols-[5.5rem_1fr_3.5rem_2rem] items-center gap-2; }
   .meter-label { @apply truncate text-xs font-semibold; }
-  .meter-track { @apply relative h-3 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800; }
-  /* La barra revela zonas fijas de la escala: verde bajo -18 dBFS, ámbar hasta -6, rojo arriba.
-     La escala va de -60 a 0, así que -18 está al 70 % y -6 al 90 %. */
-  .meter-fill { @apply absolute inset-y-0 left-0 overflow-hidden rounded-r transition-[width] duration-75; }
-  .meter-fill::before { content: ""; position: absolute; inset: 0; width: var(--track-w, 100%);
+  /* La pista lleva las zonas fijas de la escala: verde bajo -18 dBFS, ámbar hasta -6, rojo
+     arriba (la escala va de -60 a 0: -18 está al 70 % y -6 al 90 %). La máscara, del color del
+     fondo, tapa lo que está sobre el nivel y se corre con translateX: sin layout por cuadro. */
+  .meter-track { @apply relative h-3 overflow-hidden rounded;
     background: linear-gradient(to right, #16a34a 0 70%, #f59e0b 70% 90%, #e11d48 90% 100%); }
-  .meter-peak { @apply absolute inset-y-0 w-0.5 bg-zinc-900 dark:bg-zinc-100; }
+  .meter-mask { @apply absolute inset-0 bg-zinc-200 dark:bg-zinc-800; will-change: transform; }
+  .meter-peak-pos { @apply pointer-events-none absolute inset-0; will-change: transform; }
+  .meter-peak { @apply absolute inset-y-0 left-0 w-0.5 bg-zinc-900 dark:bg-zinc-100; }
   .meter-value { @apply text-right text-xs tabular-nums; }
-  .meter-clip { @apply h-3 w-3 rounded-sm border border-zinc-300 dark:border-zinc-700; }
-  .meter-clip.on { @apply border-rose-600 bg-rose-600; }
-  .meter-scale { @apply relative ml-[6rem] mr-[5.25rem] h-4 text-[10px] text-zinc-500; }
+  /* 24 px: el mínimo de WCAG 2.5.8; encendido dice SAT. */
+  .meter-clip { @apply grid h-6 w-8 place-items-center rounded border border-zinc-300 text-[10px] font-bold leading-none dark:border-zinc-700; }
+  .meter-clip.on { @apply border-rose-600 bg-rose-600 text-white; }
+  .meter-scale { @apply relative ml-[6rem] mr-[6.5rem] h-4 text-[10px] text-zinc-500; }
   .meter-scale span { @apply absolute -translate-x-1/2 tabular-nums; }
 
   .logs { @apply m-0 h-80 list-none overflow-auto rounded-xl border border-zinc-200 bg-zinc-50 py-1 font-mono text-xs dark:border-zinc-800 dark:bg-zinc-950; }
@@ -164,6 +196,130 @@
   .preset-list li.current .preset-name { @apply font-semibold; }
   .preset-name { @apply flex-1 break-words; }
   small.pending { @apply font-semibold text-rose-600; }
+  /* "En camino": el valor ya cambió en pantalla pero el oído lo nota después de la latencia. */
+  [data-pending="text"]::after { content: " · en camino"; @apply text-xs font-normal text-sky-700 dark:text-sky-300; }
+  [data-pending="dots"]::after { content: "…"; @apply text-sky-700 dark:text-sky-300; }
+  output[data-pending] { @apply text-sky-700 dark:text-sky-300; }
+  .toggle[data-pending] { @apply border-dashed border-sky-500; }
+  /* ↺ visible cuando el valor no es el neutro: el doble toque en un deslizador táctil mueve el
+     valor antes de restablecerlo. 44 px en el teléfono. */
+  .reset-btn { @apply inline-grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-zinc-300 bg-white text-base text-zinc-700 hover:bg-zinc-50 sm:h-8 sm:w-8 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700; }
+
+  /* Avisos donde se mira (Escuchar → Ahora y la cabecera): ícono y texto, no solo color. */
+  .alerts { @apply m-0 mb-3 flex list-none flex-col gap-1 p-0; }
+  .alert { @apply flex items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-sm text-rose-900 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-100; }
+  .alert-icon { @apply h-4 w-4 shrink-0; }
+
+  /* La sincronía para el oyente: un número sobre una regla con las zonas de research/09 §3. */
+  .now-facts dd.sync { @apply whitespace-normal; }
+  .sync-head { @apply flex flex-wrap items-center gap-x-2; }
+  .sync-value { @apply font-semibold tabular-nums; }
+  .sync-shape { @apply inline-block h-3 w-3 bg-zinc-400; }
+  .sync-ruler { @apply relative flex h-2 w-20 overflow-hidden rounded; }
+  .sync-zone { @apply h-full; }
+  .sync-zone + .sync-zone { @apply border-l border-white dark:border-zinc-900; }
+  .sync-pos { @apply pointer-events-none absolute inset-0; }
+  .sync-marker { @apply absolute inset-y-0 left-0 w-1 -translate-x-1/2 bg-zinc-900 dark:bg-zinc-100; }
+  .sync-note { @apply text-xs text-zinc-500 dark:text-zinc-400; }
+  [data-zone="fused"] .sync-shape, .sync-zone.fused { @apply rounded-full bg-emerald-500; }
+  [data-zone="first"] .sync-shape, .sync-zone.first { @apply bg-lime-500; }
+  [data-zone="double"] .sync-shape, .sync-zone.double { @apply bg-amber-500; }
+  [data-zone="haas"] .sync-shape, .sync-zone.haas { @apply bg-rose-500; }
+  [data-zone="first"] .sync-shape { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+  [data-zone="double"] .sync-shape { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  [data-zone="haas"] .sync-shape { @apply rounded-none; }
+  [data-zone="none"] .sync-shape { @apply rounded-full border-2 border-zinc-400 bg-transparent; }
+
+  /* La pantalla Cadena (spec 2026-10-02 §7.1), dibujada por cadena.js desde la operación `chain`. */
+  /* El orden de las etapas, y un salto a cada una: blancos de 24 px con espacio entre filas (WCAG 2.5.8). */
+  .stage-flow { @apply mb-3 flex flex-wrap items-center gap-x-1 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300; }
+  .flow-step { @apply inline-flex items-center gap-1; }
+  .flow-end { @apply font-semibold text-zinc-800 dark:text-zinc-100; }
+  .flow-stage { @apply min-h-6 cursor-pointer rounded-full border border-zinc-300 bg-white px-2 text-xs text-zinc-800 hover:border-sky-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100; }
+  .flow-stage:focus-visible { @apply outline-2 outline-offset-2 outline-sky-600; }
+  .flow-note { @apply ml-1; }
+  .stage-card { scroll-margin-top: 12rem; }
+  @media (min-width: 640px) { .stage-card { scroll-margin-top: 11rem; } }
+  .stage-list { @apply m-0 flex list-none flex-col p-0; }
+  .stage-item { @apply flex flex-col; }
+  .stage-arrow { @apply self-center py-0.5 text-lg leading-none text-zinc-400; }
+  .stage-card { @apply min-w-0 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800; }
+  .stage-head { @apply mb-1 flex flex-wrap items-center gap-2; }
+  .stage-title { @apply m-0 mr-auto flex items-center gap-2 text-sm font-semibold; }
+  .stage-n { @apply grid h-6 w-6 place-items-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300; }
+  .algo-list { @apply m-0 mt-2 grid min-w-0 gap-2 border-0 p-0 sm:grid-cols-2 lg:grid-cols-3; }
+  .algo-legend { @apply mb-1 p-0 text-xs font-semibold text-zinc-500 dark:text-zinc-400; }
+  .algo-option { @apply flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 p-2 text-sm has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 dark:border-zinc-700 dark:has-[:checked]:bg-sky-950/40; }
+  .algo-option[aria-disabled="true"] { @apply cursor-not-allowed border-dashed opacity-70; }
+  .algo-option input { @apply mt-0.5 h-5 w-5 shrink-0 accent-sky-600; }
+  .algo-text { @apply flex min-w-0 flex-col; }
+  .algo-text small { @apply text-xs text-zinc-500 dark:text-zinc-400; }
+  .algo-text .algo-meta { @apply tabular-nums; }
+  .algo-text .algo-why { @apply text-rose-700 dark:text-rose-300; }
+  .algo-single { @apply m-0 mt-2 text-sm; }
+  .param-group-head { @apply mt-3 flex items-center gap-2; }
+  .param-group-title { @apply text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400; }
+  .knobs { @apply mt-2 rounded-lg border border-zinc-200 px-2 dark:border-zinc-800; }
+  .knobs-summary { @apply flex min-h-11 cursor-pointer items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 sm:min-h-9 dark:text-zinc-300; }
+  .knobs-summary:focus-visible { @apply outline-2 outline-offset-2 outline-sky-600; }
+  .knobs-count { @apply font-normal normal-case tracking-normal text-zinc-500 dark:text-zinc-400; }
+  .knobs[open] { @apply pb-2; }
+  .param-grid { @apply mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3; }
+  .param { @apply flex min-w-0 flex-col gap-1 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800; }
+  .param.param-compact { @apply border-0 p-0; }
+  .param-head { @apply flex items-start justify-between gap-2; }
+  .param-title { @apply text-sm font-semibold; }
+  .param-row { @apply flex min-w-0 items-center gap-2; }
+  .param-row .param-range { @apply min-w-0 flex-1; }
+  .param-row .segmented { @apply min-w-0 flex-1; }
+  .param-out { @apply min-w-8 shrink-0 text-xs text-zinc-500 dark:text-zinc-400; }
+  .param-compact .param-out { @apply min-w-16 text-right text-zinc-800 dark:text-zinc-100; }
+  /* Cómo se aplica un cambio: el texto lo dice; el borde (lleno, a trazos, punteado) lo acompaña. */
+  .apply-badge { @apply ml-1 inline-flex items-center rounded border border-zinc-300 px-1 text-[11px] font-normal leading-4 whitespace-nowrap text-zinc-600 dark:border-zinc-600 dark:text-zinc-300; }
+  .apply-badge[data-apply="cut"] { @apply border-dashed border-amber-500 text-amber-800 dark:text-amber-300; }
+  .apply-badge[data-apply="restart"] { @apply border-dotted border-rose-500 text-rose-700 dark:text-rose-300; }
+  /* Por parlante: en el teléfono, un bloque por parlante; desde sm, una columna por parlante (las
+     columnas las fija cadena.js en línea: grid-template-columns y grid-template-rows). */
+  .spk-grid { @apply mt-3 flex flex-col gap-2 sm:grid sm:grid-flow-col sm:items-center sm:gap-x-3 sm:gap-y-1; }
+  .spk-col { @apply flex min-w-0 flex-col gap-1 rounded-lg border border-zinc-200 p-2 sm:contents dark:border-zinc-800; }
+  .spk-col.spk-labels { @apply hidden sm:contents; }
+  .spk-head { @apply truncate text-xs font-semibold; }
+  .spk-label { @apply text-xs text-zinc-600 dark:text-zinc-300; }
+  .spk-cell { @apply flex min-w-0 flex-col gap-0.5; }
+  .spk-cell-label { @apply text-xs text-zinc-500 sm:hidden dark:text-zinc-400; }
+  .stage-metrics { @apply m-0 mt-3 rounded-lg bg-zinc-50 p-2 text-xs dark:bg-zinc-950; contain: layout paint; }
+  .metrics-title { @apply text-xs font-semibold; }
+  .metric-list { @apply m-0 mt-1 grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2; }
+  .metric { @apply flex min-w-0 gap-2; }
+  .metric dt { @apply shrink-0 text-zinc-500 dark:text-zinc-400; }
+  .metric dd { @apply m-0 min-w-0 break-words; }
+  .metric-bars { @apply flex-col gap-0.5 sm:col-span-2; }
+  .metric-bars dd { @apply flex flex-col gap-0.5; }
+  .metric-bar-row { @apply grid grid-cols-[5rem_1fr_4.5rem] items-center gap-2; }
+  .metric-bar-name { @apply truncate; }
+  .metric-bar { @apply relative h-2 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800; }
+  .metric-bar-fill { @apply absolute inset-0 origin-left bg-amber-500; will-change: transform; }
+  .metric-bar-value { @apply text-right; }
+  /* La franja de calidad: los avisos dicen qué pasa en texto y con una forma, no solo con color. */
+  .quality-strip { @apply mb-3; }
+  .q-tiles { @apply grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6; }
+  .q-tile { @apply min-w-0 rounded-xl border border-zinc-200 p-2 dark:border-zinc-800; }
+  .q-value { @apply text-base font-semibold; }
+  .q-warnings { @apply m-0 mt-2 flex list-none flex-col gap-1 p-0; }
+  .q-warn { @apply flex items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100; }
+  .q-shape { @apply inline-block h-3 w-3 shrink-0 bg-amber-500; }
+  .q-shape[data-shape="rombo"] { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+  .q-shape[data-shape="triángulo"] { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  /* El A/B: la sonoridad de A y de B y su diferencia. */
+  .ab-diff-warn { @apply font-semibold text-amber-800 dark:text-amber-300; }
+  .ab-warn { @apply ml-1 inline-flex items-center gap-1; }
+  /* Cortes: un carril de radio por parlante. En el teléfono el carril va en su propia línea. */
+  .radio-lanes { @apply mt-2 flex flex-col gap-2; }
+  .radio-lane { @apply grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1 text-xs sm:grid-cols-[8rem_minmax(0,1fr)_4.5rem_8rem]; }
+  .radio-name { @apply truncate font-medium; }
+  .radio-track { @apply relative order-last col-span-3 h-5 rounded bg-zinc-100 sm:order-none sm:col-span-1 dark:bg-zinc-900; }
+  .radio-track .cut-dot { @apply absolute top-1 -translate-x-1/2; }
+  .radio-rate, .radio-pool { @apply text-right whitespace-nowrap; }
 
   .nav-tab { @apply flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-xs text-zinc-500 hover:bg-zinc-100 sm:flex-none sm:flex-row sm:gap-2 sm:px-3 sm:text-sm dark:hover:bg-zinc-800; }
   .nav-tab[aria-current="page"] { @apply bg-sky-50 font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300; }
@@ -183,3 +339,7 @@ html { scroll-padding-top: 12rem; scroll-padding-bottom: 5rem; }
 svg .measured { stroke-width: 2; }
 svg .unity { stroke: var(--color-zinc-400); stroke-width: 1; stroke-dasharray: 2 2; }
 body.stale #views, body.stale #player { opacity: 0.45; pointer-events: none; }
+/* Movimiento reducido: sin transiciones ni animaciones (app.js además pinta a ≤ 5 Hz). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}

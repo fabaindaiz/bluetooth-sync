@@ -12,5 +12,17 @@ command -v hatch >/dev/null || { echo "check: falta hatch (ver host/README.md)" 
 # La lista cerrada de archivos de host/src/aurasync se quitó el 2026-09-28, al
 # registrarse d-7c8794-9afee2: se construye el núcleo compartido con A2DP como primer
 # backend emisor. El límite ahora es esa decisión, no este script.
+# El panel compilado (d-7c8794-6da524): se comprueba sin Node que host/src/aurasync/panel/cadena.js
+# es el build de host/web tal como está (un sello con el hash de las fuentes y de lo escrito). Que
+# web/src/contract.gen.ts esté al día con control.py y chain.py lo comprueba hatch test
+# (tests/test_contract_types.py).
+"$PY" host/scripts/web_stamp.py
+# La PWA (d-7c8794-37f9bc) se compila en GitHub Actions (.github/workflows/pages.yml): lo compilado
+# no se versiona, y el workflow tiene que seguir existiendo.
+if [ -n "$(git ls-files host/web/dist-pwa)" ]; then
+  echo "check: host/web/dist-pwa/ no se versiona (lo arma .github/workflows/pages.yml)" >&2
+  exit 1
+fi
+[ -f .github/workflows/pages.yml ] || { echo "check: falta .github/workflows/pages.yml" >&2; exit 1; }
 (cd host && hatch fmt --check && hatch test)
 echo "check: ok"

@@ -1,0 +1,398 @@
+{
+ "teléfono": {
+  "pagina": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 1.76,
+     "costo": 1.76
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 0,
+     "pantallas": 23.38,
+     "costo": 23.38
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 3.11,
+     "costo": 3.11
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 17.5,
+     "costo": 17.5
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 0,
+     "pantallas": 20.94,
+     "costo": 20.94
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 4.85,
+     "costo": 5.85
+    }
+   },
+   "total": 94.2,
+   "total_seis": 88.4,
+   "cabecera_px": 183
+  },
+  "pestanas": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 1.96,
+     "costo": 1.96
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 4.21,
+     "costo": 4.21
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 4.22,
+     "costo": 5.22
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 2,
+     "pantallas": 3.81,
+     "costo": 5.81
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 3.27,
+     "costo": 5.27
+    }
+   },
+   "total": 31.4,
+   "total_seis": 26.1,
+   "cabecera_px": 183
+  },
+  "inicio": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 1.76,
+     "costo": 1.76
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 4.49,
+     "costo": 5.49
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 3,
+     "pantallas": 3.74,
+     "costo": 6.74
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 3.05,
+     "costo": 5.05
+    }
+   },
+   "total": 27.5,
+   "total_seis": 22.4,
+   "cabecera_px": 183
+  },
+  "lateral": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 1.96,
+     "costo": 1.96
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 4.21,
+     "costo": 4.21
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 2.15,
+     "costo": 4.15
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 2,
+     "pantallas": 3.81,
+     "costo": 5.81
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 3.27,
+     "costo": 5.27
+    }
+   },
+   "total": 30.3,
+   "total_seis": 25.0,
+   "cabecera_px": 183
+  }
+ },
+ "PC": {
+  "pagina": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 0,
+     "pantallas": 10.74,
+     "costo": 10.74
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 8.4,
+     "costo": 8.4
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 0,
+     "pantallas": 9.97,
+     "costo": 9.97
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 2.04,
+     "costo": 3.04
+    }
+   },
+   "total": 37.9,
+   "total_seis": 34.9,
+   "cabecera_px": 101
+  },
+  "pestanas": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 0.49,
+     "costo": 0.49
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 1.37,
+     "costo": 1.37
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 1.39,
+     "costo": 2.39
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 2,
+     "pantallas": 0.69,
+     "costo": 2.69
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 1.61,
+     "costo": 3.61
+    }
+   },
+   "total": 13.7,
+   "total_seis": 10.0,
+   "cabecera_px": 153
+  },
+  "inicio": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 1,
+     "pantallas": 1.78,
+     "costo": 2.78
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 3,
+     "pantallas": 1.18,
+     "costo": 4.18
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 1.47,
+     "costo": 3.47
+    }
+   },
+   "total": 11.3,
+   "total_seis": 7.9,
+   "cabecera_px": 101
+  },
+  "lateral": {
+   "escenarios": {
+    "Escuchar música": {
+     "peso": 20,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Ajustar el ambiente": {
+     "peso": 6,
+     "toques": 0,
+     "pantallas": 0.0,
+     "costo": 0.0
+    },
+    "Calibrar y ecualizar": {
+     "peso": 2,
+     "toques": 1,
+     "pantallas": 0.0,
+     "costo": 1.0
+    },
+    "Comparar A/B": {
+     "peso": 1,
+     "toques": 0,
+     "pantallas": 1.26,
+     "costo": 1.26
+    },
+    "Resolver un problema": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 0.57,
+     "costo": 2.57
+    },
+    "Montar la sala": {
+     "peso": 0.5,
+     "toques": 2,
+     "pantallas": 0.99,
+     "costo": 2.99
+    },
+    "Afinar la cadena": {
+     "peso": 1,
+     "toques": 2,
+     "pantallas": 1.52,
+     "costo": 3.52
+    }
+   },
+   "total": 10.8,
+   "total_seis": 7.3,
+   "cabecera_px": 101
+  }
+ }
+}

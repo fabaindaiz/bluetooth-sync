@@ -1,6 +1,9 @@
 // Panel de aurasync sobre el servicio de control (spec del servicio §15). Sin build ni
 // dependencias. Habla solo el contrato de control.py: lee GET /v1/state y manda cada orden
 // como el mensaje crudo por POST /v1/command, igual que viajaría por serie.
+// Todo pasa por un solo transporte, `window.aurasync.api` (host/web/src/transport.ts, en
+// cadena.js): con la cookie en el panel que sirve el equipo, y con el token del cliente
+// (`Authorization: Bearer`, el stream por ticket) en la PWA de GitHub Pages (d-7c8794-37f9bc).
 // Los textos que vienen del servicio o del log se insertan con textContent, nunca como HTML.
 "use strict";
 
@@ -32,20 +35,34 @@ const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
 let latest = null;
 let online = false;
 let renderQueued = false;
+// El transporte (transport.ts): null hasta que hay un equipo elegido. `stopped`: el equipo ya no
+// reconoce la credencial (401) y no tiene sentido seguir preguntando.
+let api = null;
+let stopped = false;
+
+// Lo que reciben las pantallas en Preact (cadena.js, compilado de host/web): app.js tiene el único
+// EventSource y la consulta de respaldo, y les pasa cada estado y cada evento del stream como un
+// evento del documento. Ellas mandan sus avisos por `aurasync:toast` (d-7c8794-6da524).
+function share(name, detail) {
+  document.dispatchEvent(new CustomEvent(`aurasync:${name}`, { detail }));
+}
 
 // -- organizaciones -------------------------------------------------------------
 // Las mismas tarjetas, repartidas de cuatro maneras. Se elige con ?layout= (y queda
 // recordada); docs/research/10-panel-de-control.md mide las cuatro con las tareas típicas.
 
-const CARDS_ALL = ["now", "presets", "quick", "ab", "room", "speakers", "devices", "calibration", "response",
+const CARDS_ALL = ["now", "presets", "quick", "ab", "chain", "room", "speakers", "devices", "calibration", "response",
   "health", "cuts", "levels", "input", "services", "logs", "config"];
-const WIDE = new Set(["speakers", "devices", "services", "logs", "config", "calibration"]);
+const WIDE = new Set(["chain", "speakers", "devices", "services", "logs", "config", "calibration"]);
 const LAYOUTS = {
   pagina: { nav: "none", views: [{ id: "todo", label: "Todo", icon: "list", cards: CARDS_ALL }] },
   pestanas: { nav: "tabs", views: [
     // La pantalla principal: lo de todos los días arriba (estado, efectos, presets, parlantes,
     // niveles); comparar y analizar la entrada, más abajo (research/10 §3, escenarios).
     { id: "escuchar", label: "Escuchar", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input"] },
+    // La cadena entera (spec 2026-10-02 §7.1): cada etapa, sus algoritmos y sus perillas. Es lo que
+    // antes era Ajustes → Sonido, y mucho más; la dibuja cadena.js (Preact, host/web).
+    { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     // Primero conectar, después ajustar cada parlante, al final la sala.
     { id: "parlantes", label: "Parlantes", icon: "speaker", cards: ["devices", "speakers", "room"] },
     { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response"] },
@@ -55,6 +72,7 @@ const LAYOUTS = {
   ] },
   inicio: { nav: "hub", views: [
     { id: "inicio", label: "Inicio", icon: "home", cards: ["now", "presets", "quick", "hub"] },
+    { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     { id: "parlantes", label: "Sala y parlantes", icon: "speaker", cards: ["devices", "speakers", "room"] },
     { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response"] },
     { id: "comparar", label: "A/B ciego", icon: "compare", cards: ["ab", "levels"] },
@@ -64,6 +82,7 @@ const LAYOUTS = {
   ] },
   lateral: { nav: "sidebar", views: [
     { id: "sonido", label: "Sonido", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input"] },
+    { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     { id: "sala", label: "Sala", icon: "speaker", cards: ["devices", "speakers", "room"] },
     { id: "medir", label: "Medir", icon: "target", cards: ["calibration", "response", "health", "cuts"] },
     { id: "sistema", label: "Sistema", icon: "server", cards: ["services", "logs", "config"] },
@@ -83,10 +102,14 @@ const ICONS = {
   home: "M3 11 12 4l9 7M5 10v10h14V10",
   server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01",
   compare: "M7 4v16M17 4v16M3 8h8M13 16h8",
+  battery: "M3 8h15v8H3zM21 11v2M6 11v2",
+  unlink: "M9 15l6-6M10 6l1-1a4 4 0 0 1 6 6l-1 1M14 18l-1 1a4 4 0 0 1-6-6l1-1M3 3l18 18",
+  radio: "M5 12a7 7 0 0 1 14 0M8.5 12a3.5 3.5 0 0 1 7 0M12 12v8",
+  chain: "M4 7h4v4H4zM16 13h4v4h-4zM8 9h3a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1",
 };
 
-function icon(name) {
-  const node = svg("svg", { viewBox: "0 0 24 24", class: "nav-icon h-5 w-5", fill: "none", stroke: "currentColor",
+function icon(name, cls = "nav-icon h-5 w-5") {
+  const node = svg("svg", { viewBox: "0 0 24 24", class: cls, fill: "none", stroke: "currentColor",
     "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" });
   node.append(svg("path", { d: ICONS[name] || ICONS.list }));
   return node;
@@ -240,7 +263,18 @@ function duration(seconds) {
   return `${Math.floor(seconds / 3600)} h ${Math.floor((seconds % 3600) / 60)} min`;
 }
 
-const fmt = (value, digits = 1) => (value == null ? "—" : Number(value).toFixed(digits));
+// Los números visibles van con coma decimal, como los documentos (Intl, sin dependencias).
+const NUMBER_FORMATS = new Map();
+function nf(value, digits = 1) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  let f = NUMBER_FORMATS.get(digits);
+  if (!f) {
+    f = new Intl.NumberFormat("es", { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false });
+    NUMBER_FORMATS.set(digits, f);
+  }
+  return f.format(Number(value));
+}
+const fmt = (value, digits = 1) => nf(value, digits);
 
 // -- controles que no se pisan --------------------------------------------------
 // Un control se escribe solo cuando cambia su valor en el servicio, y nunca mientras se
@@ -290,16 +324,9 @@ function resync(node) {
 // -- el contrato ----------------------------------------------------------------
 
 async function send(op, args = {}) {
-  let reply;
-  try {
-    const response = await fetch("/v1/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ v: 1, op, ...args }),
-    });
-    reply = await response.json();
-  } catch {
+  if (!api) { toast("Todavía no hay un equipo conectado."); return null; }
+  const reply = await api.raw({ op, ...args });
+  if (reply === null) {
     toast("Sin conexión: la orden no se envió.");
     return null;
   }
@@ -315,6 +342,25 @@ async function sendFrom(node, op, args) {
 
 function setSpeaker(node, speaker, changes) { return sendFrom(node, "set", { speaker, changes }); }
 function setGlobal(node, changes) { return sendFrom(node, "set", { changes }); }
+
+// "En camino" (research/11 D §4): el valor cambia en pantalla al instante, pero el oído lo nota
+// después de la latencia de escrito a oído. Mientras tanto el control lleva `data-pending`.
+// Dura la latencia medida por la última calibración (`latency.measured_ms`); sin medir, la
+// conocida (`latency.known_ms`, una cota inferior), y sin estado todavía, 500 ms.
+const DEFAULT_PENDING_MS = 500;
+const pendingTimers = new WeakMap();
+
+function pendingMs() {
+  const l = latest && latest.latency;
+  return (l && (l.measured_ms ?? l.known_ms)) ?? DEFAULT_PENDING_MS;
+}
+
+function markPending(node) {
+  if (!node) return;
+  node.setAttribute("data-pending", node.dataset.pendingStyle || "dots");
+  clearTimeout(pendingTimers.get(node));
+  pendingTimers.set(node, setTimeout(() => node.removeAttribute("data-pending"), pendingMs()));
+}
 
 // Un deslizador manda mientras se arrastra, como mucho cada 80 ms, y al soltarlo. Con el stream
 // la respuesta vuelve en el cuadro siguiente.
@@ -334,37 +380,66 @@ function liveRange(node, output, format, sendValue) {
 }
 
 async function pollState() {
-  if (live.alive) { setTimeout(pollState, STATE_EVERY_MS); return; }
-  try {
-    const response = await fetch("/v1/state", { credentials: "same-origin", cache: "no-store" });
-    if (response.status === 401) {
-      setOnline(false, "Sin autorización: abrí el link con el token que imprime aurasync service.");
-      return;
-    }
-    const reply = await response.json();
+  if (stopped) return;
+  if (live.alive || document.hidden) { setTimeout(pollState, STATE_EVERY_MS); return; }
+  const reply = await api.state();
+  if (stopped) return;
+  if (reply === null) setOnline(false);
+  else if (reply.ok) {
     latest = reply.result;
     setOnline(true);
     if (!renderQueued) {
       renderQueued = true;
       requestAnimationFrame(() => { renderQueued = false; render(latest); });
     }
-  } catch {
-    setOnline(false);
-  } finally {
-    setTimeout(pollState, STATE_EVERY_MS);
   }
+  // Un 401 lo atiende onAccess (deja de consultar); un 403 o un 429 se reintentan.
+  setTimeout(pollState, STATE_EVERY_MS);
+}
+
+// Lo que el transporte avisa (transport.ts): credencial revocada, permiso insuficiente, demasiados
+// intentos. Sin conexión lo dice setOnline.
+function onAccess(event) {
+  const e = event.detail;
+  if (e.kind === "unauthorized") {
+    stopped = true;
+    closeStream();
+    const remote = window.aurasync && window.aurasync.mode === "remote";
+    setOnline(false, remote
+      ? `${deviceName()} ya no reconoce a este navegador: volvé a emparejar.`
+      : "Sin autorización: abrí el link con el token que imprime aurasync service.");
+  } else if (e.kind === "rate_limited") {
+    toast(e.message);
+  }
+}
+
+function deviceName() {
+  const device = window.aurasync && window.aurasync.device;
+  return device ? device.name : "aurasync";
 }
 
 // -- stream en vivo (spec §17) ---------------------------------------------------
 // El estado, los niveles a 20 Hz, la entrada a 10 Hz y los logs llegan por Server-Sent Events.
 // Mientras el stream vive, las consultas periódicas se saltan; si falla 3 veces seguidas, el
 // panel vuelve a consultar y lo dice ("Consultando").
-const live = { source: null, alive: false, failures: 0, meters: null, metersAt: 0, input: null, shownMode: "" };
+const live = { source: null, opening: false, alive: false, failures: 0, meters: null, metersAt: 0, input: null, radio: null, shownMode: "", retry: null };
 const STREAM_MAX_FAILURES = 3;
 
-function openStream() {
-  if (typeof EventSource === "undefined" || live.failures >= STREAM_MAX_FAILURES) return;
-  const source = new EventSource(`/v1/stream?since=${logSince}`);
+async function openStream() {
+  if (typeof EventSource === "undefined" || live.failures >= STREAM_MAX_FAILURES || stopped || !api) return;
+  // Con la pestaña oculta no se abre: el stream seguía mandando ~28 eventos/s que nadie veía,
+  // y cada pestaña ocupa una de las 6 conexiones HTTP/1.1 del navegador (research/11 D §6).
+  if (document.hidden || live.source || live.opening) return;
+  // En la PWA, primero un ticket de un solo uso (EventSource no manda cabeceras).
+  live.opening = true;
+  const source = await api.stream(logSince);
+  live.opening = false;
+  if (!source) {
+    live.failures += 1;
+    if (live.failures < STREAM_MAX_FAILURES && !stopped) live.retry = setTimeout(openStream, 1000 * live.failures);
+    return;
+  }
+  if (document.hidden || stopped) { source.close(); return; }
   live.source = source;
   source.addEventListener("open", () => { live.failures = 0; live.alive = true; setOnline(true); });
   source.addEventListener("state", (e) => {
@@ -379,14 +454,36 @@ function openStream() {
   source.addEventListener("meters", (e) => { live.meters = JSON.parse(e.data); live.metersAt = performance.now(); });
   source.addEventListener("input", (e) => { live.input = JSON.parse(e.data); });
   source.addEventListener("log", (e) => ingestLogs(JSON.parse(e.data)));
+  source.addEventListener("quality", (e) => share("quality", JSON.parse(e.data)));
+  source.addEventListener("chain", (e) => share("chain", JSON.parse(e.data)));
+  source.addEventListener("radio", (e) => { live.radio = JSON.parse(e.data); share("radio", live.radio); });
   source.addEventListener("error", () => {
     source.close();
+    if (live.source === source) live.source = null;
     live.alive = false;
     live.failures += 1;
     setOnline(online);
-    if (live.failures < STREAM_MAX_FAILURES) setTimeout(openStream, 1000 * live.failures);
+    if (live.failures < STREAM_MAX_FAILURES) live.retry = setTimeout(openStream, 1000 * live.failures);
   });
 }
+
+function closeStream() {
+  clearTimeout(live.retry);
+  if (live.source) live.source.close();
+  live.source = null;
+  live.alive = false;
+}
+
+// Oculta: se cierra el stream y tampoco se consulta. Visible: se reabre desde el último log
+// visto (`since=`), así los logs no quedan con hueco; el stream manda el estado al conectar.
+function onVisibility() {
+  if (stopped) return;
+  if (document.hidden) closeStream();
+  else { live.failures = 0; openStream(); }
+}
+
+// Para los tests: el estado del stream visto desde el navegador.
+window.aurasyncStream = () => ({ open: Boolean(live.source), readyState: live.source ? live.source.readyState : null, alive: live.alive });
 
 function setOnline(value, message) {
   const mode = `${value}|${live.alive}`;
@@ -394,6 +491,8 @@ function setOnline(value, message) {
   live.shownMode = mode;
   online = value;
   $("connection").textContent = value ? (live.alive ? "En vivo" : "Consultando") : "Desconectado";
+  // Revocado (onAccess), el aviso queda: no es una desconexión que se arregle sola.
+  if (!value && !message && !stopped) message = `Sin conexión con ${deviceName()}. Reintentando…`;
   $("connection").title = value
     ? (live.alive ? "Recibe el estado y los niveles por stream" : "Sin stream: consulta el estado cada 500 ms")
     : "";
@@ -417,6 +516,8 @@ function render(s) {
   renderHealth(s);
   renderCuts(s);
   renderNow(s);
+  renderAlerts(s);
+  renderSync(s);
   renderChart(s);
   renderMeters(s);
   renderInput(s);
@@ -424,6 +525,7 @@ function render(s) {
   renderConfig(s);
   renderCalibration(s);
   renderPresets(s);
+  share("state", s);
 }
 
 function renderTop(s) {
@@ -481,7 +583,7 @@ function renderControls(s) {
   if (source.kind === "file") syncValue($("source-file"), source.name || "");
   syncSourceFields();
   syncValue($("volume"), s.global.volume_db);
-  $("volume-out").textContent = `${Number($("volume").value).toFixed(0)} dB`;
+  setText($("volume-out"), `${nf($("volume").value, 0)} dB`);
   const l = s.latency;
   $("latency-total").textContent = l.measured_ms != null ? `${Math.round(l.measured_ms)} ms` : `≥ ${Math.round(l.known_ms)} ms`;
   $("chip-preset").hidden = !s.preset;
@@ -541,14 +643,24 @@ function speakerState(s, sp) {
 function rangeCell(min, max, step, label, format, onValue, neutral = null) {
   const input = el("input", { type: "range", min, max, step, "aria-label": label });
   const out = el("output", { class: "num" });
-  liveRange(input, out, format, onValue);
+  let reset = null;
+  const syncReset = () => { if (reset) reset.classList.toggle("invisible", Number(input.value) === neutral); };
+  liveRange(input, out, format, (v) => { syncReset(); markPending(out); return onValue(v); });
   if (neutral != null) {
-    // Convención de consola: doble clic (o doble toque) vuelve al valor neutro, y una marca lo muestra.
+    // Convención de consola: doble clic vuelve al valor neutro, y una marca lo muestra. En un
+    // teléfono el primer toque mueve el deslizador, así que además hay un ↺ visible de 44 px
+    // mientras el valor no es el neutro.
+    const back = () => { input.value = String(neutral); out.textContent = format(neutral); syncReset(); markPending(out); onValue(neutral); };
     input.setAttribute("list", "tick-zero");
     input.title = `${label}: doble clic vuelve a ${format(neutral)}`;
-    input.addEventListener("dblclick", () => { input.value = String(neutral); out.textContent = format(neutral); onValue(neutral); });
+    input.addEventListener("dblclick", back);
+    reset = el("button", { type: "button", class: "reset-btn invisible", text: "↺",
+      "aria-label": `${label}: volver a ${format(neutral)}`, title: `Volver a ${format(neutral)}` });
+    reset.addEventListener("click", back);
   }
-  return { input, out, cell: el("div", { class: "inline" }, input, el("span", { class: "w-14 shrink-0 text-right text-xs tabular-nums" }, out)) };
+  const cell = el("div", { class: "hstack" }, input, el("span", { class: "w-14 shrink-0 text-right text-xs tabular-nums" }, out),
+    ...(reset ? [reset] : []));
+  return { input, out, reset, cell, syncReset };
 }
 
 function speakerRow(speaker) {
@@ -559,18 +671,18 @@ function speakerRow(speaker) {
   const kind = editable(el("select", { "aria-label": `Tipo de ${name}` }));
   kind.addEventListener("change", () => setSpeaker(kind, name, { kind: kind.value }));
   role.addEventListener("change", () => { if (role.value) sendFrom(role, "assign", { speaker: name, role: role.value }); });
-  const pan = rangeCell("-1", "1", "0.05", `Pan de ${name}`, (v) => (v === 0 ? "C" : v < 0 ? `I ${(-v).toFixed(2)}` : `D ${v.toFixed(2)}`),
+  const pan = rangeCell("-1", "1", "0.05", `Pan de ${name}`, (v) => (v === 0 ? "C" : v < 0 ? `I ${nf(-v, 2)}` : `D ${nf(v, 2)}`),
     (v) => setSpeaker(pan.input, name, { pan: v }), 0);
-  const ambience = rangeCell("0", "1", "0.05", `Ambiente de ${name}`, (v) => v.toFixed(2),
+  const ambience = rangeCell("0", "1", "0.05", `Ambiente de ${name}`, (v) => nf(v, 2),
     (v) => setSpeaker(ambience.input, name, { ambience: v }));
-  const gain = rangeCell("-40", "6", "0.5", `Volumen de ${name}`, (v) => `${v.toFixed(1)} dB`,
+  const gain = rangeCell("-40", "6", "0.5", `Volumen de ${name}`, (v) => `${nf(v, 1)} dB`,
     (v) => setSpeaker(gain.input, name, { gain_db: v }), 0);
   const delay = editable(el("input", { type: "number", min: "0", max: "100", step: "0.1", class: "num-input",
     "aria-label": `Retardo de ${name} en ms` }));
   delay.addEventListener("change", () => setSpeaker(delay, name, { delay_ms: Number(delay.value) }));
   const delayNow = el("div", { class: "speaker-sub" });
   const mute = el("button", { type: "button", class: "ghost small-btn" });
-  mute.addEventListener("click", () => { const sp = current(); if (sp) send("set", { speaker: name, changes: { muted: !sp.muted } }); });
+  mute.addEventListener("click", () => { const sp = current(); if (sp) { markPending(mute); send("set", { speaker: name, changes: { muted: !sp.muted } }); } });
   const tone = el("button", { type: "button", class: "ghost small-btn", text: "Tono" });
   tone.addEventListener("click", () => send("tone", { speaker: name, seconds: 2 }));
   const remove = el("button", { type: "button", class: "ghost small-btn danger", text: "Quitar" });
@@ -590,7 +702,7 @@ function speakerRow(speaker) {
     el("td", { class: "cell-ambience" }, ambience.cell),
     el("td", { class: "cell-volume" }, gain.cell),
     el("td", { class: "num cell-delay" }, delay, delayNow),
-    el("td", { class: "cell-actions" }, el("div", { class: "inline" }, tone, mute, remove)),
+    el("td", { class: "cell-actions" }, el("div", { class: "hstack" }, tone, mute, remove)),
   );
   return row;
 }
@@ -632,18 +744,19 @@ function renderSpeakers(s) {
     }
     syncValue(row.kind, sp.kind || sp.kind_guess || "generic");
     for (const [key, cell, format] of [
-      ["pan", row.pan, (v) => (v === 0 ? "C" : v < 0 ? `I ${(-v).toFixed(2)}` : `D ${v.toFixed(2)}`)],
-      ["ambience", row.ambience, (v) => v.toFixed(2)],
-      ["gain_db", row.gain, (v) => `${v.toFixed(1)} dB`],
+      ["pan", row.pan, (v) => (v === 0 ? "C" : v < 0 ? `I ${nf(-v, 2)}` : `D ${nf(v, 2)}`)],
+      ["ambience", row.ambience, (v) => nf(v, 2)],
+      ["gain_db", row.gain, (v) => `${nf(v, 1)} dB`],
     ]) {
       syncValue(cell.input, sp[key]);
-      cell.out.textContent = format(Number(cell.input.value));
+      setText(cell.out, format(Number(cell.input.value)));
+      cell.syncReset();
     }
     syncValue(row.delay, sp.delay_ms);
     row.delay.disabled = loop;
     row.delay.title = loop ? "Lo maneja el lazo de recalibración mientras corre" : "";
     // El retardo que suena: el de calibración más el de Haas (ambiente × retardo trasero).
-    row.delayNow.textContent = sp.delay_now_ms != null ? `efectivo ${sp.delay_now_ms.toFixed(2)}` : "";
+    row.delayNow.textContent = sp.delay_now_ms != null ? `efectivo ${nf(sp.delay_now_ms, 2)}` : "";
     row.delayNow.title = "Lo que se aplica ahora: este retardo más ambiente × retardo trasero";
     row.mute.textContent = sp.muted ? "Activar" : "Silenciar";
     row.mute.setAttribute("aria-pressed", String(sp.muted));
@@ -665,23 +778,29 @@ function quickRow(speaker) {
   const current = () => latest && latest.speakers.find((sp) => sp.name === name);
   const title = el("div", { class: "speaker-name truncate" });
   const status = el("span", { class: "status text-xs" });
-  const ambience = rangeCell("0", "1", "0.05", `Ambiente de ${name}`, (v) => v.toFixed(2),
+  const ambience = rangeCell("0", "1", "0.05", `Ambiente de ${name}`, (v) => nf(v, 2),
     (v) => setSpeaker(ambience.input, name, { ambience: v }));
   ambience.input.classList.add("q-ambience");
-  const gain = rangeCell("-40", "6", "0.5", `Volumen de ${name}`, (v) => `${v.toFixed(1)} dB`,
+  const gain = rangeCell("-40", "6", "0.5", `Volumen de ${name}`, (v) => `${nf(v, 1)} dB`,
     (v) => setSpeaker(gain.input, name, { gain_db: v }), 0);
   gain.input.classList.add("q-gain");
   const mute = el("button", { type: "button", class: "btn small-btn q-mute" });
-  mute.addEventListener("click", () => { const sp = current(); if (sp) send("set", { speaker: name, changes: { muted: !sp.muted } }); });
+  mute.addEventListener("click", () => { const sp = current(); if (sp) { markPending(mute); send("set", { speaker: name, changes: { muted: !sp.muted } }); } });
   const tone = el("button", { type: "button", class: "btn btn-ghost small-btn q-tone", text: "Tono" });
   tone.addEventListener("click", () => send("tone", { speaker: name, seconds: 2 }));
   const box = el("div", { class: "rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800", "data-quick": name },
     el("div", { class: "flex items-center justify-between gap-2" },
-      el("div", { class: "flex min-w-0 items-baseline gap-2" }, title, status), el("div", { class: "inline" }, tone, mute)),
-    el("div", { class: "grid grid-cols-2 gap-3" },
-      el("label", { class: "field" }, el("span", { text: "Ambiente" }), ambience.cell),
-      el("label", { class: "field" }, el("span", { text: "Volumen" }), gain.cell)));
+      el("div", { class: "flex min-w-0 items-baseline gap-2" }, title, status), el("div", { class: "hstack" }, tone, mute)),
+    // El número va en la línea del título, para que el deslizador tenga el ancho y el ↺ su lugar.
+    el("div", { class: "grid grid-cols-2 gap-3" }, quickField("Ambiente", ambience), quickField("Volumen", gain)));
   return { box, title, status, ambience, gain, mute, tone };
+}
+
+function quickField(title, cell) {
+  cell.out.classList.add("text-xs");
+  return el("div", { class: "field" },
+    el("span", { class: "flex items-baseline justify-between gap-2" }, el("span", { text: title }), cell.out),
+    el("div", { class: "hstack" }, cell.input, ...(cell.reset ? [cell.reset] : [])));
 }
 
 function renderQuick(s) {
@@ -695,9 +814,10 @@ function renderQuick(s) {
     row.title.textContent = `${sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
     setStatus(row.status, SPEAKER_STATUS, speakerState(s, sp), sp.muted ? " · mudo" : "");
     syncValue(row.ambience.input, sp.ambience);
-    row.ambience.out.textContent = Number(row.ambience.input.value).toFixed(2);
+    setText(row.ambience.out, nf(row.ambience.input.value, 2));
     syncValue(row.gain.input, sp.gain_db);
-    row.gain.out.textContent = `${Number(row.gain.input.value).toFixed(1)} dB`;
+    setText(row.gain.out, `${nf(row.gain.input.value, 1)} dB`);
+    row.gain.syncReset();
     // Convención de consola: el botón queda "encendido" mientras el parlante está silenciado.
     row.mute.textContent = sp.muted ? "Silenciado" : "Silenciar";
     row.mute.setAttribute("aria-pressed", String(sp.muted));
@@ -714,7 +834,7 @@ const DEVICE_GROUPS = [
 ];
 
 function deviceRow(d, playing) {
-  const actions = el("div", { class: "inline" });
+  const actions = el("div", { class: "hstack" });
   const button = (text, cls, onClick, title = "") => {
     const b = el("button", { type: "button", class: cls, text, title });
     b.addEventListener("click", onClick);
@@ -781,7 +901,7 @@ function serviceRow() {
     tr: el("tr"), name, kind: el("div", { class: "speaker-sub" }), status: el("span", { class: "status" }),
     pid: el("td", { class: "num cell-pid" }), uptime: el("td", { class: "num cell-uptime" }),
     restarts: el("td", { class: "num cell-restarts" }), detail: el("div", { class: "service-detail" }),
-    error: el("div", { class: "service-error" }), actions: el("div", { class: "inline" }), actionsKey: null,
+    error: el("div", { class: "service-error" }), actions: el("div", { class: "hstack" }), actionsKey: null,
   };
   row.tr.append(
     el("td", { class: "cell-name" }, name, row.kind),
@@ -851,7 +971,7 @@ function renderHealth(s) {
   const playing = s.session.status === "playing";
   $("t-input").textContent = !playing ? "—" : h.input_active ? "recibe audio" : "en silencio";
   $("t-input-sub").textContent = playing ? "lo que suena en la salida «aurasync»" : "la sesión está detenida";
-  $("t-motor").textContent = h.motor_ms == null || !playing ? "—" : `${h.motor_ms.toFixed(2)} ms`;
+  $("t-motor").textContent = h.motor_ms == null || !playing ? "—" : `${nf(h.motor_ms, 2)} ms`;
   $("t-motor-sub").textContent = h.realtime_x ? `por bloque de ${h.budget_ms} ms · ${h.realtime_x}× tiempo real` : `bloque de ${h.budget_ms} ms`;
   $("t-routing").textContent = !playing ? "—" : h.lost.length ? `${h.lost.length} perdido(s)` : "en orden";
   $("t-routing-sub").textContent = `${h.routing_repairs} stream(s) devuelto(s) a su parlante`;
@@ -866,7 +986,7 @@ function renderHealth(s) {
   const xr = Object.entries(h.xruns || {});
   const worst = xr.reduce((m, [, v]) => (v.per_min != null && v.per_min > m ? v.per_min : m), xr.length ? 0 : null);
   const tile = $("t-xruns");
-  tile.textContent = !playing ? "—" : worst == null ? "midiendo…" : worst === 0 ? "sin cortes" : `${worst.toFixed(0)} por minuto`;
+  tile.textContent = !playing ? "—" : worst == null ? "midiendo…" : worst === 0 ? "sin cortes" : `${nf(worst, 0)} por minuto`;
   tile.classList.toggle("bad", worst != null && worst >= 6);
   tile.classList.toggle("warn", worst != null && worst > 0 && worst < 6);
   // El chip de arriba cuenta los cortes de verdad (cuts.py), no solo los xruns, y lleva a ellos.
@@ -881,7 +1001,7 @@ function renderHealth(s) {
   const r = s.recalibration;
   $("t-recal").textContent = r.active ? "encendida" : "apagada";
   $("t-recal-sub").textContent = r.last ? `${r.last.kind}: ${r.last.reason}` : `micrófono: ${r.microphone || "ninguno"}`;
-  const drift = r.drift_ms_h ? Object.entries(r.drift_ms_h).map(([n, v]) => `${n} ${v >= 0 ? "+" : ""}${v.toFixed(1)}`).join(" · ") : "";
+  const drift = r.drift_ms_h ? Object.entries(r.drift_ms_h).map(([n, v]) => `${n} ${v >= 0 ? "+" : ""}${nf(v, 1)}`).join(" · ") : "";
   $("t-drift").textContent = drift ? `deriva ms/h (INFERIDA): ${drift}` : "";
   const l = s.latency;
   const rows = [
@@ -890,10 +1010,10 @@ function renderHealth(s) {
   ];
   $("latency").replaceChildren(
     ...rows.map(([label, ms]) => el("tr", {}, el("td", { text: label }),
-      el("td", { class: "num", text: ms == null ? "sin medir" : `${ms.toFixed(1)} ms` }))),
-    el("tr", { class: "total" }, el("td", { text: "Conocido" }), el("td", { class: "num", text: `≥ ${l.known_ms.toFixed(1)} ms` })),
+      el("td", { class: "num", text: ms == null ? "sin medir" : `${nf(ms, 1)} ms` }))),
+    el("tr", { class: "total" }, el("td", { text: "Conocido" }), el("td", { class: "num", text: `≥ ${nf(l.known_ms, 1)} ms` })),
     el("tr", { class: "total" }, el("td", { text: "Medida (última calibración, de escrito a oído)" }),
-      el("td", { class: "num", text: l.measured_ms == null ? "calibrá para medirla" : `${l.measured_ms.toFixed(0)} ms` })),
+      el("td", { class: "num", text: l.measured_ms == null ? "calibrá para medirla" : `${nf(l.measured_ms, 0)} ms` })),
   );
 }
 
@@ -920,11 +1040,11 @@ function renderChart(s) {
   const x = (t) => pad.left + ((t - t0) / Math.max(1e-9, t1 - t0)) * (width - pad.left - pad.right);
   const y = (v) => pad.top + (1 - (v - lo) / (hi - lo)) * (height - pad.top - pad.bottom);
   const chart = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img",
-    "aria-label": `Retardo por parlante, entre ${lo.toFixed(1)} y ${hi.toFixed(1)} ms` });
+    "aria-label": `Retardo por parlante, entre ${nf(lo, 1)} y ${nf(hi, 1)} ms` });
   for (const v of [lo, hi]) {
     chart.append(svg("line", { class: "grid-line", x1: pad.left, x2: width - pad.right, y1: y(v), y2: y(v) }));
     const label = svg("text", { class: "axis-label", x: pad.left - 4, y: y(v) + 3, "text-anchor": "end" });
-    label.textContent = v.toFixed(1);
+    label.textContent = nf(v, 1);
     chart.append(label);
   }
   names.forEach((name, i) => {
@@ -944,6 +1064,29 @@ const RMS_TAU_MS = 300;
 const meterPct = (v) => Math.max(0, Math.min(100, ((v + 60) / 60) * 100));
 const METER_NAMES = { "in L": "Entrada L", "in R": "Entrada R", mic: "Micrófono" };
 
+// Lo que se mueve: los medidores (cada cuadro) y el espectro de entrada (con cada dato nuevo).
+// Solo se escriben `transform` y textos que cambiaron, y nunca se lee una medida del layout:
+// antes, `clientWidth` después de escribir estilos forzaba 7 layouts por cuadro (420/s,
+// research/11 D §6). Una capa de ancho completo corrida con translateX(%) se mueve en el
+// compositor sin conocer el ancho de la pista (el % es del propio elemento).
+// WCAG 2.2.2: Niveles y Entrada se pueden pausar; con `prefers-reduced-motion` se pintan a
+// lo sumo 5 veces por segundo y sin transiciones (el CSS las apaga).
+const motion = {
+  reduce: typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false },
+  paused: { levels: false, input: false },
+  meterPaintAt: 0,
+  meterTextAt: 0,
+  inputFrame: null,
+  inputPaintAt: 0,
+};
+const METER_EVERY_MS = 33; // ~30 por segundo: el dato llega a 20 Hz y la caída del pico se ve continua
+const REDUCED_EVERY_MS = 200; // ≤ 5 actualizaciones por segundo
+const METER_TEXT_EVERY_MS = 100; // el número y aria-valuetext: 10 por segundo alcanza para leerlos
+
+function setText(node, text) {
+  if (node.textContent !== text) node.textContent = text;
+}
+
 function buildMeterRows(names) {
   const box = $("meters");
   box.replaceChildren();
@@ -954,23 +1097,26 @@ function buildMeterRows(names) {
     return t;
   }));
   for (const name of names) {
-    const fill = el("div", { class: "meter-fill" });
-    const peak = el("div", { class: "meter-peak" });
+    // La pista lleva las zonas de color; la máscara (del color de la pista) tapa lo que está
+    // sobre el nivel y se corre a la derecha cuando sube.
+    const mask = el("div", { class: "meter-mask" });
+    const peak = el("div", { class: "meter-peak-pos" }, el("div", { class: "meter-peak" }));
     const value = el("div", { class: "meter-value num" });
-    const clip = el("button", { type: "button", class: "meter-clip", title: "Saturación: tocalo para apagarlo", "aria-label": `Saturación en ${name}` });
-    clip.addEventListener("click", () => clip.classList.remove("on"));
+    const clip = el("button", { type: "button", class: "meter-clip", title: "Saturación: tocalo para apagarlo", "aria-label": `Saturación en ${name}`, "aria-pressed": "false" });
+    clip.addEventListener("click", () => { clip.classList.remove("on"); clip.textContent = ""; clip.setAttribute("aria-pressed", "false"); });
     const limit = el("div", { class: "meter-limit num", title: "Reducción del limitador" });
-    const track = el("div", { class: "meter-track", role: "meter", "aria-label": `Nivel ${name}`,
-      "aria-valuemin": "-60", "aria-valuemax": "0" }, fill, peak);
     const label = METER_NAMES[name] || name.replace("JBL ", "");
+    const track = el("div", { class: "meter-track", role: "meter", "aria-label": `Nivel ${label}`,
+      "aria-valuemin": "-60", "aria-valuemax": "0", "aria-valuenow": "-60", "aria-valuetext": "sin señal" }, mask, peak);
     box.append(el("div", { class: "meter" }, el("div", { class: "meter-label" }, label, limit), track, value, clip));
-    meterRows.set(name, { fill, peak, value, track, clip, limit, rms: SILENCE, held: SILENCE, heldAt: 0, at: 0 });
+    meterRows.set(name, { mask, peak, value, track, clip, limit, rms: SILENCE, held: SILENCE, heldAt: 0, at: 0, shown: "" });
   }
 }
 
 // Con stream: valores crudos cada 21 ms; la integración del RMS (300 ms) y la retención del pico
-// (1,5 s, después cae 20 dB en 1,7 s) se hacen acá, contra el reloj del navegador.
-function drawMeter(row, rmsDb, peakDb, now) {
+// (1,5 s, después cae 20 dB en 1,7 s) se hacen acá, contra el reloj del navegador, en cada cuadro;
+// pintar puede ser más espaciado (movimiento reducido).
+function integrateMeter(row, rmsDb, peakDb, now) {
   const dt = row.at ? now - row.at : 0;
   row.at = now;
   const a = dt > 0 ? Math.exp(-dt / RMS_TAU_MS) : 0;
@@ -979,17 +1125,32 @@ function drawMeter(row, rmsDb, peakDb, now) {
   row.rms = mixed > 0 ? 10 * Math.log10(mixed) : SILENCE;
   if (peakDb >= row.held) { row.held = peakDb; row.heldAt = now; }
   else if (now - row.heldAt > PEAK_HOLD_MS) row.held = Math.max(peakDb, row.held - PEAK_FALL_DB_PER_MS * dt);
-  paintMeter(row, row.rms, row.held);
 }
 
-function paintMeter(row, rmsDb, peakDb) {
-  row.fill.style.setProperty("--track-w", `${row.track.clientWidth}px`);
-  row.fill.style.width = rmsDb <= SILENCE ? "0%" : `${meterPct(rmsDb)}%`;
-  row.peak.hidden = peakDb <= SILENCE;
-  row.peak.style.left = `${meterPct(peakDb)}%`;
-  if (peakDb >= -0.5) row.clip.classList.add("on");
-  row.value.textContent = rmsDb <= SILENCE ? "—" : rmsDb.toFixed(1);
-  row.track.setAttribute("aria-valuenow", String(Math.max(-60, Math.round(rmsDb))));
+function paintMeter(row, rmsDb, peakDb, withText = true) {
+  const pct = rmsDb <= SILENCE ? 0 : meterPct(rmsDb);
+  const transform = `translateX(${pct.toFixed(2)}%)`;
+  if (row.mask.style.transform !== transform) row.mask.style.transform = transform;
+  const hidePeak = peakDb <= SILENCE;
+  if (row.peak.hidden !== hidePeak) row.peak.hidden = hidePeak;
+  const peakTransform = `translateX(${meterPct(peakDb).toFixed(2)}%)`;
+  if (!hidePeak && row.peak.style.transform !== peakTransform) row.peak.style.transform = peakTransform;
+  if (peakDb >= -0.5 && !row.clip.classList.contains("on")) {
+    // La saturación dice "SAT", no solo se pone roja (WCAG 1.4.1).
+    row.clip.classList.add("on");
+    row.clip.textContent = "SAT";
+    row.clip.setAttribute("aria-pressed", "true");
+  }
+  if (!withText) return;
+  const text = rmsDb <= SILENCE ? "—" : nf(rmsDb, 1);
+  setText(row.value, text);
+  const valuetext = rmsDb <= SILENCE ? "sin señal"
+    : `${nf(rmsDb, 1)} dB, pico ${peakDb <= SILENCE ? "—" : nf(peakDb, 1)} dB${row.clip.classList.contains("on") ? ", saturó" : ""}`;
+  if (row.shown !== valuetext) {
+    row.shown = valuetext;
+    row.track.setAttribute("aria-valuenow", String(Math.max(-60, Math.round(rmsDb))));
+    row.track.setAttribute("aria-valuetext", valuetext);
+  }
 }
 
 function renderMeters(s) {
@@ -1004,7 +1165,7 @@ function renderMeters(s) {
     return;
   }
   if ([...meterRows.keys()].join("|") !== names.join("|")) buildMeterRows(names);
-  if (fresh) return; // el cuadro de animación los dibuja
+  if (fresh || motion.paused.levels) return; // el cuadro de animación los dibuja
   for (const [name, row] of meterRows) {
     const m = values[name];
     if (m) paintMeter(row, m.rms_db, m.peak_db);
@@ -1014,16 +1175,38 @@ function renderMeters(s) {
 function animateMeters(now) {
   const frame = live.meters;
   if (frame && now - live.metersAt < 500 && meterRows.size) {
+    const every = motion.reduce.matches ? REDUCED_EVERY_MS : METER_EVERY_MS;
+    // 2 ms de holgura: con pantallas de 60 Hz, 33 ms cae a veces apenas antes del segundo cuadro.
+    const paint = !motion.paused.levels && now - motion.meterPaintAt >= every - 2;
+    const withText = paint && now - motion.meterTextAt >= Math.max(every, METER_TEXT_EVERY_MS);
+    if (paint) motion.meterPaintAt = now;
+    if (withText) motion.meterTextAt = now;
     for (const [name, row] of meterRows) {
       const m = frame.meters[name];
-      if (m) drawMeter(row, m.rms_db, m.peak_db, now);
-      const cut = (frame.limiter_db || {})[name];
-      row.limit.textContent = cut > 0.05 ? ` −${cut.toFixed(1)} dB lim` : "";
+      if (!m) continue;
+      integrateMeter(row, m.rms_db, m.peak_db, now);
+      if (paint) paintMeter(row, row.rms, row.held, withText);
+      if (withText) {
+        const cut = (frame.limiter_db || {})[name];
+        setText(row.limit, cut > 0.05 ? ` −${nf(cut, 1)} dB lim` : "");
+      }
     }
-    $("meters-sync").textContent = frame.synced ? "sincronizado con lo que suena" : "sin latencia medida: adelantado respecto de lo que suena";
+    if (withText) setText($("meters-sync"), frame.synced ? "sincronizado con lo que suena" : "sin latencia medida: adelantado respecto de lo que suena");
   }
-  drawInputLive();
+  drawInputLive(now);
   requestAnimationFrame(animateMeters);
+}
+
+function setPaused(which, paused) {
+  motion.paused[which] = paused;
+  const button = $(`${which}-pause`);
+  button.textContent = paused ? "Reanudar" : "Pausar";
+  button.setAttribute("aria-pressed", String(paused));
+  if (!paused && which === "levels") {
+    // Al reanudar se salta al presente: la integración vuelve a empezar con el dato de ahora.
+    for (const row of meterRows.values()) { row.at = 0; row.rms = SILENCE; row.held = SILENCE; }
+  }
+  if (!paused && which === "input") motion.inputFrame = null;
 }
 
 // -- ahora: la pantalla principal ---
@@ -1033,13 +1216,11 @@ function renderNow(s) {
   $("now-preset").textContent = s.preset ? `preset: ${s.preset}` : "sin preset";
   const cuts = s.health && s.health.cuts;
   const analysis = s.input && s.input.analysis;
-  const rec = s.recalibration;
   const facts = [
     ["Estado", playing ? "sonando" : s.session.status === "error" ? `detenido: ${s.session.reason || "error"}` : "detenido"],
     ["Fuente", s.source ? [SOURCE_NAMES[s.source.kind] || s.source.kind, s.source.name].filter(Boolean).join(" · ") : "—"],
-    ["Entrada", analysis ? `${analysis.kind}${analysis.bandwidth_hz ? ` · hasta ${(analysis.bandwidth_hz / 1000).toFixed(1)} kHz` : ""}` : "—"],
+    ["Entrada", analysis ? `${analysis.kind}${analysis.bandwidth_hz ? ` · hasta ${nf(analysis.bandwidth_hz / 1000, 1)} kHz` : ""}` : "—"],
     ["Cortes", !cuts ? "—" : cuts.faults_1min ? `${cuts.faults_1min} en el último minuto` : cuts.faults_10min ? `${cuts.faults_10min} en 10 min` : "ninguno"],
-    ["Sincronía", !playing ? "—" : rec.active ? (rec.last ? `${rec.last.kind}: ${rec.last.reason || ""}`.slice(0, 80) : "midiendo") : "sin seguir la deriva"],
   ];
   $("now-facts").replaceChildren(...facts.flatMap(([k, v]) => {
     const dd = el("dd", { text: v });
@@ -1048,9 +1229,126 @@ function renderNow(s) {
       dd.firstChild.addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
     }
     return [el("dt", { text: k }), dd];
-  }));
+  }), ...syncRow());
   $("now-calibrate").disabled = !playing || nowBusy;
   $("now-identify").disabled = !playing || nowBusy;
+}
+
+// -- avisos donde se mira: batería baja, parlante perdido o desconectado, cortes de radio ---
+// Van en Escuchar → Ahora y en la cabecera, con ícono y texto (antes la batería estaba solo en
+// Parlantes, y solo en rojo).
+const LOW_BATTERY_PCT = 20;
+
+function alertsOf(s) {
+  const playing = s.session.status === "playing";
+  const devices = new Map((s.devices || []).map((d) => [d.address, d]));
+  const radio = (s.radio && s.radio.available && s.radio.speakers) || {};
+  const out = [];
+  for (const sp of s.speakers) {
+    const short = sp.name.replace("JBL ", "");
+    const battery = (devices.get(sp.address) || {}).battery_pct;
+    if (playing && !sp.playing) {
+      out.push({ icon: "unlink", text: `${sp.name}: perdido, sin stream (los demás siguen)`, short: `${short}: perdido` });
+    } else if (!playing && sp.connected === false) {
+      out.push({ icon: "unlink", text: `${sp.name}: desconectado`, short: `${short}: desconectado` });
+    }
+    if (battery != null && battery <= LOW_BATTERY_PCT) {
+      out.push({ icon: "battery", text: `${sp.name}: batería ${nf(battery, 0)} %`, short: `${short}: batería ${nf(battery, 0)} %` });
+    }
+    const drops = (radio[sp.name] || {}).drops_per_min;
+    if (playing && drops > 0) {
+      out.push({ icon: "radio", text: `${sp.name}: ${nf(drops, 0)} cortes de radio por minuto`, short: `${short}: radio` });
+    }
+  }
+  return out;
+}
+
+function renderAlerts(s) {
+  const alerts = alertsOf(s);
+  const key = JSON.stringify(alerts);
+  const list = $("now-alerts");
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  list.hidden = alerts.length === 0;
+  list.replaceChildren(...alerts.map((a) => el("li", { class: "alert" }, icon(a.icon, "alert-icon"), el("span", { text: a.text }))));
+  const chip = $("chip-alert");
+  chip.hidden = alerts.length === 0;
+  chip.replaceChildren(...(alerts.length ? [icon(alerts[0].icon, "h-3.5 w-3.5"),
+    el("span", { text: alerts[0].short + (alerts.length > 1 ? ` y ${alerts.length - 1} más` : "") })] : []));
+}
+
+// -- la sincronía para el oyente (spec 2026-10-02 §7.3.4) ---
+// Un número, la desalineación residual (la mayor diferencia de llegada entre dos parlantes, sin
+// lo que se puso a propósito), sobre una regla con las zonas de research/09 §3. Se muestra solo
+// lo medido: hoy lo mide la calibración (`calibration.results[].delay_ms` es lo que faltaba
+// corregir con las correcciones de ese momento). Si los retardos cambiaron después, ese número
+// ya no vale y se dice "sin medición". El lazo mide lo mismo cada 20 s y el estado lo trae en
+// `sync` (residual_ms, measured_at, age_s): se muestra la más nueva de las dos mediciones.
+const SYNC_SCALE_MS = 15;
+const SYNC_ZONES = [
+  [2, "fused", "un solo sonido, entre los parlantes"],
+  [5, "first", "un solo sonido, corrido hacia el que llega primero"],
+  [10, "double", "en golpes secos puede oírse doble"],
+  [Infinity, "haas", "zona de Haas: el más tardío se separa en los golpes; conviene calibrar"],
+];
+
+function syncMeasurement(s) {
+  const loop = s.sync && s.sync.residual_ms != null ? s.sync : null;
+  const cal = s.calibration;
+  const calAt = cal && cal.state === "done" && cal.measured_at ? Date.parse(cal.measured_at) : null;
+  if (loop && (calAt == null || Date.parse(loop.measured_at) >= calAt)) {
+    return { ms: loop.residual_ms, note: `Medida por el lazo de recalibración hace ${duration(loop.age_s)}, con la música: lo que faltaba corregir en ese momento (el lazo lo corrige de a poco).` };
+  }
+  return calibrationSync(s, cal);
+}
+
+function calibrationSync(s, cal) {
+  if (!cal || cal.state !== "done") {
+    return { ms: null, note: "Calibrá para medirla." };
+  }
+  const good = cal.results.filter((r) => !r.silent && !r.doubtful && r.delay_ms != null);
+  if (good.length < 2) return { ms: null, note: "La última calibración no midió con confianza dos parlantes o más." };
+  const spread = Math.max(...good.map((r) => r.delay_ms)) - Math.min(...good.map((r) => r.delay_ms));
+  const when = cal.measured_at ? `calibración de las ${cal.measured_at.slice(11, 16)}` : "última calibración";
+  const moved = good.some((r) => {
+    const sp = s.speakers.find((x) => x.name === r.speaker);
+    return sp && r.applied_delay_ms != null && Math.abs(sp.delay_ms - r.applied_delay_ms) > 0.05;
+  });
+  if (moved) {
+    return { ms: null, note: `Los retardos cambiaron después de la ${when} (que midió ${nf(spread, 1)} ms): calibrá otra vez para medir lo que queda.` };
+  }
+  const caveats = [cal.stale ? "de una sesión anterior" : "", cal.reliable ? "" : "medición dudosa"].filter(Boolean);
+  return { ms: spread, note: `Medida en la ${when}${caveats.length ? ` (${caveats.join(", ")})` : ""}.` };
+}
+
+// La fila de sincronía se crea una vez (de su <template>) y se vuelve a poner al final de los datos.
+let syncNodes = null;
+function syncRow() {
+  if (!syncNodes) syncNodes = [...$("now-sync-row").content.cloneNode(true).children];
+  return syncNodes;
+}
+
+function renderSync(s) {
+  syncRow();
+  const { ms, note } = syncMeasurement(s);
+  const box = syncNodes[1];
+  const zone = ms == null ? null : SYNC_ZONES.find(([limit]) => ms < limit);
+  box.dataset.zone = zone ? zone[1] : "none";
+  setText(box.querySelector("#sync-value"), ms == null ? "sin medición" : `${nf(ms, 1)} ms`);
+  setText(box.querySelector("#sync-phrase"), zone ? zone[2] : "");
+  const pos = box.querySelector("#sync-pos");
+  pos.hidden = ms == null;
+  if (ms != null) pos.style.transform = `translateX(${((Math.min(ms, SYNC_SCALE_MS) / SYNC_SCALE_MS) * 100).toFixed(2)}%)`;
+  const rec = s.recalibration;
+  const drift = rec.drift_ms_h ? Math.max(...Object.values(rec.drift_ms_h).map(Math.abs)) : null;
+  const trend = s.session.status !== "playing" ? ""
+    : !rec.active ? "Deriva: sin corregir (el lazo está apagado)."
+    : drift == null ? "Deriva: la corrige el lazo."
+    : `Deriva estimada (INFERIDA): hasta ${nf(drift, 1)} ms/h, la corrige el lazo.`;
+  // A la vista, solo lo que pide hacer algo (medir, o encender el lazo); el resto, en el título.
+  const loopOff = s.session.status === "playing" && !rec.active;
+  setText(box.querySelector("#sync-note"), [ms == null ? note : "", loopOff ? trend : ""].filter(Boolean).join(" "));
+  box.title = [note, trend].filter(Boolean).join(" ");
 }
 
 let nowBusy = false;
@@ -1104,7 +1402,9 @@ async function identifySpeakers() {
 // -- cortes ---
 
 const CUT_CLASS = { underrun: "cut-fault", low: "cut-fault", late: "cut-fault", lost: "cut-fault", routing: "cut-fault",
-  xrun: "cut-xrun", input_gap: "cut-input", fade: "cut-fade" };
+  xrun: "cut-xrun", input_gap: "cut-input", fade: "cut-fade", radio: "cut-radio" };
+// La forma acompaña al color (WCAG 1.4.1); el CSS dibuja cada una.
+const CUT_SHAPE = { "cut-fault": "círculo", "cut-xrun": "cuadrado", "cut-input": "triángulo", "cut-fade": "anillo", "cut-radio": "rombo" };
 const CUT_CONTEXT = {
   loop_measuring: () => "el lazo medía",
   bt_discovering: () => "Bluetooth buscaba dispositivos",
@@ -1115,6 +1415,7 @@ const CUT_WINDOW_S = 600;
 
 function renderCuts(s) {
   const c = s.health && s.health.cuts;
+  renderRadio(s, c);
   const list = $("cuts-list");
   const line = $("cuts-timeline");
   if (!c) {
@@ -1131,7 +1432,8 @@ function renderCuts(s) {
   $("cuts-likely").textContent = c.likely || "";
   line.replaceChildren(...c.events.map((e) => {
     const age = c.now - e.t;
-    const dot = el("span", { class: `cut-dot ${CUT_CLASS[e.kind] || "cut-fault"}`, title: `${e.at.slice(11, 19)} · ${e.what}${e.where ? ` · ${e.where}` : ""}` });
+    const cls = CUT_CLASS[e.kind] || "cut-fault";
+    const dot = el("span", { class: `cut-dot ${cls}`, "data-shape": CUT_SHAPE[cls], title: `${e.at.slice(11, 19)} · ${e.what}${e.where ? ` · ${e.where}` : ""}` });
     dot.style.left = `${Math.max(0, Math.min(100, (1 - age / CUT_WINDOW_S) * 100))}%`;
     return dot;
   }));
@@ -1143,6 +1445,63 @@ function renderCuts(s) {
     el("td", { text: e.detail || "" }),
     el("td", { text: Object.entries(e.context || {}).map(([k, v]) => (CUT_CONTEXT[k] ? CUT_CONTEXT[k](v) : `${k}: ${v}`)).join(" · ") }),
   )) : [el("tr", {}, el("td", { colspan: "5", class: "muted", text: "Sin cortes en los últimos 10 minutos." }))]));
+}
+
+// -- la radio, por parlante (spec 2026-10-02 §7.2) ---
+// Un carril por parlante con los paquetes que su enlace descartó (cada uno, un corte audible de
+// ~24-40 ms después de PipeWire, radio.py), los descartes por minuto y el bitpool de ahora. Verlos
+// exige subir el registro de bluez5: un cambio de sistema, anotado con su reversión.
+
+function renderRadio(s, c) {
+  const radio = (live.alive && live.radio) || s.radio || { available: false, speakers: {} };
+  const level = s.radio_log || { available: false, active: false };
+  const button = $("radio-log");
+  button.hidden = !level.available;
+  button.disabled = Boolean(level.pending);
+  setText(button, level.pending ? "Cambiando el registro…" : level.active ? "Desactivar registro de radio" : "Activar registro de radio");
+  button.setAttribute("aria-pressed", String(Boolean(level.active)));
+  const notes = [];
+  if (!level.available) notes.push("Este servicio no maneja el registro de radio.");
+  if (level.error) notes.push(`Error: ${level.error}.`);
+  if (level.active && level.changes_file) notes.push(`Cambio anotado en ${level.changes_file}${level.mode === "heavy" ? " (registro completo: journald puede perder líneas)" : ""}.`);
+  notes.push(radio.available
+    ? `${radio.simulated ? "SIMULADO · " : ""}Leyendo el registro de bluez5${radio.since_s != null ? ` desde hace ${duration(radio.since_s)}` : ""}.`
+    : (radio.reason || "Sin datos de la radio."));
+  setText($("radio-note"), notes.join(" "));
+  const events = c ? c.events.filter((e) => e.kind === "radio") : [];
+  const links = radio.speakers || {};
+  const names = s.speakers.map((sp) => sp.name);
+  const extra = Object.keys(links).filter((k) => !names.includes(k));
+  const rows = [...names, ...extra].map((name) => {
+    const link = links[name];
+    const lane = el("div", { class: "radio-track", role: "img" });
+    const mine = events.filter((e) => e.where === name || e.where === `enlace sin identificar ${name}`);
+    lane.setAttribute("aria-label", `${name}: ${mine.length} paquetes descartados en 10 minutos`);
+    lane.append(...mine.map((e) => {
+      const dot = el("span", { class: "cut-dot cut-radio", "data-shape": "rombo", title: `${e.at.slice(11, 19)} · ${e.detail || e.what}` });
+      dot.style.left = `${Math.max(0, Math.min(100, (1 - (c.now - e.t) / CUT_WINDOW_S) * 100))}%`;
+      return dot;
+    }));
+    const rate = link && link.drops_per_min != null ? `${nf(link.drops_per_min, 1)}/min` : "—";
+    const pool = link && link.bitpool != null ? `bitpool ${link.bitpool}${link.bitpool_max != null ? ` de ${link.bitpool_max}` : ""}` : "bitpool —";
+    return el("div", { class: "radio-lane", "data-radio-speaker": name },
+      el("span", { class: "radio-name", title: name, text: extra.includes(name) ? `sin identificar ${name}` : name.replace("JBL ", "") }),
+      lane,
+      el("span", { class: "radio-rate num", title: "Descartes por minuto, en el último minuto", text: rate }),
+      el("span", { class: "radio-pool num", title: "El bitpool que usa ahora el códec SBC (baja cuando el enlace no da abasto)", text: pool }));
+  });
+  // Sin registro ni datos, los carriles no dirían nada: solo el botón y su explicación.
+  const lanes = $("radio-lanes");
+  lanes.hidden = !radio.available && !level.active;
+  lanes.replaceChildren(...(lanes.hidden ? [] : rows));
+}
+
+async function toggleRadioLog() {
+  const level = latest && latest.radio_log;
+  if (!level || !level.available || level.pending) return;
+  // Sin confirm(): se deshace con el mismo botón, y lo que cambia está escrito al lado (research/11 §4.3).
+  markPending($("radio-log"));
+  await send("radio_log", { active: !level.active });
 }
 
 // -- entrada ---
@@ -1164,14 +1523,14 @@ function renderInput(s) {
     $("input-stale").hidden = true;
     return;
   }
-  const band = a.bandwidth_hz == null ? "—" : `${(a.bandwidth_hz / 1000).toFixed(1)} kHz`;
+  const band = a.bandwidth_hz == null ? "—" : `${nf(a.bandwidth_hz / 1000, 1)} kHz`;
   const rows = [
     ["Tipo", a.kind],
-    ["Correlación L/R", `${a.correlation.toFixed(2)} (1 = mono)`],
-    ["Lateral / central", `${a.side_db.toFixed(1)} dB`],
-    ["Balance L − R", `${a.balance_db.toFixed(1)} dB`],
+    ["Correlación L/R", `${nf(a.correlation, 2)} (1 = mono)`],
+    ["Lateral / central", `${nf(a.side_db, 1)} dB`],
+    ["Balance L − R", `${nf(a.balance_db, 1)} dB`],
     ["Ancho de banda", band],
-    ["Nivel", `RMS ${a.rms_db.toFixed(1)} · pico ${a.peak_db.toFixed(1)} dBFS`],
+    ["Nivel", `RMS ${nf(a.rms_db, 1)} · pico ${nf(a.peak_db, 1)} dBFS`],
     ["Saturación", a.clipped ? `${a.clipped} muestras en los últimos segundos` : "ninguna"],
     ...apps.map((app) => [`Aplicación: ${app.name}`, app.sample_spec || "—"]),
   ];
@@ -1185,21 +1544,26 @@ function renderInput(s) {
   $("input-stale").hidden = !a.stale;
 }
 
-function drawInputLive() {
+function drawInputLive(now) {
   const frame = live.input;
   const bars = $("input-bars");
-  if (!frame || !bars) return;
+  // Solo con un dato nuevo (llega a 10 Hz): antes se reescribían las 31 alturas en cada cuadro.
+  if (!frame || !bars || frame === motion.inputFrame || motion.paused.input) return;
+  if (motion.reduce.matches && now - motion.inputPaintAt < REDUCED_EVERY_MS) return;
+  motion.inputFrame = frame;
+  motion.inputPaintAt = now;
   if (bars.childElementCount !== frame.bands_db.length) {
     bars.replaceChildren(...frame.bands_db.map(() => el("div", { class: "input-bar" })));
   }
   frame.bands_db.forEach((db, i) => {
-    bars.children[i].style.height = `${Math.max(0, Math.min(100, ((db + 80) / 80) * 100))}%`;
+    const scale = Math.max(0, Math.min(1, (db + 80) / 80));
+    bars.children[i].style.transform = `scaleY(${scale.toFixed(3)})`;
   });
   const c = frame.correlation;
   const marker = $("corr-marker");
-  marker.hidden = c == null;
-  if (c != null) marker.style.left = `${((c + 1) / 2) * 100}%`;
-  $("corr-value").textContent = c == null ? "—" : c.toFixed(2);
+  if (marker.hidden !== (c == null)) marker.hidden = c == null;
+  if (c != null) marker.style.transform = `translateX(${(((c + 1) / 2) * 100).toFixed(2)}%)`;
+  setText($("corr-value"), c == null ? "—" : nf(c, 2));
 }
 
 function renderMicrophones(s) {
@@ -1223,30 +1587,32 @@ function renderMicrophones(s) {
 function renderConfig(s) {
   const values = { ...s.global, ...s.config };
   for (const node of document.querySelectorAll("[data-global]")) syncValue(node, values[node.dataset.global]);
-  const out = document.querySelector('[data-out="rear_delay_ms"]');
-  out.textContent = `${Number(document.querySelector('[data-global="rear_delay_ms"]').value).toFixed(1)} ms`;
-  for (const node of document.querySelectorAll("[data-pending]")) {
-    const pending = s.config.pending_restart.includes(node.dataset.pending);
+  for (const node of document.querySelectorAll("[data-restart]")) {
+    const pending = s.config.pending_restart.includes(node.dataset.restart);
     node.textContent = pending ? "pendiente: reiniciá la sesión" : "al reiniciar";
     node.classList.toggle("pending", pending);
   }
 }
+
+// Los ajustes que cambian lo que suena (los otros esperan al reinicio y lo dicen).
+const AUDIO_GLOBALS = new Set(["extract_ambience", "decorrelate", "eq_active"]);
 
 function setupConfig() {
   for (const node of document.querySelectorAll("[data-global]")) {
     editable(node);
     const key = node.dataset.global;
     node.addEventListener("change", () => {
+      if (AUDIO_GLOBALS.has(key)) markPending(node.closest(".toggle, .check"));
       let value = node.type === "checkbox" ? node.checked : node.value;
       if (node.type === "range" || node.dataset.number) value = Number(value);
       if (typeof value === "string") value = value.trim();
       setGlobal(node, { [key]: value });
     });
   }
-  const rear = document.querySelector('[data-global="rear_delay_ms"]');
-  rear.addEventListener("input", () => {
-    document.querySelector('[data-out="rear_delay_ms"]').textContent = `${Number(rear.value).toFixed(1)} ms`;
-  });
+  // Ajustes → Sonido se mudó a Cadena (spec 2026-10-02 §7.1): el enlace lleva allá.
+  for (const link of document.querySelectorAll("[data-goto-card]")) {
+    link.addEventListener("click", () => window.aurasyncShow(`[data-card="${link.dataset.gotoCard}"]`));
+  }
 }
 
 // -- calibración --------------------------------------------------------------------
@@ -1290,7 +1656,7 @@ function renderCalibration(s) {
   )));
 }
 
-const hz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
+const hz = (f) => (f >= 1000 ? `${nf(f / 1000, f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
 
 // La respuesta de cada parlante: escala logarítmica en frecuencia, de −40 a +15 dB.
 function renderResponse(cal, speakers) {
@@ -1379,15 +1745,53 @@ function renderPresets(s) {
     }
     const last = ab.last ? ` · la última: ${ab.last.correct ? "acertaste" : "no"} (X era ${ab.last.truth.toUpperCase()})` : "";
     $("ab-score").textContent = `${ab.a} contra ${ab.b}: ${ab.correct} de ${ab.trials} aciertos${last}`;
+    renderAbLoudness($("ab-loudness"), ab);
   }
   $("ab-result").hidden = !(ab && !ab.active);
   if (ab && !ab.active) {
     const n = ab.trials.length;
     const p = n ? binomialTail(ab.correct, n) : 1;
     $("ab-result").textContent = `Último A/B: ${ab.a} contra ${ab.b}, ${ab.correct} de ${n} aciertos. ` +
-      (n === 0 ? "" : p < 0.05 ? `Significativo (p = ${p.toFixed(3)}): la diferencia se oye.`
-        : `No alcanza (p = ${p.toFixed(2)}): con 20 intentos hacen falta 15 aciertos.`);
+      (n === 0 ? "" : p < 0.05 ? `Significativo (p = ${nf(p, 3)}): la diferencia se oye.`
+        : `No alcanza (p = ${nf(p, 2)}): con 20 intentos hacen falta 15 aciertos.`);
+    if (ab.loudness_lu) {
+      const box = el("span", { class: "ab-loudness block mt-1" });
+      renderAbLoudness(box, ab);
+      $("ab-result").append(box);
+    }
   }
+}
+
+// El A/B con la sonoridad igualada (spec 2026-10-02 §7.3.5): el más fuerte suele ganar por ser más
+// fuerte. Se muestra la sonoridad de corto plazo de A y de B (la mide el servicio mientras suena
+// cada uno, nunca X) y su diferencia; sobre 0,5 LU, un aviso con forma y texto.
+const AB_LOUDNESS_WARN_LU = 0.5;
+
+function renderAbLoudness(node, ab) {
+  const l = ab.loudness_lu || {};
+  const lufs = (v) => (v == null ? "midiendo…" : `${nf(v, 1)} LUFS`);
+  const parts = [el("span", { text: `Sonoridad: A ${lufs(l.a)} · B ${lufs(l.b)}` })];
+  if (l.diff != null) {
+    const off = Math.abs(l.diff) > AB_LOUDNESS_WARN_LU;
+    parts.push(el("span", { class: off ? "ab-diff ab-diff-warn" : "ab-diff", "data-warn": off ? "1" : "0",
+      text: ` · diferencia ${l.diff > 0 ? "+" : ""}${nf(l.diff, 1)} LU` }));
+    if (off) {
+      parts.push(el("span", { class: "ab-warn" }, el("span", { class: "q-shape", "data-shape": "triángulo", "aria-hidden": "true" }),
+        ab.match_loudness
+          ? ` Difieren más de ${nf(AB_LOUDNESS_WARN_LU, 1)} LU aun igualadas: la comparación favorece al más fuerte.`
+          : ` Difieren más de ${nf(AB_LOUDNESS_WARN_LU, 1)} LU: el más fuerte suele parecer mejor. Empezá con «Igualar la sonoridad».`));
+    }
+  }
+  const comp = Object.entries(ab.compensation_db || {}).filter(([, db]) => Math.abs(db) > 0.05);
+  if (ab.match_loudness) {
+    parts.push(el("span", { class: "muted", text: comp.length
+      ? ` · igualada: ${comp.map(([w, db]) => `${w.toUpperCase()} ${nf(db, 1)} dB`).join(", ")}`
+      : " · igualada (sin diferencia que compensar todavía)" }));
+  }
+  if (l.a == null || l.b == null) {
+    parts.push(el("span", { class: "muted", text: " · cada uno se mide 3 s después de empezar a sonar" }));
+  }
+  node.replaceChildren(...parts);
 }
 
 function ingestLogs({ records, gap }) {
@@ -1458,19 +1862,12 @@ function renderLogList(full, fresh = []) {
 }
 
 async function pollLogs() {
-  if (live.alive) { setTimeout(pollLogs, LOGS_EVERY_MS); return; }
-  try {
-    const response = await fetch("/v1/command", {
-      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
-      body: JSON.stringify({ v: 1, op: "logs", since: logSince, limit: 500 }),
-    });
-    const reply = await response.json();
-    if (reply.ok) ingestLogs(reply.result);
-  } catch {
-    // El estado ya muestra la desconexión.
-  } finally {
-    setTimeout(pollLogs, LOGS_EVERY_MS);
-  }
+  if (stopped) return;
+  if (live.alive || document.hidden) { setTimeout(pollLogs, LOGS_EVERY_MS); return; }
+  const reply = await api.raw({ op: "logs", since: logSince, limit: 500 });
+  // Sin respuesta, el estado ya muestra la desconexión.
+  if (reply && reply.ok) ingestLogs(reply.result);
+  setTimeout(pollLogs, LOGS_EVERY_MS);
 }
 
 function downloadLogs() {
@@ -1528,7 +1925,7 @@ function setup() {
   app.addEventListener("change", () => { if (app.value) sendFrom(app, "source", { kind: "app", name: app.value }); });
   file.addEventListener("change", () => { const v = file.value.trim(); if (v) sendFrom(file, "source", { kind: "file", name: v }); });
   const volume = $("volume");
-  liveRange(volume, $("volume-out"), (v) => `${v.toFixed(0)} dB`, (v) => setGlobal(volume, { volume_db: v }));
+  liveRange(volume, $("volume-out"), (v) => `${nf(v, 0)} dB`, (v) => { markPending($("volume-out")); return setGlobal(volume, { volume_db: v }); });
   $("scan").addEventListener("click", () => send("scan"));
   $("save").addEventListener("click", async () => {
     const reply = await send("save");
@@ -1557,7 +1954,7 @@ function setup() {
     const reply = await send("preset_save", { name });
     if (reply && reply.ok) $("preset-name").value = "";
   });
-  $("ab-start").addEventListener("click", () => send("ab_start", { a: $("ab-a").value, b: $("ab-b").value }));
+  $("ab-start").addEventListener("click", () => send("ab_start", { a: $("ab-a").value, b: $("ab-b").value, match_loudness: $("ab-match").checked }));
   for (const button of document.querySelectorAll("[data-ab]")) {
     button.addEventListener("click", () => send("ab_play", { which: button.dataset.ab }));
   }
@@ -1565,19 +1962,47 @@ function setup() {
     button.addEventListener("click", () => send("ab_answer", { x_is: button.dataset.answer }));
   }
   $("ab-stop").addEventListener("click", () => send("ab_stop"));
-  $("pair-open").addEventListener("click", () => {
-    $("pair-qr").src = `/pairing.svg?${Date.now()}`;
+  $("radio-log").addEventListener("click", toggleRadioLog);
+  $("pair-open").addEventListener("click", async () => {
     $("pair-dialog").showModal();
+    $("pair-qr").hidden = true;
+    $("pair-note").textContent = "Cargando el código…";
+    const url = api ? await api.imageUrl("/pairing.svg") : null;
+    if (url) {
+      $("pair-qr").src = url;
+      $("pair-qr").hidden = false;
+      $("pair-note").textContent = "El código abre la app y pide acceso; no lleva ningún token.";
+    } else {
+      $("pair-note").textContent = "Para el teléfono hace falta HTTPS: poné \"tls\": true en service.json y reiniciá el servicio.";
+    }
   });
   setupConfig();
   setupLogs();
   $("now-calibrate").addEventListener("click", calibrateAndApply);
   $("chip-quality").addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
   $("now-identify").addEventListener("click", identifySpeakers);
-  pollState();
-  pollLogs();
-  openStream();
+  $("chip-alert").addEventListener("click", () => {
+    window.aurasyncShow("[data-card=now]");
+    $("now-alerts").scrollIntoView({ block: "nearest" });
+  });
+  $("levels-pause").addEventListener("click", () => setPaused("levels", !motion.paused.levels));
+  $("input-pause").addEventListener("click", () => setPaused("input", !motion.paused.input));
+  document.addEventListener("visibilitychange", onVisibility);
+  document.addEventListener("aurasync:toast", (e) => toast(e.detail));
+  document.addEventListener("aurasync:access", onAccess);
   requestAnimationFrame(animateMeters);
+  // El transporte lo pone cadena.js (se carga después de este archivo, antes de DOMContentLoaded).
+  // En la PWA llega cuando hay un equipo elegido.
+  if (!window.aurasync) {
+    setOnline(false, "No se cargó cadena.js, que conecta el panel con el equipo: recargá la página.");
+    return;
+  }
+  window.aurasync.ready.then((ready) => {
+    api = ready;
+    pollState();
+    pollLogs();
+    openStream();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", setup);

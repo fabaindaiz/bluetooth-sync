@@ -10,3 +10,9 @@ build/
 # calibration, up to 28 MB per recording). Their results are written in docs/research/.
 docs/research/experimentos/datos/**/*.wav
 docs/research/experimentos/datos/**/*.npz
+
+# La aplicación web del panel (d-7c8794-6da524): las dependencias de npm no se versionan (las fija
+# host/web/package-lock.json); lo compilado sí, en host/src/aurasync/panel/.
+node_modules/
+# La PWA (d-7c8794-37f9bc) se arma en GitHub Actions (.github/workflows/pages.yml) y no se versiona.
+host/web/dist-pwa/
