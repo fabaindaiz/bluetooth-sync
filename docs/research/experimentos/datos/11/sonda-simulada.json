@@ -1,0 +1,430 @@
+{
+ "trials": 20,
+ "delays_ms": {
+  "Red": 3.13,
+  "Black": 7.61,
+  "Blue": 12.27
+ },
+ "results": {
+  "seed0|2s|decorr|-15dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.008,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|decorr|-20dB": {
+   "median_ms": 0.004,
+   "p95_ms": 0.011,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|decorr|-25dB": {
+   "median_ms": 0.006,
+   "p95_ms": 0.023,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|decorr|-30dB": {
+   "median_ms": 0.01,
+   "p95_ms": 0.043,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|decorr|music": {
+   "median_ms": 4.638,
+   "p95_ms": 4.661,
+   "over_1ms": 0.85,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|plain|-15dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.007,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|plain|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.012,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|plain|-25dB": {
+   "median_ms": 0.004,
+   "p95_ms": 0.017,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|plain|-30dB": {
+   "median_ms": 0.008,
+   "p95_ms": 0.034,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|2s|plain|music": {
+   "median_ms": 4.66,
+   "p95_ms": 9.14,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|decorr|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.004,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|decorr|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.006,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|decorr|-25dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.008,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|decorr|-30dB": {
+   "median_ms": 0.006,
+   "p95_ms": 0.013,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|decorr|music": {
+   "median_ms": 4.319,
+   "p95_ms": 4.66,
+   "over_1ms": 0.8,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|plain|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.003,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|plain|-20dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.005,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|plain|-25dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.01,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|plain|-30dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.018,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|4s|plain|music": {
+   "median_ms": 4.659,
+   "p95_ms": 9.14,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|decorr|-15dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.004,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|decorr|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.005,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|decorr|-25dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.009,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|decorr|-30dB": {
+   "median_ms": 0.006,
+   "p95_ms": 0.014,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|decorr|music": {
+   "median_ms": 4.55,
+   "p95_ms": 4.667,
+   "over_1ms": 0.8,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|plain|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.003,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|plain|-20dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.004,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|plain|-25dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.005,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|plain|-30dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.009,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed0|8s|plain|music": {
+   "median_ms": 4.659,
+   "p95_ms": 9.14,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|decorr|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.007,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|decorr|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.012,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|decorr|-25dB": {
+   "median_ms": 0.004,
+   "p95_ms": 0.025,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|decorr|-30dB": {
+   "median_ms": 0.008,
+   "p95_ms": 0.038,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|decorr|music": {
+   "median_ms": 4.658,
+   "p95_ms": 4.669,
+   "over_1ms": 0.85,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|plain|-15dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.006,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|plain|-20dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.008,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|plain|-25dB": {
+   "median_ms": 0.005,
+   "p95_ms": 0.016,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|plain|-30dB": {
+   "median_ms": 0.009,
+   "p95_ms": 11.829,
+   "over_1ms": 0.2,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|2s|plain|music": {
+   "median_ms": 4.659,
+   "p95_ms": 9.14,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|decorr|-15dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.005,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|decorr|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.007,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|decorr|-25dB": {
+   "median_ms": 0.004,
+   "p95_ms": 0.009,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|decorr|-30dB": {
+   "median_ms": 0.007,
+   "p95_ms": 0.014,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|decorr|music": {
+   "median_ms": 4.496,
+   "p95_ms": 4.663,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|plain|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.005,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|plain|-20dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.007,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|plain|-25dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.01,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|plain|-30dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.014,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|4s|plain|music": {
+   "median_ms": 4.66,
+   "p95_ms": 9.14,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|decorr|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.003,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|decorr|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.003,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|decorr|-25dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.007,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|decorr|-30dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.015,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|decorr|music": {
+   "median_ms": 4.495,
+   "p95_ms": 4.66,
+   "over_1ms": 0.75,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|plain|-15dB": {
+   "median_ms": 0.001,
+   "p95_ms": 0.005,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|plain|-20dB": {
+   "median_ms": 0.002,
+   "p95_ms": 0.007,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|plain|-25dB": {
+   "median_ms": 0.003,
+   "p95_ms": 0.01,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|plain|-30dB": {
+   "median_ms": 0.005,
+   "p95_ms": 0.014,
+   "over_1ms": 0.0,
+   "failed": 0,
+   "n": 20
+  },
+  "seed1|8s|plain|music": {
+   "median_ms": 4.66,
+   "p95_ms": 9.14,
+   "over_1ms": 0.7,
+   "failed": 0,
+   "n": 20
+  }
+ }
+}

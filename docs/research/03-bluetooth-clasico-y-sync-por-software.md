@@ -234,6 +234,73 @@ calibración con micrófono, que ya existe y ya mide. Si las dos coinciden, el c
 micrófono sirve; si no, el micrófono sigue siendo la referencia. Esa comparación es gratis
 porque las dos piezas ya están construidas.
 
+## 3.2 Medir el retardo con una sonda enmascarada bajo la música (i-7c8794-e3e40d)
+
+Investigación del 2026-10-01. La pregunta: ¿se puede medir el retardo de cada parlante
+**mientras suena música**, con una señal que no se note, en vez de correlacionar contra la
+música misma? Hoy el lazo hace lo segundo, y falla cuando los parlantes llevan contenido
+correlacionado (experimentos/08 y 09 §5). Diseño: spec
+`superpowers/specs/2026-10-01-music-first-and-masked-probe-design.md` §4.
+
+**Lo que hay publicado:**
+- **REPORTADO:** Serafini y Li miden la respuesta al impulso de salas con público:
+  - bajo 4 kHz usan chirps cortos con forma de notas;
+  - sobre 4 kHz, MLS enmascarado por música de rango dinámico comprimido;
+  - el público oye música y la medición alcanza unos 50 dB de decaimiento [1].
+- **REPORTADO:** hay patentes que describen el procedimiento general [2]:
+  - se calcula un umbral de enmascaramiento por banda (Bark) y por bloque;
+  - la señal de prueba se moldea por debajo de ese umbral;
+  - el moldeado sigue en tiempo real el nivel y el espectro de la música.
+- **REPORTADO:** una patente de Roku sincroniza un parlante "tonto" con uno inteligente [3]:
+  - usa un código ensanchador de 16 kbit en BPSK, que se repite cada segundo;
+  - la señal es "apenas audible";
+  - informa una resolución de unos 20 µs.
+- **REPORTADO:** en las marcas de agua de espectro ensanchado de Kirovski y Malvar [4]:
+  - la marca va entre 200 Hz y 2 kHz, con ±0,5 a 2,5 dB por coeficiente;
+  - se detecta con 11 s de audio;
+  - **se oye en bloques con partes silenciosas de hasta 10 ms (pre-eco)**, así que hay que
+    seguir la envolvente en el tiempo y no solo el espectro.
+- **REPORTADO:** una marca de agua probada por aire, con parlantes y micrófonos comunes [5]:
+  - se detecta con 0,8 s o más;
+  - tolera hasta ~300 ppm de deriva;
+  - 10 oyentes expertos no la distinguieron del original.
+- **REPORTADO:** la regla de la IFPI pide más de 20 dB entre la música y la marca para que
+  la marca no se perciba [6].
+
+**La banda casi ultrasónica (17–20 kHz) no sirve con los Go 4:**
+- **REPORTADO:** con SBC la respuesta es plana hasta ~15 kHz, cae ~1 dB a 17 kHz y 4–5 dB a
+  20 kHz [7];
+- **REPORTADO:** la asignación LOUDNESS de SBC da los bits a las subbandas graves, y con
+  bitpool limitado las agudas pueden quedar sin bits [8];
+- **MEDIDO** (experimentos/10 §6): el Go 4 ya cae −22 dB a 16 kHz en el micrófono;
+- **INFERIDO:** a 18–20 kHz se perderían más de 30 dB, y la sonda desaparecería de forma
+  intermitente en el codificador. Una sonda inaudible en esa banda no se podría medir.
+
+**Cuánto tiempo hace falta** (INFERIDO, de la ganancia de proceso B·T):
+- a −20 dB bajo la música, con 4 kHz de banda y 2 s, la correlación gana ~19 dB, y la cota
+  de Cramér-Rao queda en decenas de µs. La reverberación lo empeora, pero sigue muy por
+  debajo de 1 ms;
+- a −30 dB hacen falta 5–10 s, en los que la deriva medida (22 ppm) acumula 0,1–0,2 ms.
+
+**Lo que conviene aquí** (INFERIDO, detallado en la spec):
+- ruido pseudoaleatorio distinto por parlante, entre ~300 Hz y 8 kHz;
+- moldeado por tercio de octava a −20 dB de la música, con anticipación de un bloque contra
+  el pre-eco;
+- apagado en silencio;
+- un parlante con sonda por ventana, por turnos;
+- correlación contra la sonda enviada, con ponderación SCOT o ML en vez de PHAT pura;
+- la inaudibilidad se valida con el A/B ciego que ya existe, a −15, −20, −25 y −30 dB.
+
+Fuentes:
+[1] https://www.academia.edu/7478497/IMPULSE_RESPONSE_MEASUREMENT_WITH_CHIRP_LETS_AND_MASKED_NOISE_STIMULI ·
+[2] https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/6594365 ·
+[3] https://patents.google.com/patent/US11177851B2/en ·
+[4] https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/KirovskiMalvarTSPApr03.pdf ·
+[5] https://arxiv.org/html/1903.08238 ·
+[6] https://eejournal.ktu.lt/index.php/elt/article/download/23950/13863 ·
+[7] https://addictedtoaudio.co.nz/blogs/how-things-work/let-s-measure-the-bluetooth-codecs-which-performs-the-best ·
+[8] https://www.net.in.tum.de/fileadmin/bibtex/publications/papers/hoene_sbc2009.pdf
+
 ## 4. Diferencia con LE Audio / Auracast (en breve)
 
 LE Audio usa canales isócronos (CIS/BIS) que comparten una referencia de tiempo de
