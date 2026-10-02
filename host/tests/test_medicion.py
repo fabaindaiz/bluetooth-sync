@@ -382,13 +382,30 @@ def test_los_niveles_salen_bien_con_cualquier_realizacion_del_ruido(semilla, seg
         assert abs(error_db) < 0.5, f"{nombre}: {error_db:+.2f} dB"
 
 
-@pytest.mark.parametrize("llegadas", [(0, 0, 0), (144, 360, 576), (576, 360, 144), (0, 48, 96)])
+@pytest.mark.parametrize(
+    "llegadas",
+    [
+        (0, 0, 0),
+        (144, 360, 576),
+        (576, 360, 144),
+        (0, 48, 96),
+        # El primero llega más de 15 ms (BUSQUEDA_MS) antes que la mediana (experimentos/16 §3):
+        (0, 960, 1008),
+        (1008, 960, 0),
+        (0, 1200, 1440),
+    ],
+)
 def test_calibrar_iguala_bien_aunque_los_parlantes_lleguen_a_destiempo(llegadas):
     """El parlante que llega antes que la mediana tiene el pico en un retraso negativo.
 
     `niveles` cortaba la correlación en el índice 0 y lo perdía: con llegadas de 3, 7,5 y
     12 ms, `calibrar` le pedía 0 dB al más fuerte y -14 dB al del medio (2026-10-01, lo
     destapó la calibración del panel simulado).
+
+    Y la pista que recibía `niveles` era relativa al parlante más temprano, cuando las
+    referencias están alineadas a la mediana: con el primero a más de 15 ms de la mediana, su
+    ventana no encontraba el pico y la ganancia salía de la diafonía, con 2,7 a 6,6 dB de error
+    y la calibración informada como confiable (2026-10-02, experimentos/16 §3).
     """
     ganancias = {"a": 1.0, "b": 0.8, "c": 0.6}
     pistas = estimulos.calibracion(3, 5.0, semilla=0)

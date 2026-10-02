@@ -539,15 +539,23 @@ def calibrar(micro: np.ndarray, referencias: dict[str, np.ndarray], sr: int = SR
         retardos[nombre] = float(np.median(valores))
         estabilidad[nombre] = float(max(valores) - min(valores))
 
-    # Los retardos son relativos al primer parlante, así que algunos son negativos. Para
-    # medir niveles hay que alinear cada referencia **hacia adelante**, porque un
-    # desplazamiento negativo no se puede aplicar sobre la grabación: se corren todos para
-    # que el más temprano quede en cero. Sin esto, los parlantes con retardo negativo
-    # quedaban con una columna de ceros y su ganancia salía 0, que fue exactamente el
-    # síntoma que destapó el error.
-    finitos = [v for v in retardos.values() if np.isfinite(v)]
-    origen = min(finitos) if finitos else 0.0
-    para_nivel = {n: (v - origen if np.isfinite(v) else 0.0) for n, v in retardos.items()}
+    # **La pista de `niveles` va en el marco de las referencias alineadas**, que es la llegada
+    # mediana. Los retardos de arriba son relativos (cada ventana se vuelve relativa al más
+    # temprano), así que falta el residuo absoluto de uno: el del más temprano se mide una vez
+    # sobre toda la grabación y se suma a todos. Hasta el 2026-10-02 la pista suponía que el más
+    # temprano estaba en cero: cada una estaba errada en (primero - mediana), y si eso pasaba de
+    # `BUSQUEDA_MS` la ventana no encontraba el pico y la ganancia salía de la diafonía, con 2,7
+    # a 6,6 dB de error y la calibración informada como confiable (experimentos/16 §3).
+    # `niveles` busca módulo n, así que una pista negativa no es problema.
+    finitos = {n: v for n, v in retardos.items() if np.isfinite(v)}
+    if finitos:
+        temprano = min(finitos, key=finitos.get)
+        absoluto = gcc_phat(micro, alineadas[temprano], sr, retardo_maximo_ms=150.0, retardo_minimo_ms=-150.0)
+        para_nivel = {
+            n: (v - finitos[temprano] + absoluto.retardo_ms if np.isfinite(v) else 0.0) for n, v in retardos.items()
+        }
+    else:
+        para_nivel = dict.fromkeys(retardos, 0.0)
     niveles_medidos = niveles(micro, alineadas, para_nivel, sr)
     return Calibracion(
         retardos_ms=correcciones(retardos),
