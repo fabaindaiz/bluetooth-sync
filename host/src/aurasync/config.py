@@ -68,6 +68,13 @@ class Parlante:
     El ambiente es lo que produce el envolvimiento
     (`docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md` §1), así que subirlo
     es la perilla principal del efecto."""
+    ecualizacion_db: list[float] | None = None
+    """La corrección por tercio de octava (50 Hz a 20 kHz, la grilla de `dsp/response.py`),
+    calculada de la respuesta que midió una calibración (`dsp/eq.py`). `None`: sin ecualizar."""
+    tipo: str | None = None
+    """Qué parlante es (`dsp/profiles.py`: "go4", "charge6", "generic"), lo dice la persona.
+    La ecualización confía en la banda del fabricante antes que en la del micrófono.
+    `None`: se deduce del nombre si lo dice ("JBL Go 4 …"), y si no, genérico."""
 
     @property
     def ubicado(self) -> bool:

@@ -173,12 +173,18 @@ def retardos_simultaneos(
     return {n: gcc_phat(micro, ref, sr, **kwargs) for n, ref in referencias.items()}
 
 
+GRAVES_HZ = 300.0
+"""Por debajo de esto no se estima el nivel: ver `niveles`."""
+BUSQUEDA_MS = 15.0
+"""Cuánto puede estar el pico de un parlante lejos de la pista que recibe `niveles`."""
+
+
 def niveles(
     micro: np.ndarray,
     referencias: dict[str, np.ndarray],
     retardos_ms: dict[str, float],
     sr: int = SR,
-    ventana_ms: float = 80.0,
+    ventana_ms: float = 20.0,
 ) -> dict[str, float]:
     """Cuánto aporta cada parlante al micrófono. Solo importan las **razones** entre ellos.
 
@@ -200,6 +206,25 @@ def niveles(
 
     `retardos_ms` se usa solo como pista de dónde buscar el pico; no hace falta que sea
     exacto.
+
+    **Corregido el 2026-10-01, y por qué los 0,3 dB de arriba no lo vieron.** Dividir por la
+    energía de la referencia suponía que la autocorrelación de cada estímulo tiene la misma
+    forma, y con ruido rosa no la tiene: casi toda su energía está en los graves, y ahí dos
+    ruidos independientes de 5 o 10 s todavía se parecen bastante. Con la semilla 0, ganancias
+    reales de 1 / 0,8 / 0,6 se medían como 1 / 0,53 / 0,90; en 12 realizaciones el peor error
+    era de **11,4 dB**. Repetía igual entre corridas porque la semilla es siempre la misma:
+    era estable y estaba mal. Ahora se quitan los graves (bajo `GRAVES_HZ`) de las dos
+    señales y se normaliza por la autocorrelación de la propia referencia en la misma
+    ventana; el peor error en esas 12 realizaciones es de **0,22 dB**
+    (`tests/test_medicion.py::test_los_niveles_salen_bien_con_cualquier_realizacion_del_ruido`).
+    Un Go 4 casi no reproduce por debajo de 150 Hz, así que no se pierde nada que importe.
+
+    **La ventana bajó de 80 a 20 ms en el mismo cambio.** Normalizada por una autocorrelación
+    angosta, la diafonía que junta una ventana ancha deja de ser despreciable: con 80 ms un
+    parlante mudo medía 0,14 y 0,20 del que suena (no se detectaba); con 20 ms, 0,06 y 0,0,
+    y la exactitud sigue en 0,24 dB. 20 ms cubre el sonido directo y las primeras
+    reflexiones; que eso alcance en una pieza real es INFERIDO hasta la prueba de cierre con
+    parlantes (calibrar, aplicar, calibrar otra vez: las correcciones tienen que dar ~0 dB).
     """
     resultado = {}
     for nombre, ref in referencias.items():
@@ -210,30 +235,46 @@ def niveles(
         n = 1
         while n < len(micro) + len(ref):
             n *= 2
-        correlacion = np.fft.irfft(np.fft.rfft(micro, n=n) * np.conj(np.fft.rfft(ref, n=n)), n=n)
+        graves = np.fft.rfftfreq(n, 1 / sr) < GRAVES_HZ
+        espectro_ref = np.fft.rfft(ref, n=n)
+        espectro_ref[graves] = 0
+        espectro_micro = np.fft.rfft(micro, n=n)
+        espectro_micro[graves] = 0
+        correlacion = np.fft.irfft(espectro_micro * np.conj(espectro_ref), n=n)
+        autocorrelacion = np.fft.irfft(espectro_ref * np.conj(espectro_ref), n=n)
+        # **La correlación es circular, y los retrasos negativos viven al final.** Contra
+        # referencias ya corridas por el desfase grueso, el parlante que llega antes que la
+        # mediana tiene su pico en un retraso negativo. Cortar en el índice 0 lo dejaba
+        # afuera, y su nivel salía de la diafonía (2026-10-01: con llegadas de 3, 7,5 y
+        # 12 ms, el primero medía 0,12 en vez de 1). Todos los índices van módulo `n`, y el
+        # pico se busca alrededor de la pista en vez de suponer que está en ella.
         pedido = retardos_ms.get(nombre, 0.0)
         limite = round(sr * 1.5)
         if np.isfinite(pedido):
-            centro = round(sr * pedido / 1000)
-            centro = min(max(centro, 0), max(limite - 1, 0))
+            pista = round(sr * pedido / 1000)
+            busqueda = (pista + np.arange(-round(sr * BUSQUEDA_MS / 1000), round(sr * BUSQUEDA_MS / 1000) + 1)) % n
         else:
-            centro = int(np.argmax(np.abs(correlacion[:limite])))
+            busqueda = np.arange(-limite, limite) % n
+        centro = int(busqueda[np.argmax(np.abs(correlacion[busqueda]))])
         ancho = int(sr * ventana_ms / 1000)
         # Un poco antes del pico y bastante después: las reflexiones llegan detrás.
-        ini, fin = max(0, centro - ancho // 4), min(len(correlacion), centro + ancho)
-        trozo = correlacion[ini:fin]
-        if trozo.size == 0:
-            resultado[nombre] = 0.0
-            continue
+        desde_pico = np.arange(-(ancho // 4), ancho)
+        trozo = correlacion[(centro + desde_pico) % n]
         # Línea de base: lejos del pico solo hay diafonía de los otros parlantes y ruido.
         # Restarla evita sobreestimar a los parlantes flojos, que es hacia donde se iba el
         # estimador: con ganancias reales de 0,5 y 0,25 devolvía 0,568 y 0,310; con la resta
         # devuelve 0,538 y 0,242. Y vuelve el resultado casi cero cuando el parlante no
         # suena, que es lo que permite detectarlo.
-        lejos = np.concatenate([correlacion[fin : fin + 10 * ancho], correlacion[max(0, ini - 10 * ancho) : ini]])
+        lejos = correlacion[
+            (centro + np.concatenate([np.arange(ancho, 11 * ancho), np.arange(-11 * ancho, -(ancho // 4))])) % n
+        ]
         piso = float((lejos**2).mean()) if lejos.size else 0.0
         energia = max(0.0, float((trozo**2).sum()) - piso * trozo.size)
-        resultado[nombre] = float(np.sqrt(energia) / energia_ref)
+        # La misma ventana alrededor del cero de la autocorrelación: lo que daría un
+        # parlante de ganancia 1 sin sala.
+        propia = autocorrelacion[desde_pico % n]
+        energia_propia = float((propia**2).sum())
+        resultado[nombre] = float(np.sqrt(energia / energia_propia)) if energia_propia > 0 else 0.0
     return resultado
 
 
@@ -281,7 +322,7 @@ def alineacion_gruesa(
     referencias: dict[str, np.ndarray],
     sr: int = SR,
     retardo_maximo_ms: float = 1500.0,
-    tolerancia_ms: float = 20.0,
+    tolerancia_ms: float = 100.0,
 ) -> float | None:
     """El desfase global entre la grabación y las referencias, o `None` si no se puede.
 
@@ -304,7 +345,13 @@ def alineacion_gruesa(
        canal.
 
     Ahora se toma el **grupo más grande que concuerda** dentro de `tolerancia_ms`, y se
-    acepta si reúne al menos a la mitad de los canales. El que se va del consenso no arrastra
+    acepta si reúne al menos a la mitad de los canales.
+
+    **La tolerancia subió de 20 a 100 ms el 2026-10-01.** "Todos arrancan en el mismo instante"
+    resultó falso con A2DP: un stream puede correrse un cuantum entero de PipeWire (2048
+    muestras, 42,67 ms) respecto de los demás, y con dos parlantes así la separación pasaba
+    los 20 ms y la calibración fallaba con "could not align" (experimentos/10). Los picos
+    espurios que motivaron el consenso estaban a cientos de ms; 100 ms los sigue separando. El que se va del consenso no arrastra
     a los demás: no aporta al desfase grueso, y después la medición fina dirá si ese parlante
     sirve.
     """
@@ -462,7 +509,9 @@ def calibrar(micro: np.ndarray, referencias: dict[str, np.ndarray], sr: int = SR
     un canal se movía **5,45 ms** al cambiar la ventana; con referencias independientes, el
     mismo canal se movía **0,14 ms**.
     """
-    grueso = alineacion_gruesa(micro, referencias, sr)
+    # Hasta 2,5 s: dentro de la sesión del servicio el estímulo llegaba a ~1,3 s de la grabación
+    # (la tubería hacia pw-play sumaba 0,68 s) y con 1,5 s de búsqueda fallaba de a ratos.
+    grueso = alineacion_gruesa(micro, referencias, sr, retardo_maximo_ms=2500.0)
     if grueso is None:
         return None
     alineadas = alinear(micro, referencias, grueso, sr)
@@ -472,7 +521,7 @@ def calibrar(micro: np.ndarray, referencias: dict[str, np.ndarray], sr: int = SR
         # El mínimo negativo es imprescindible acá: contra referencias ya corridas por el
         # desfase grueso, el parlante que llega antes que la mediana tiene residuo negativo.
         medianas, _ = calibrar_por_ventanas(
-            micro, alineadas, sr, ventana_s=ventana, retardo_maximo_ms=120.0, retardo_minimo_ms=-120.0
+            micro, alineadas, sr, ventana_s=ventana, retardo_maximo_ms=150.0, retardo_minimo_ms=-150.0
         )
         primera = next(iter(referencias))
         base = medianas.get(primera, float("nan"))

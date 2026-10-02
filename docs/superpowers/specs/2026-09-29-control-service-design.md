@@ -1,7 +1,7 @@
 # Control service: live adjustment over a transport-independent contract
 
 - **Date:** 2026-09-29
-- **Status:** design approved in conversation, spec pending review. No code written.
+- **Status:** approved by the user on 2026-10-01, with §13 and §14 added in that review.
 - **Roadmap:** i-7c8794-bdb678 (live diffusion mode). First of two deliveries; the
   second is i-7c8794-f3ddf8 (blind A/B and a user interface).
 - **Decisions:** d-7c8794-74b639 (the contract and the service), d-7c8794-7b3093 (new
@@ -293,6 +293,8 @@ over 80 ms.
 | Installation file missing | Starts anyway; `state` says so; `start` → `not_found` |
 | `start` with a speaker disconnected | `unavailable`, naming it; nothing created |
 | **During a session:** all speakers disconnect, routing ends up wrong, a `pw-play` dies, the motor raises | **Only the session closes**, in order (the virtual sink disappears). `session.status = error` with reason and time. The program waits for another `start` |
+| **During a session:** one speaker is turned off, or its `pw-play` dies (changed on 2026-10-01) | Its stream is **closed** and the others keep playing, as `run` always did; `state` names it in `warnings` and marks it `"playing": false`. Closed, not moved back: an orphan stream can be moved by WirePlumber to another output, including the virtual sink (the feedback loop of experiment 09). Only when **all** are gone does the session close |
+| **During a session:** a stream ends up on the wrong sink | Checked every 2 s (`pw-dump`, ~16 ms) and moved back; `state` counts the repairs |
 | Exception inside a request | 500 `internal`, logged; the server keeps running |
 | Ctrl-C, `SIGTERM` or `shutdown` | Closes the session in order, replies to `shutdown` first, exits 0. A second Ctrl-C exits immediately: P1 measured that the virtual sink disappears even after `kill -9` (`docs/research/experimentos/07-p1-la-captura-no-deja-huella.md`) |
 
@@ -413,3 +415,191 @@ compared with `hmac.compare_digest`.
   `docs/research/experimentos/08-lazo-de-recalibracion-en-simulacion.md`). The first
   implementation step measures blocks per second against real time; it matters again on
   the Pi Zero in Phase 3.
+
+## 13. The panel on `panel-demo` becomes a client of this contract
+
+On 2026-10-01 a separate session built a web panel over a simulated engine, on the branch
+`panel-demo`, without seeing this design. It has its own state and command contract
+(`state.py`, `engine/base.py`) over a WebSocket. Two contracts for one engine would drift
+apart, so:
+
+- **`control.py` is the only contract.** When the panel is integrated (i-7c8794-f3ddf8),
+  its commands and its snapshot are rewritten as messages of §5, and its WebSocket becomes
+  one more transport over the same dispatcher, like REST and serial.
+- **Its simulated engine is kept as a demonstration backend** of the service, and is a
+  candidate for the fake session the service tests use (§8).
+- Nothing on `panel-demo` is merged in this delivery; the branch stays as it is.
+
+## 14. Change notification is out of version 1
+
+REST only answers when asked. The panel refreshes its state about ten times a second and
+streams logs live; over this contract it could only poll `GET /v1/state`. Polling is
+enough for this delivery (a phone polling twice a second costs nothing here), so version 1
+has **no subscription**. It is recorded as pending, undesigned: when the panel or the
+serial transport needs it, it is an addition to the contract (a `subscribe` operation or a
+streaming route), and `sequence` already lets a polling client tell whether anything
+changed.
+
+## 15. The panel (added on 2026-10-01, d-7c8794-09d10f)
+
+The user asked for every feature of the `panel-demo` panel, controlling the real engine.
+The panel is served by the service itself (`/`, `/static/*`, `/pairing.svg`) and speaks
+**only** this contract: it polls `GET /v1/state` every 500 ms and sends each order as the
+raw message to `POST /v1/command`. No WebSocket and no aiohttp: with three speakers,
+polling costs nothing and keeps one transport path.
+
+### 15.1 What each panel feature is on the A2DP engine
+
+| Panel (`panel-demo`) | Real engine |
+|---|---|
+| channel per speaker, quad / LCRS | a **role** (`FL FR RL RR` or `FL FC FR RC`) is a shortcut for a `(pan, ambience)` pair; a speaker matching none is "custom"; one speaker per role |
+| volume, mute, delay, gain, tone | `gain_db`; `muted` (50 ms ramp, listener state, not saved); `delay_ms` by hand only while the loop is off; a 660 Hz tone at -26 dBFS on one speaker |
+| scan speakers | `bluetoothctl` devices with the A2DP sink UUID; connect (pair and trust first if needed), disconnect, add to / remove from the installation (session stopped) |
+| services with PID and logs | session, virtual sink, one `pw-play` per speaker, recalibration loop (its microphone), source; `bluetoothd`, `pipewire`, `wireplumber` only observed. Logs are the process's `logging`, polled with a cursor (`logs`) |
+| link health | input receiving audio, motor time per block, routing repairs and lost speakers, the loop's last decision, a chart of the delays it applied, latency by stage (A2DP unmeasured) |
+| levels | input L/R and each speaker's output, RMS and held peak |
+| engine config | live: extraction, decorrelation, rear delay; on next start: block size, `pw-play` buffer, sink name, loop period and window. Auracast keys are absent until E4 |
+| calibration | the stimulus is played **inside the open session** (no second set of streams), recorded, and measured on a worker thread; apply goes through the fade; `measurement_save` writes a JSON record with the environment |
+| source | system (the "aurasync" output), one application (its streams moved with `pactl`), a file, or the test signal — each verified in `pw-dump` after starting |
+
+Plus the second delivery of §3: **presets and the blind A/B** (`ab_start`, `ab_play`,
+`ab_answer`, `ab_stop`). X is drawn again after every answer, and the state never says
+which preset X is.
+
+### 15.2 New operations
+
+`assign`, `source`, `tone`, `recalibrate`, `calibrate`, `calibrate_cancel`,
+`calibration_apply`, `measurement_save`, `scan`, `connect`, `disconnect`, `speaker_add`,
+`speaker_remove`, `logs`, `service_start`, `service_stop`, `service_restart`, `ab_start`,
+`ab_play`, `ab_answer`, `ab_stop`. They are additive: version 1 stays version 1. The one
+change to an existing field: `delay_ms` is settable (it was `read_only`), and the service
+answers `conflict` while the loop runs.
+
+### 15.3 Security for a browser
+
+The token travels once in the URL (`/?t=…`) and becomes an `HttpOnly; SameSite=Strict`
+cookie, with a redirect that drops it from the address bar. Every request's `Host` must
+be one of this machine's names (DNS rebinding); a request authenticated only by the cookie
+must carry an `Origin` equal to the server (CSRF). `curl` with the bearer token is
+unaffected.
+
+### 15.4 Nothing slow on the engine thread
+
+Bluetooth actions, switching the source and measuring a calibration run on worker
+threads; the system view (`system.Observer`, ~100 ms per read on `PC-Ryzen5`) refreshes on
+its own thread. The engine thread only reads their last result.
+
+### 15.5 Simulated mode
+
+`aurasync service --simular` runs the real motor, contract, loop and calibration over a
+simulated room (each speaker reaches the microphone 3, 7.5 and 12 ms late, with gains 1,
+0.8 and 0.6, plus noise), on a copy of the installation and presets. The panel shows
+SIMULADO and `measurement_save` refuses. It is what the browser tests run on.
+
+### 15.6 What building it found in the measurement code
+
+The simulated calibration returned the right delays and wrong gains. `medicion.niveles`
+had two errors, both now fixed with tests: it divided by the reference's energy (wrong for
+pink noise, whose autocorrelation varies a lot between realizations: up to 11.4 dB of
+error) and it cut the circular correlation at index 0, losing the speaker that arrives
+before the median. See `docs/research/experimentos/10-…` §3.
+
+## 16. The output path after measuring it (2026-10-01, d-7c8794-a41ec9)
+
+Measured with the three Go 4 and the microphone (`docs/research/experimentos/10-…` §5):
+
+- **One stream, one clock.** Each Bluetooth sink is its own PipeWire driver. One `pw-play`
+  per speaker let the clock difference pile up in each pipe and come out as jumps of exactly
+  one quantum (2048 samples, 42.67 ms) in one speaker. The session now writes a single
+  N-channel stream to a combine-stream sink (`ReproductorCombinado`), which spreads it with
+  adaptive resampling: 0 jumps in 8 calibrations, and a smooth ~22 ppm drift left for the
+  loop. `output_mode = separado` keeps the old path for comparison.
+- **Streams nobody can move.** `node.dont-move`, `node.dont-reconnect` and
+  `node.dont-fallback` on every stream the session creates: WirePlumber was moving the
+  stream of the speaker that was the default output into the `aurasync` sink on every start.
+- **Short pipes.** Two blocks of pipe to `pw-play` (the kernel's 64 KB was 0.68 s of audio):
+  measured latency from written to heard went from ~1.03 s to ~0.50 s.
+- **Calibration measures the residual** through the corrections in place (closure: 0.35 ms),
+  reports the measured latency, and the motor runs on silence so that pending fades finish
+  with nothing playing.
+- **Protocol-only calibration is not possible with these speakers:** no Delay Reporting,
+  PipeWire's reported latency is the same constant for all three. What the protocol does
+  offer: the quantum (the size of the jumps) and AVRCP volume (gain without touching the
+  delay, with a speaker curve still to measure).
+
+## 17. Live metrics: a stream from the service (added on 2026-10-01, i-7c8794-530882, d-7c8794-316465)
+
+**Status: built (2026-10-01).** The state goes every 1 s and not every 2 s: the snapshot also
+carries what changes without `sequence` (health, the observer's view), and the panel used to
+see it every 0.5 s.
+
+The user asked for metrics "more live, maybe with a stream". §14 left change notification
+out of version 1 as an *addition* for when the panel needed it; this is that addition. The
+contract and its polling stay as they are: a client that never opens the stream loses
+nothing.
+
+### 17.1 Why polling is not enough
+
+- Meters are computed once per engine block (4096 samples, 85 ms) and the panel reads them
+  every 500 ms: a meter that moves twice a second is not a meter.
+- The whole snapshot travels every time (tens of KB) even when nothing changed; going to
+  20 Hz with it would cost 20× for the same information.
+- What the meters show runs **~0.5 s ahead of what is heard**: the engine processes a block
+  long before the speakers play it (pipe, `pw-play`, Bluetooth; `latency.measured_ms`).
+  Seeing a peak before hearing it is what makes a meter feel disconnected.
+
+### 17.2 Design
+
+- **Transport: Server-Sent Events**, `GET /v1/stream`, `text/event-stream`. Same-origin
+  `EventSource` sends the panel's cookie, so authentication is the existing one (cookie or
+  `?token=`). It is one-way, which is all that is needed: orders keep going through
+  `POST /v1/command`. A WebSocket would need its own framing in the standard library (or a
+  dependency) for a back channel nobody uses. Over serial (i-7c8794-a9f161) the same events
+  become a `subscribe` operation.
+- **Events** (JSON in `data:`, the event name in `event:`):
+
+  | Event | Rate | Content |
+  |---|---|---|
+  | `state` | when `sequence` changes, and at least every 1 s | the full snapshot, as `GET /v1/state` |
+  | `meters` | 20 Hz | per meter: RMS and peak (dBFS), limiter reduction per speaker; `t` |
+  | `input` | 10 Hz | input third-octave spectrum (50 Hz-20 kHz), L/R correlation, side/mid |
+  | `log` | as they happen | the log lines, as `logs` returns them |
+  | (comment) | every 5 s | keep-alive, so proxies and phones do not drop the connection |
+
+- **Telemetry, timed to the ear.** The engine thread records, for every 1024-sample chunk of
+  each block it writes, the meters and its **play time** = write time + the output latency
+  (measured by the last calibration; without one, 0 and the stream says `"synced": false`).
+  The stream sends the newest chunk whose play time has arrived: the meter moves when the
+  sound does. One clock (`time.monotonic`) decides it (card `derive-state-from-one-clock`):
+  a frame is chosen by comparing its play time with now, never by counting ticks.
+- **The stream can never slow the engine** (card `best-effort-side-channels`). The engine
+  appends to a bounded ring under a short lock and never waits for a reader; each stream
+  runs in its own HTTP thread and reads the ring. A client that stops reading fills only
+  its own socket; a failed write ends only that stream, with one log line.
+- **Bounded:** at most 8 streams at once; the 9th gets `503` with a stable error code
+  (`busy`). Each stream ends when the service shuts down.
+- **The panel** opens the stream and stops polling while it is alive; meters draw on
+  `requestAnimationFrame` from the last frame. After 3 failed reconnections it falls back
+  to polling every 500 ms and says so ("consultando" instead of "en vivo"). A `state` event
+  replaces the whole snapshot (the source wins; nothing is merged, card
+  `derived-copy-goes-stale-silently`).
+
+### 17.3 Also in this delivery: controls
+
+- Sliders send every 80 ms while dragging (was 200 ms): with the stream, the result comes
+  back within the next frame.
+- An input spectrum (31 bars) and a correlation meter (−1 to +1) in the Entrada card.
+- Limiter reduction per speaker next to its meter: when the EQ's lift reaches full scale,
+  it shows.
+
+### 17.4 How it is verified
+
+- `telemetry`: chunks per block, the frame chosen at a given instant (and the same frame
+  reached from before and after), ring bounded, a reader that raises does not stop a writer.
+- REST: the stream sends `state`, `meters` and `input` within a second, rejects without
+  auth, refuses the 9th client, and a client that closes mid-stream leaves the service and
+  the session untouched.
+- Browser: meters move with the stream; with the stream blocked, the panel falls back to
+  polling and says "consultando".
+- With speakers: the meter peak against the microphone's, to check the play-time offset
+  (the measured latency) puts them within one frame (50 ms).

@@ -99,3 +99,31 @@ def test_pide_candidatos_suficientes():
 def test_rechaza_cantidades_invalidas():
     with pytest.raises(ValueError, match="filtros"):
         decorrelate.banco_decorrelador(0)
+
+
+def test_el_filtro_es_plano_tambien_entre_los_bins_de_diseno():
+    """Lo que suena es la respuesta continua, no solo los bins con que se diseñó el filtro.
+
+    La versión anterior era exactamente plana en sus 65 bins de diseño y tenía huecos de
+    hasta 46 dB entre ellos (9,5 dB en tercios de octava): le ponía a cada parlante un
+    ecualizador al azar. Lo notó el oído del usuario como "audio degradado" el 2026-10-01.
+    """
+    fr = np.fft.rfftfreq(16384, 1 / 48000)
+    banda = (fr > 50) & (fr < 16000)
+    for h in decorrelate.banco_decorrelador(4):
+        magnitud_db = 20 * np.log10(np.abs(np.fft.rfft(h, 16384)))
+        assert np.abs(magnitud_db[banda]).max() < 1.0
+
+
+def test_decorrela_ruido_rosa_mejor_que_el_filtro_anterior():
+    """La correlación entre salidas, con material de espectro realista (rosa), por debajo de
+    0,6. El filtro anterior daba 0,67 (y además coloreaba)."""
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal(48000)
+    espectro = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / 48000)
+    espectro[1:] /= np.sqrt(f[1:])
+    x = np.fft.irfft(espectro, len(x))
+    salidas = [np.convolve(x, h)[: len(x)] for h in decorrelate.banco_decorrelador(3)]
+    peor = max(abs(np.corrcoef(salidas[i], salidas[j])[0, 1]) for i in range(3) for j in range(i + 1, 3))
+    assert peor < 0.6

@@ -70,10 +70,11 @@ def test_el_pan_reparte_los_canales():
     """Un parlante con pan -1 solo recibe el izquierdo."""
     inst = Instalacion(parlantes=[Parlante("izq", "s0", pan=-1.0), Parlante("der", "s1", pan=1.0)])
     m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False)
-    izq = np.ones(1000)
+    izq = np.full(1000, 0.5)
     der = np.zeros(1000)
     salida = m.procesar(izq, der)
-    assert np.allclose(salida["izq"], 1.0)
+    desde = 2 * m.latencia_retardo  # lo que tarda en llenarse la lectura de banda limitada
+    assert np.allclose(salida["izq"][desde:], 0.5)
     assert np.allclose(salida["der"], 0.0)
 
 
@@ -98,14 +99,15 @@ def test_el_retardo_corre_la_senal_lo_que_dice():
     pulso = np.zeros(SR)
     pulso[100] = 1.0
     salida = m.procesar(pulso, pulso)
-    assert int(np.argmax(salida["a"])) == 100
-    assert int(np.argmax(salida["b"])) == 100 + int(SR * 0.010)
+    fija = m.latencia_retardo
+    assert int(np.argmax(salida["a"])) == 100 + fija
+    assert int(np.argmax(salida["b"])) == 100 + int(SR * 0.010) + fija
 
 
 def test_la_ganancia_se_aplica_en_decibeles():
     inst = Instalacion(parlantes=[Parlante("a", "s0"), Parlante("b", "s1", ganancia_db=-6.0206)])
     m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False)
-    x = np.ones(1000)
+    x = np.full(1000, 0.5)
     salida = m.procesar(x, x)
     assert np.allclose(salida["b"] / salida["a"], 0.5, atol=1e-3)
 
@@ -213,15 +215,25 @@ def test_cambiar_el_retardo_en_caliente_no_produce_un_clic():
 def test_la_ganancia_cambia_con_rampa_y_no_de_golpe():
     inst = _un_parlante()
     m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False, velocidad_ganancia_db_s=6.0)
-    x = np.ones(SR // 10)  # 100 ms
+    x = np.full(SR // 10, 0.5)  # 100 ms, bajo el techo del limitador
     m.procesar(x, x)
 
     inst.parlantes[0].ganancia_db = -20.0
     salida = m.procesar(x, x)["solo"]
     # En 100 ms, a 6 dB/s, solo puede bajar 0,6 dB: ni se queda ni llega a -20.
-    assert salida[-1] == pytest.approx(10 ** (-0.6 / 20), rel=0.02)
+    assert salida[-1] == pytest.approx(0.5 * 10 ** (-0.6 / 20), rel=0.02)
     # Y dentro del bloque el cambio es continuo, no un escalón.
     assert np.abs(np.diff(salida)).max() < 0.01
+
+
+def test_el_limitador_no_deja_pasar_de_escala_completa():
+    """La ecualización solo realza: lo que se pasa lo baja el limitador, no lo recorta pw-play."""
+    from aurasync.dsp import limiter
+
+    inst = Instalacion(parlantes=[Parlante("a", "s0", ganancia_db=6.0)])
+    m = motor.Motor(inst, SR, extraer_ambiente=False, decorrelar=False)
+    x = np.sin(np.arange(4800) / 7)
+    assert np.abs(m.procesar(x, x)["a"]).max() <= limiter.CEILING + 1e-9
 
 
 def test_la_ganancia_llega_a_su_objetivo():

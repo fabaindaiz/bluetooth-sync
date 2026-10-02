@@ -1,0 +1,185 @@
+/* El panel de aurasync con Tailwind v4 (compilado con `hatch run web:css`, sin Node).
+   Los componentes de abajo existen porque app.js crea elementos con estas clases: así el
+   JavaScript no repite cadenas largas de utilidades, y Tailwind las encuentra al escanear
+   esta carpeta. El modo oscuro sigue al sistema (`prefers-color-scheme`). */
+@import "tailwindcss";
+@source "./";
+
+@theme {
+  --color-s1: #2a78d6;
+  --color-s2: #d06d1b;
+  --color-s3: #1f9e6e;
+  --color-s4: #8a5cd1;
+  --color-s5: #c43f8e;
+  --color-s6: #6b7a11;
+}
+
+:root {
+  --s1: #2a78d6; --s2: #d06d1b; --s3: #1f9e6e; --s4: #8a5cd1; --s5: #c43f8e; --s6: #6b7a11;
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900; }
+  .card-title { @apply text-sm font-semibold tracking-wide text-zinc-800 dark:text-zinc-100; }
+  .card-head { @apply mb-3 flex flex-wrap items-center justify-between gap-2; }
+  .muted { @apply text-zinc-500 dark:text-zinc-400; }
+  .small { @apply text-xs; }
+  .num { @apply tabular-nums; }
+
+  .btn { @apply inline-flex min-h-11 sm:min-h-10 items-center justify-center gap-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700; }
+  .btn-primary { @apply border-sky-600 bg-sky-600 text-white hover:bg-sky-500 dark:border-sky-500 dark:bg-sky-600 dark:hover:bg-sky-500; }
+  .btn-stop { @apply border-rose-500 bg-white text-rose-600 hover:bg-rose-50 dark:bg-zinc-900 dark:text-rose-400 dark:hover:bg-rose-950; }
+  .btn-big { @apply min-h-12 px-5 text-base; }
+  .ghost, .btn-ghost { @apply border-transparent bg-transparent shadow-none hover:bg-zinc-100 dark:bg-transparent dark:hover:bg-zinc-800; }
+  /* 44 px en el teléfono (Apple HIG, WCAG 2.5.8); más compacto con puntero fino. */
+  .small-btn { @apply min-h-11 px-3 py-1 text-xs sm:min-h-8 sm:px-2; }
+  .btn:focus-visible, .input:focus-visible, .seg:focus-visible, .nav-tab:focus-visible, input:focus-visible, select:focus-visible { @apply outline-2 outline-offset-2 outline-sky-600; }
+  .q-mute[aria-pressed="true"] { @apply border-amber-500 bg-amber-400 text-zinc-900 hover:bg-amber-300 dark:bg-amber-400 dark:text-zinc-900; }
+  .danger { @apply text-rose-600 dark:text-rose-400; }
+  .link-btn { @apply cursor-pointer border-0 bg-transparent p-0 text-left font-semibold text-zinc-800 underline decoration-zinc-300 underline-offset-4 hover:decoration-sky-500 dark:text-zinc-100 dark:decoration-zinc-600; }
+  button[aria-pressed="true"].seg { @apply bg-sky-50 font-semibold text-sky-700 shadow-[inset_0_-3px_0_var(--s1)] dark:bg-sky-950 dark:text-sky-300; }
+  .seg { @apply min-h-11 flex-1 rounded-none border-0 bg-transparent px-3 text-sm; }
+  .segmented { @apply inline-flex overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700; }
+  .segmented > .seg + .seg { @apply border-l border-zinc-300 dark:border-zinc-700; }
+
+  .field { @apply flex min-w-0 flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400; }
+  .input, .field select, .field input[type="text"], .field input[type="number"], .num-input, .preset-input {
+    @apply min-h-10 rounded-xl border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+  }
+  .num-input { @apply w-20 text-right tabular-nums; }
+  /* Zona táctil de 44 px aunque el riel se vea fino. */
+  input[type="range"] { @apply h-11 w-full cursor-pointer accent-sky-600 sm:h-7; }
+  input[type="checkbox"] { @apply h-5 w-5 accent-sky-600; }
+  .check { @apply inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300; }
+  .inline { @apply flex flex-nowrap items-center gap-2; }
+  .row { @apply flex flex-wrap items-end gap-2; }
+
+  .table { @apply w-full border-collapse text-sm; }
+  .table th { @apply border-b border-zinc-200 px-2 py-1 text-left text-xs font-medium whitespace-nowrap text-zinc-500 dark:border-zinc-800; }
+  .input-bars { @apply flex h-24 items-end gap-px rounded bg-zinc-100 p-1 dark:bg-zinc-900; }
+  .input-bar { @apply flex-1 rounded-t-sm bg-sky-500 transition-[height] duration-75 dark:bg-sky-400; }
+  .input-axis { @apply mt-1 flex justify-between; }
+  .corr { @apply flex items-center gap-2; }
+  .corr-track { @apply relative h-3 flex-1 rounded bg-gradient-to-r from-red-300 via-zinc-200 to-emerald-300 dark:from-red-900 dark:via-zinc-800 dark:to-emerald-900; }
+  .corr-marker { @apply absolute -top-1 h-5 w-1 -translate-x-1/2 rounded bg-zinc-900 dark:bg-zinc-100; }
+  .meter-limit { @apply ml-1 text-xs text-amber-600 dark:text-amber-400; }
+  .now-facts { @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm; }
+  .now-facts dt { @apply text-zinc-500 dark:text-zinc-400; }
+  .now-facts dd { @apply m-0 min-w-0 truncate; }
+  .toggle { @apply flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 p-2 text-sm has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 dark:border-zinc-700 dark:has-[:checked]:bg-sky-950/40; }
+  .toggle input { @apply mt-1; }
+  .toggle span { @apply flex flex-col; }
+  .toggle small { @apply text-xs text-zinc-500 dark:text-zinc-400; }
+  .link { @apply text-sky-700 underline dark:text-sky-400; }
+  .setting-group { @apply mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 first:mt-0 dark:text-zinc-400; }
+  .settings { @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3; }
+  .setting { @apply flex flex-col gap-1 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800; }
+  .setting-head { @apply flex items-start justify-between gap-2; }
+  .setting-title { @apply text-sm font-semibold; }
+  .setting-desc { @apply m-0 text-xs text-zinc-600 dark:text-zinc-400; }
+  .help { @apply relative inline-flex; }
+  .help-btn { @apply grid h-6 w-6 place-items-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-600 hover:border-sky-500 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-sky-500 dark:border-zinc-600 dark:text-zinc-300; }
+  .help-pop { @apply invisible absolute right-0 top-8 z-30 w-72 max-w-[80vw] rounded-lg border border-zinc-200 bg-white p-3 text-xs font-normal leading-relaxed text-zinc-700 opacity-0 shadow-lg transition-opacity dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200; }
+  .help:hover .help-pop, .help:focus-within .help-pop { @apply visible opacity-100; }
+  .group-row th { @apply bg-zinc-50 px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400; }
+  .callout { @apply mt-2 rounded border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm dark:bg-amber-950/40; }
+  .cuts-timeline { @apply relative mt-3 h-6 rounded bg-zinc-100 dark:bg-zinc-900; }
+  .cuts-timeline .cut-dot { @apply absolute top-1.5 -translate-x-1/2; }
+  .cuts-axis { @apply mt-1 flex justify-between; }
+  .cut-dot { @apply inline-block h-3 w-3 rounded-full; }
+  .cut-fault { @apply bg-red-500; }
+  .cut-xrun { @apply bg-amber-500; }
+  .cut-input { @apply bg-sky-500; }
+  .cut-fade { @apply bg-zinc-400; }
+  .facts { @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm; }
+  .facts dt { @apply text-zinc-500 dark:text-zinc-400; }
+  .facts dd { @apply m-0; }
+  .table td { @apply border-b border-zinc-100 px-2 py-2 align-middle dark:border-zinc-800; }
+  .table-wrap { @apply overflow-x-auto; }
+
+  .status { @apply inline-flex items-center gap-1 text-sm whitespace-nowrap; }
+  .status-dot { @apply inline-block h-2 w-2 shrink-0 rounded-full bg-zinc-400; }
+  .status-running .status-dot, .status-playing .status-dot { @apply bg-emerald-500; }
+  .status-starting .status-dot, .status-connected .status-dot { @apply bg-amber-500; }
+  .status-failed .status-dot, .status-lost .status-dot { @apply bg-rose-600; }
+  .speaker-name { @apply font-medium; }
+  .speaker-sub { @apply text-xs break-all text-zinc-500 tabular-nums dark:text-zinc-400; }
+  .service-detail { @apply text-xs text-zinc-600 dark:text-zinc-300; }
+  .service-error { @apply text-xs text-rose-600; }
+
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-zinc-200 px-2 py-0.5 text-xs whitespace-nowrap text-zinc-600 dark:border-zinc-700 dark:text-zinc-300; }
+  .chip-ok { @apply border-emerald-300 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300; }
+  .chip-warn { @apply border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300; }
+  .chip-bad { @apply border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300; }
+
+  .tiles { @apply grid grid-cols-1 gap-2 sm:grid-cols-2; }
+  .tile { @apply rounded-xl border border-zinc-200 p-3 dark:border-zinc-800; }
+  .tile-label { @apply text-xs text-zinc-500 dark:text-zinc-400; }
+  .tile-value { @apply text-lg font-semibold; }
+  .tile-value.bad { @apply text-rose-600; }
+  .tile-value.warn { @apply text-amber-600; }
+  .tile-value.good { @apply text-emerald-600 dark:text-emerald-400; }
+  .tile-sub { @apply text-xs break-words text-zinc-600 dark:text-zinc-300; }
+
+  .room { @apply relative mx-auto aspect-square w-full max-w-xs rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950; }
+  .room-front { @apply absolute top-0 right-[20%] left-[20%] border-b-4 border-zinc-300 pb-0.5 text-center text-[11px] text-zinc-500 dark:border-zinc-700; }
+  .room-custom { @apply absolute right-2 bottom-1 left-2 text-center text-[11px] text-zinc-500; }
+  .slot { @apply absolute w-[30%] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-dashed border-zinc-300 bg-white px-1 py-1.5 text-center text-xs leading-tight dark:border-zinc-700 dark:bg-zinc-900; }
+  .slot.filled { @apply border-solid border-sky-500; }
+  .slot.lost { @apply border-rose-500 bg-rose-50 dark:bg-rose-950; }
+  .slot-channel { @apply text-sm font-bold; }
+  .slot-name { @apply break-words text-zinc-600 dark:text-zinc-300; }
+
+  .meters { @apply flex flex-col gap-2; }
+  .meter { @apply grid grid-cols-[5.5rem_1fr_3.5rem_1.25rem] items-center gap-2; }
+  .meter-label { @apply truncate text-xs font-semibold; }
+  .meter-track { @apply relative h-3 overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800; }
+  /* La barra revela zonas fijas de la escala: verde bajo -18 dBFS, ámbar hasta -6, rojo arriba.
+     La escala va de -60 a 0, así que -18 está al 70 % y -6 al 90 %. */
+  .meter-fill { @apply absolute inset-y-0 left-0 overflow-hidden rounded-r transition-[width] duration-75; }
+  .meter-fill::before { content: ""; position: absolute; inset: 0; width: var(--track-w, 100%);
+    background: linear-gradient(to right, #16a34a 0 70%, #f59e0b 70% 90%, #e11d48 90% 100%); }
+  .meter-peak { @apply absolute inset-y-0 w-0.5 bg-zinc-900 dark:bg-zinc-100; }
+  .meter-value { @apply text-right text-xs tabular-nums; }
+  .meter-clip { @apply h-3 w-3 rounded-sm border border-zinc-300 dark:border-zinc-700; }
+  .meter-clip.on { @apply border-rose-600 bg-rose-600; }
+  .meter-scale { @apply relative ml-[6rem] mr-[5.25rem] h-4 text-[10px] text-zinc-500; }
+  .meter-scale span { @apply absolute -translate-x-1/2 tabular-nums; }
+
+  .logs { @apply m-0 h-80 list-none overflow-auto rounded-xl border border-zinc-200 bg-zinc-50 py-1 font-mono text-xs dark:border-zinc-800 dark:bg-zinc-950; }
+  .log { @apply grid grid-cols-[5.5rem_4.5rem_6.5rem_1fr] gap-2 px-2 hover:bg-sky-50 dark:hover:bg-sky-950; }
+  .log time, .log-service { @apply truncate text-zinc-500; }
+  .log-message { @apply break-words whitespace-pre-wrap; }
+  .log-warning { @apply bg-amber-50 dark:bg-amber-950/40; }
+  .log-error, .log-critical { @apply bg-rose-50 dark:bg-rose-950/40; }
+
+  .legend { @apply mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300; }
+  .legend-item { @apply inline-flex items-center gap-1; }
+  .legend-swatch { @apply inline-block h-2.5 w-2.5 rounded-sm; }
+  .chart { @apply relative mt-1 h-28; }
+  .resp-chart { @apply h-40; }
+  .chart-empty { @apply pt-8 text-center text-sm text-zinc-500; }
+  .preset-list { @apply m-0 flex list-none flex-col gap-1 p-0; }
+  .preset-list li { @apply flex items-center gap-2 border-b border-zinc-100 py-1 dark:border-zinc-800; }
+  .preset-list li.current .preset-name { @apply font-semibold; }
+  .preset-name { @apply flex-1 break-words; }
+  small.pending { @apply font-semibold text-rose-600; }
+
+  .nav-tab { @apply flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-xs text-zinc-500 hover:bg-zinc-100 sm:flex-none sm:flex-row sm:gap-2 sm:px-3 sm:text-sm dark:hover:bg-zinc-800; }
+  .nav-tab[aria-current="page"] { @apply bg-sky-50 font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300; }
+  .nav-icon { @apply text-base leading-none; }
+}
+
+/* Lo que no son utilidades: los trazos de los gráficos SVG. */
+svg .grid-line { stroke: var(--color-zinc-200); stroke-width: 1; }
+svg .axis-label { fill: var(--color-zinc-500); font-size: 10px; font-variant-numeric: tabular-nums; }
+svg .line { fill: none; stroke: var(--s1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+svg .eq-line { stroke-dasharray: 4 3; stroke-width: 1.5; opacity: 0.8; }
+@media (prefers-color-scheme: dark) { svg .grid-line { stroke: var(--color-zinc-800); } }
+[hidden] { display: none !important; }
+/* El foco nunca queda tapado por la cabecera ni por la barra de abajo (WCAG 2.4.11). */
+html { scroll-padding-top: 12rem; scroll-padding-bottom: 5rem; }
+@media (min-width: 640px) { html { scroll-padding-top: 11rem; scroll-padding-bottom: 1rem; } }
+svg .measured { stroke-width: 2; }
+svg .unity { stroke: var(--color-zinc-400); stroke-width: 1; stroke-dasharray: 2 2; }
+body.stale #views, body.stale #player { opacity: 0.45; pointer-events: none; }

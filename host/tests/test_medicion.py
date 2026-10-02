@@ -355,3 +355,49 @@ def test_calibrar_acierta_con_el_parlante_que_llega_antes_que_la_mediana():
     ultimo = max(reales.values())
     for nombre, real in reales.items():
         assert cal.retardos_ms[nombre] == pytest.approx(ultimo - real, abs=0.05)
+
+
+@pytest.mark.parametrize("semilla", range(6))
+@pytest.mark.parametrize("segundos", [5.0, 10.0])
+def test_los_niveles_salen_bien_con_cualquier_realizacion_del_ruido(semilla, segundos):
+    """El nivel no puede depender de qué ruido rosa le tocó a cada parlante.
+
+    Lo destapó el panel simulado (2026-10-01): con la semilla 0 y 5 s, ganancias reales de
+    1 / 0,8 / 0,6 se medían como 1 / 0,53 / 0,90, porque la diafonía de graves entre ruidos
+    independientes dominaba la ventana. Repetía igual entre corridas (la misma semilla da el
+    mismo error), así que la estabilidad no lo podía ver.
+    """
+    ganancias = {"a": 1.0, "b": 0.8, "c": 0.6}
+    pistas = estimulos.calibracion(3, segundos, semilla=semilla)
+    refs = {n: 0.1 * p for n, p in zip(ganancias, pistas, strict=True)}
+    llegadas = {"a": 144, "b": 360, "c": 576}
+    micro = np.zeros(len(pistas[0]) + SR)
+    for nombre, ref in refs.items():
+        inicio = SR // 2 + llegadas[nombre]
+        micro[inicio : inicio + len(ref)] += ganancias[nombre] * ref
+    micro += 0.001 * np.random.default_rng(semilla).standard_normal(len(micro))
+    medidos = medicion.niveles(micro, refs, {n: (SR // 2 + d) / SR * 1000 for n, d in llegadas.items()}, SR)
+    for nombre, esperado in ganancias.items():
+        error_db = 20 * np.log10((medidos[nombre] / medidos["a"]) / esperado)
+        assert abs(error_db) < 0.5, f"{nombre}: {error_db:+.2f} dB"
+
+
+@pytest.mark.parametrize("llegadas", [(0, 0, 0), (144, 360, 576), (576, 360, 144), (0, 48, 96)])
+def test_calibrar_iguala_bien_aunque_los_parlantes_lleguen_a_destiempo(llegadas):
+    """El parlante que llega antes que la mediana tiene el pico en un retraso negativo.
+
+    `niveles` cortaba la correlación en el índice 0 y lo perdía: con llegadas de 3, 7,5 y
+    12 ms, `calibrar` le pedía 0 dB al más fuerte y -14 dB al del medio (2026-10-01, lo
+    destapó la calibración del panel simulado).
+    """
+    ganancias = {"a": 1.0, "b": 0.8, "c": 0.6}
+    pistas = estimulos.calibracion(3, 5.0, semilla=0)
+    refs = {n: 0.1 * p for n, p in zip(ganancias, pistas, strict=True)}
+    micro = np.zeros(len(pistas[0]) + SR)
+    for (nombre, ref), d in zip(refs.items(), llegadas, strict=True):
+        micro[SR // 2 + d : SR // 2 + d + len(ref)] += ganancias[nombre] * ref
+    micro += 0.001 * np.random.default_rng(1).standard_normal(len(micro))
+    resultado = medicion.calibrar(micro, refs)
+    esperadas = {n: 20 * np.log10(0.6 / g) for n, g in ganancias.items()}
+    for nombre, esperada in esperadas.items():
+        assert abs(resultado.ganancias_db[nombre] - esperada) < 0.5, (nombre, resultado.ganancias_db)

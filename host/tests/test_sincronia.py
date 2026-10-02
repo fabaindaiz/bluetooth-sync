@@ -547,3 +547,27 @@ def test_las_dos_ventanas_se_corresponden_con_la_latencia_de_reproduccion():
     ultimo = max(reales_ms.values())
     for nombre, real in reales_ms.items():
         assert cal.retardos_ms[nombre] == pytest.approx(ultimo - real, abs=0.1)
+
+
+def test_la_medicion_en_otro_proceso_devuelve_lo_mismo():
+    from aurasync import medicion
+
+    rng = np.random.default_rng(5)
+    sr = 48000
+    refs = {n: rng.standard_normal(int(sr * 2.0)) * 0.3 for n in ("a", "b")}
+    mic = np.zeros(int(sr * 2.3))
+    mic[480 : 480 + len(refs["a"])] += refs["a"]
+    mic[960 : 960 + len(refs["b"])] += 0.8 * refs["b"]
+    m = sincronia.MedicionEnSegundoPlano(medicion.calibrar, en_proceso=True)
+    try:
+        assert m.lanzar(mic, refs, sr)
+        fin = time.monotonic() + 60
+        listo, resultado = False, None
+        while not listo and time.monotonic() < fin:
+            time.sleep(0.05)
+            listo, resultado = m.recoger()
+        assert listo
+        assert not isinstance(resultado, Exception), resultado
+        assert resultado == medicion.calibrar(mic, refs, sr)
+    finally:
+        m.cerrar()

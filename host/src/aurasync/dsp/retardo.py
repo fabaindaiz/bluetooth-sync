@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from aurasync.dsp import interpolation
+
 SR = 48000
 VELOCIDAD_POR_DEFECTO_MS_S = 0.5
 """Cuánto puede moverse el retardo por segundo, en ms. Ver el módulo para por qué no se oye."""
@@ -41,14 +43,22 @@ class LineaDeRetardo:
         retardo_ms: float = 0.0,
         maximo_ms: float = 250.0,
         velocidad_ms_s: float = VELOCIDAD_POR_DEFECTO_MS_S,
+        *,
+        sinc: bool = False,
     ) -> None:
+        """`sinc`: lectura fraccionaria de banda limitada (`dsp/interpolation.py`), que no le
+        quita agudos al sonido, a cambio de `interpolation.HALF` muestras de latencia fija.
+        La lineal (por defecto) deja exacto el retardo pedido, sin latencia extra: es la que
+        usan la sesión para sus referencias y los tests de exactitud."""
         if retardo_ms < 0 or retardo_ms > maximo_ms:
             msg = f"el retardo inicial {retardo_ms} ms está fuera de [0, {maximo_ms}]"
             raise ValueError(msg)
         self.sr = sr
         self.maximo_ms = maximo_ms
         self.velocidad_ms_s = velocidad_ms_s
-        self._maximo_muestras = int(np.ceil(sr * maximo_ms / 1000)) + 2
+        self.sinc = sinc
+        self.latencia_fija = interpolation.HALF if sinc else 0
+        self._maximo_muestras = int(np.ceil(sr * maximo_ms / 1000)) + 2 + 2 * self.latencia_fija
         self._actual = sr * retardo_ms / 1000
         self._objetivo = self._actual
         self._historia = np.zeros(self._maximo_muestras)
@@ -103,7 +113,13 @@ class LineaDeRetardo:
 
         datos = np.concatenate([self._historia, x])
         base = len(self._historia)
-        posicion = base + np.arange(n) - d
+        posicion = base + np.arange(n) - d - self.latencia_fija
+        if self.sinc:
+            # La historia alcanza para la mitad del núcleo antes; después hay `latencia_fija`.
+            posicion = np.clip(posicion, interpolation.HALF - 1, len(datos) - 1 - interpolation.HALF)
+            salida = interpolation.read(datos, posicion)
+            self._historia = datos[-len(self._historia) :]
+            return salida
         # La historia tiene el largo del retardo máximo más dos, así que la posición nunca
         # cae antes del principio; el `clip` es solo una red por si alguien cambia el máximo.
         posicion = np.clip(posicion, 0, len(datos) - 1)

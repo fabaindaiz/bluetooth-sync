@@ -196,3 +196,128 @@ def test_distingue_un_monitor_de_un_microfono():
         "alsa_input.usb-3142_fifine": False,
         "alsa_output.pci-0000_30_00.6.analog-stereo.monitor": True,
     }
+
+
+def test_el_reproductor_combinado_reparte_un_canal_por_parlante():
+    """La configuración del sink combinado: un canal AUXn por parlante, sin compensar
+    latencias por su cuenta (eso lo mide la calibración) y sin que nada se pueda mover."""
+    from aurasync.sonido import ReproductorCombinado
+
+    r = ReproductorCombinado(["bluez_output.A.1", "bluez_output.B.1"], nombre="x_salida")
+    conf = r.configuracion()
+    assert 'node.name = "x_salida"' in conf
+    assert "combine.latency-compensate = false" in conf
+    assert 'node.name = "bluez_output.A.1" } ] actions = { create-stream = { combine.audio.position = [ AUX0 ]' in conf
+    assert "combine.audio.position = [ AUX1 ]" in conf
+    assert conf.count("node.dont-move = true") == 3
+
+
+def test_el_reproductor_combinado_intercala_y_silencia_a_los_perdidos():
+    import io
+
+    import numpy as np
+
+    from aurasync.sonido import ReproductorCombinado
+
+    class Falso:
+        def __init__(self):
+            self.stdin = io.BytesIO()
+
+        def poll(self):
+            return None
+
+    r = ReproductorCombinado(["a", "b", "c"])
+    r._play = Falso()  # noqa: SLF001
+    r.soltar("b")
+    r.escribir({"a": np.full(2, 0.5), "b": np.full(2, 0.5), "c": np.full(2, -0.5)})
+    datos = np.frombuffer(r._play.stdin.getvalue(), "<f4").reshape(-1, 3)  # noqa: SLF001
+    assert datos[:, 0].tolist() == [0.5, 0.5]
+    assert datos[:, 1].tolist() == [0.0, 0.0]
+    assert datos[:, 2].tolist() == [-0.5, -0.5]
+    assert r.vivos == ["a", "c"]
+
+
+def test_los_xruns_se_leen_por_destino_y_de_la_ultima_vuelta():
+    from aurasync.system import parse_xruns
+
+    top = """S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME
+R  184   9600  48000  13,0ms  10,5us  0,30  0,00  1207    S16LE 3 48000  = pw-play
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME
+R  184      0      0   0,0us   0,0us  ???   ???     0    S16LE 3 48000 pw-play
+R  184   9600  48000  13,0ms  10,5us  0,30  0,00  1324    S16LE 3 48000  = pw-play
+"""
+    dump = [
+        {
+            "id": 184,
+            "type": "PipeWire:Interface:Node",
+            "info": {"props": {"application.name": "pw-play", "target.object": "aurasync_salida"}},
+        }
+    ]
+    assert parse_xruns(top, dump) == {"aurasync_salida": 1324}
+
+
+def test_el_sink_virtual_no_pierde_ni_corre_muestras_si_la_lectura_llega_cortada():
+    """Una lectura que termina a mitad de un marco no debe cambiar L por R en lo que sigue."""
+    import os
+
+    leer, escribir = os.pipe()
+    sv = sonido.SinkVirtual()
+
+    class Falso:
+        stdout = os.fdopen(leer, "rb")
+
+        def poll(self):
+            return None
+
+    sv._proceso = Falso()  # noqa: SLF001
+    marcos = np.array([[0.25, -0.25], [0.5, -0.5], [0.75, -0.75]], dtype="<f4").tobytes()
+    os.write(escribir, marcos[:13])  # un marco y medio, cortado dentro de una muestra
+    izq, der = sv.leer(3)
+    assert izq.tolist() == [0.25]
+    assert der.tolist() == [-0.25]
+    os.write(escribir, marcos[13:])
+    izq, der = sv.leer(2)
+    assert izq.tolist() == [0.5, 0.75]
+    assert der.tolist() == [-0.5, -0.75]
+    os.close(escribir)
+    sv._proceso = None  # noqa: SLF001
+
+
+def test_bluez_devices_come_from_dbus_with_battery():
+    import json
+
+    from aurasync.system import parse_bluez_discovering, parse_bluez_objects
+
+    sink = "0000110b-0000-1000-8000-00805f9b34fb"
+    data = {
+        "type": "a{oa{sa{sv}}}",
+        "data": [
+            {
+                "/org/bluez/hci0": {"org.bluez.Adapter1": {"Discovering": {"type": "b", "data": True}}},
+                "/org/bluez/hci0/dev_A": {
+                    "org.bluez.Device1": {
+                        "Address": {"type": "s", "data": "AA:AA:AA:AA:AA:AA"},
+                        "Name": {"type": "s", "data": "Go 4"},
+                        "Paired": {"type": "b", "data": True},
+                        "Connected": {"type": "b", "data": True},
+                        "UUIDs": {"type": "as", "data": [sink]},
+                    },
+                    "org.bluez.Battery1": {"Percentage": {"type": "y", "data": 64}},
+                },
+                "/org/bluez/hci0/dev_K": {
+                    "org.bluez.Device1": {
+                        "Address": {"type": "s", "data": "BB:BB:BB:BB:BB:BB"},
+                        "Name": {"type": "s", "data": "Teclado"},
+                        "UUIDs": {"type": "as", "data": ["00001124-0000-1000-8000-00805f9b34fb"]},
+                    }
+                },
+            }
+        ],
+    }
+    text = json.dumps(data)
+    devices = parse_bluez_objects(text)
+    assert [d["name"] for d in devices] == ["Go 4"]
+    assert devices[0]["battery_pct"] == 64
+    assert devices[0]["connected"]
+    assert parse_bluez_discovering(text)
+    assert parse_bluez_objects("no es json") == []

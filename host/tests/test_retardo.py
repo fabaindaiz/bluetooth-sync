@@ -161,3 +161,24 @@ def test_procesar_por_bloques_equivale_a_procesar_de_una_vez():
 def test_un_bloque_vacio_no_rompe():
     linea = LineaDeRetardo(SR, retardo_ms=5.0)
     assert len(linea.procesar(np.zeros(0))) == 0
+
+
+def test_la_lectura_de_banda_limitada_no_le_quita_agudos_a_ningun_retardo():
+    """La lineal le quitaba 3,5 dB a 12,7 kHz a medio camino entre muestras."""
+    t = np.arange(SR // 2) / SR
+    for retardo_ms in (0.0, 13.56, 11.59, 10.0 + 0.5 / SR * 1000):
+        for f in (1000.0, 8000.0, 12700.0, 16000.0):
+            linea = LineaDeRetardo(SR, retardo_ms=retardo_ms, sinc=True)
+            y = linea.procesar(np.sin(2 * np.pi * f * t))
+            amplitud = np.sqrt(2) * y[SR // 8 :].std()
+            assert abs(20 * np.log10(amplitud)) < 0.05, (retardo_ms, f, amplitud)
+
+
+def test_la_lectura_de_banda_limitada_es_exacta_en_retardos_enteros():
+    linea = LineaDeRetardo(SR, retardo_ms=1.0, sinc=True)
+    pulso = np.zeros(1000)
+    pulso[10] = 1.0
+    y = linea.procesar(pulso)
+    assert int(np.argmax(y)) == 10 + 48 + linea.latencia_fija
+    assert np.isclose(y.max(), 1.0)
+    assert np.count_nonzero(np.abs(y) > 1e-9) == 1

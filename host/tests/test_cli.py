@@ -180,9 +180,32 @@ def test_run_acepta_las_opciones_de_la_prueba_de_audio():
     assert args.registro == "/tmp/x.jsonl"
 
 
-def test_calibrate_y_run_comparten_el_microfono_por_defecto():
-    from aurasync.cli import MICROFONO_POR_DEFECTO, build_parser
+def test_el_microfono_se_resuelve_en_orden(tmp_path, monkeypatch):
+    """`--microfono`, después `service.json`, después la fuente por defecto (spec §4.3)."""
+    import json
 
-    parser = build_parser()
-    assert parser.parse_args(["calibrate"]).microfono == MICROFONO_POR_DEFECTO
-    assert parser.parse_args(["run"]).microfono == MICROFONO_POR_DEFECTO
+    from aurasync import cli, sonido
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(sonido, "microfono_por_defecto", lambda: "el.del.sistema")
+    parser = cli.build_parser()
+
+    assert cli.resolver_microfono(parser.parse_args(["calibrate"])) == "el.del.sistema"
+    (tmp_path / "aurasync").mkdir()
+    (tmp_path / "aurasync" / "service.json").write_text(json.dumps({"microphone": "el.del.servicio"}))
+    assert cli.resolver_microfono(parser.parse_args(["run"])) == "el.del.servicio"
+    assert cli.resolver_microfono(parser.parse_args(["calibrate", "--microfono", "el.pedido"])) == "el.pedido"
+
+
+def test_la_fuente_por_defecto_no_vale_si_es_un_monitor(monkeypatch):
+    import subprocess
+
+    from aurasync import sonido
+
+    def falso(salida):
+        return lambda *a, **_: subprocess.CompletedProcess(a, 0, stdout=salida, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", falso("alsa_output.pci.analog-stereo.monitor\n"))
+    assert sonido.microfono_por_defecto() is None
+    monkeypatch.setattr(subprocess, "run", falso("alsa_input.usb-fifine.analog-stereo\n"))
+    assert sonido.microfono_por_defecto() == "alsa_input.usb-fifine.analog-stereo"

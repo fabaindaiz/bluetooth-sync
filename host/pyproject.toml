@@ -22,6 +22,10 @@ dependencies = [
   # ajuste por mínimos cuadrados) está en numpy, y scipy es una dependencia pesada que
   # en la Raspberry Pi de la Fase 3 costaría compilar.
   "numpy>=2.0",
+  # El QR del panel para abrirlo desde el teléfono (spec del servicio §15). Python puro,
+  # sin dependencias; es la que eligió el diseño del panel (docs/research/09-panel… en la
+  # rama panel-demo).
+  "segno==1.6.6",
 ]
 
 [project.scripts]
@@ -44,6 +48,34 @@ installer = "uv"
 [[tool.hatch.envs.hatch-test.matrix]]
 python = ["3.12"]
 
+# El panel en navegadores reales (Playwright 1.60.0, como en la rama panel-demo). Usa el
+# caché de navegadores de Playwright (`hatch run browser:install`). Va fuera de
+# scripts/check.sh porque necesita esos navegadores instalados.
+[tool.hatch.envs.browser]
+installer = "uv"
+python = "3.12"
+extra-dependencies = ["playwright==1.60.0", "pytest==9.1.1"]
+
+[tool.hatch.envs.browser.scripts]
+install = "python -m playwright install chromium firefox"
+test = "pytest tests_browser {args}"
+
+# El CSS del panel se compila con el CLI de Tailwind, sin Node: `pytailwindcss` baja el
+# binario oficial de la versión fijada. El CSS generado (`panel/tailwind.css`) se versiona,
+# así el servicio no depende de nada en tiempo de ejecución ni de internet (el teléfono
+# abre el panel en la red local). Después de tocar clases: `hatch run web:css`.
+[tool.hatch.envs.web]
+installer = "uv"
+python = "3.12"
+skip-install = true
+dependencies = ["pytailwindcss==0.3.1"]
+
+[tool.hatch.envs.web.env-vars]
+TAILWINDCSS_VERSION = "v4.3.3"
+
+[tool.hatch.envs.web.scripts]
+css = "tailwindcss -i src/aurasync/panel/tailwind.input.css -o src/aurasync/panel/tailwind.css --minify"
+
 [tool.ruff.lint.per-file-ignores]
 # OJO: esta tabla **reemplaza** la que trae hatch, no la extiende. Por eso hay que repetir
 # acá las exenciones de los tests, o aparecen 127 errores por usar `assert`.
@@ -57,3 +89,14 @@ python = ["3.12"]
 # PATH y su ubicación cambia entre distribuciones. Fijarla rompería la portabilidad sin
 # ganar nada, porque el usuario ya controla su propio PATH.
 "src/aurasync/sonido.py" = ["S607"]
+# El contrato del servicio de control (spec 2026-09-29): `ContractError(code, message)` lleva
+# un código estable como primer argumento y el mensaje es para quien llama, no un texto que
+# convenga repetir en una variable. EM y TRY003 piden lo contrario en cada `raise`.
+"src/aurasync/{control,presets,service,rest,session}.py" = ["EM101", "EM102", "TRY003"]
+# Las fuentes y el observador llaman a pw-play, pactl, systemctl y bluetoothctl por nombre,
+# por la misma razón que sonido.py; y sus errores son mensajes para el panel.
+"src/aurasync/{sources,system}.py" = ["S607", "EM101", "EM102", "TRY003"]
+# El servicio llama a `ip` y a `pipewire --version` por nombre, igual que sonido.py.
+"src/aurasync/service.py" = ["S607"]
+# Los tests de navegador siguen las mismas excepciones que hatch da a tests/.
+"tests_browser/**/*" = ["ARG001", "PLC0415", "PLR2004", "PLR6301", "S", "TC003", "TID252"]

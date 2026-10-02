@@ -13,16 +13,28 @@ Todo pasa por las herramientas de línea de comandos de PipeWire (`pw-dump`, `pw
 PipeWire, y de hecho los probes lo hicieron así, pero entonces el reparto de canales lo
 decide `libpipewire-module-combine-stream` y no este programa: el retardo y la ganancia por
 parlante quedarían fuera de nuestro alcance. Con un proceso por parlante, el motor manda
-exactamente lo que cada uno tiene que reproducir. Los N streams siguen el mismo reloj del
-grafo de PipeWire, así que no se desalinean entre sí por este motivo.
+exactamente lo que cada uno tiene que reproducir.
+
+**Corrección del 2026-10-01: "los N streams siguen el mismo reloj" era falso.** Cada sink
+Bluetooth es su propio driver en PipeWire. Con un `pw-play` por parlante, la diferencia de
+reloj se acumulaba en cada tubería y se liberaba como saltos de exactamente un cuantum
+(2048 muestras, 42,67 ms) en un solo parlante (MEDIDO, experimentos/10 §5). Por eso la
+salida por defecto es ahora `ReproductorCombinado`: el motor sigue decidiendo qué recibe
+cada parlante —cada canal del stream ya viene procesado—, y combine-stream solo lo reparte,
+con un reloj y remuestreo adaptativo. `Reproductor` queda para comparar.
 """
 
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import json
+import re
 import select
+import struct
 import subprocess
+import termios
+import time
 import wave
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
@@ -116,6 +128,53 @@ def entradas_audio() -> list[EntradaAudio]:
     return leer_entradas(_pw_dump())
 
 
+def leer_nombres_de_nodo(objetos: list) -> set[str]:
+    """Los `node.name` de todos los nodos de una salida de `pw-dump` ya parseada."""
+    nombres = set()
+    for objeto in objetos:
+        if not str(objeto.get("type", "")).endswith("Node"):
+            continue
+        nombre = ((objeto.get("info") or {}).get("props") or {}).get("node.name")
+        if nombre:
+            nombres.add(str(nombre))
+    return nombres
+
+
+def nodo_existe(nombre: str) -> bool:
+    """Si ya hay un nodo de PipeWire con ese nombre.
+
+    Lo usa una sesión antes de crear su sink virtual: `run` y el servicio crearían dos
+    sinks con el mismo nombre, y WirePlumber podría mandarle audio al equivocado.
+    """
+    return nombre in leer_nombres_de_nodo(_pw_dump())
+
+
+def bytes_en_tuberia(archivo) -> int | None:
+    """Cuántos bytes esperan en una tubería (FIONREAD vale en cualquiera de sus dos puntas)."""
+    try:
+        return struct.unpack("i", fcntl.ioctl(archivo.fileno(), termios.FIONREAD, b"\0\0\0\0"))[0]
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def fijar_volumen_completo(sink: str) -> bool:
+    """Pone un sink al 100 % y sin silenciar, y dice si quedó así (se comprueba, no se supone)."""
+    subprocess.run(["pactl", "set-sink-volume", sink, "100%"], capture_output=True, check=False)
+    subprocess.run(["pactl", "set-sink-mute", sink, "0"], capture_output=True, check=False)
+    salida = subprocess.run(["pactl", "get-sink-volume", sink], capture_output=True, text=True, check=False).stdout
+    porcentajes = re.findall(r"(\d+)%", salida)
+    return bool(porcentajes) and all(v == "100" for v in porcentajes)
+
+
+def microfono_por_defecto() -> str | None:
+    """La fuente por defecto de PipeWire, si es un micrófono y no el monitor de una salida."""
+    salida = subprocess.run(["pactl", "get-default-source"], capture_output=True, text=True, check=False)
+    nodo = salida.stdout.strip()
+    if salida.returncode != 0 or not nodo or EntradaAudio(nodo, nodo).es_monitor:
+        return None
+    return nodo
+
+
 def salidas_bluetooth() -> list[SalidaBluetooth]:
     """Los parlantes Bluetooth conectados ahora mismo."""
     return leer_salidas(_pw_dump())
@@ -134,13 +193,23 @@ def codecs_mezclados(salidas: list[SalidaBluetooth]) -> bool:
 class Reproductor:
     """Manda audio a varios parlantes a la vez, uno por proceso."""
 
-    def __init__(self, nodos: list[str], sr: int = SR, latencia_ms: int = 200) -> None:
+    def __init__(self, nodos: list[str], sr: int = SR, latencia_ms: int = 200, tuberia_ms: float | None = None) -> None:
+        """`tuberia_ms` limita lo que se acumula en la tubería hacia cada `pw-play`.
+
+        **Por defecto Linux le da 64 KB, que en mono a 48 kHz son 0,68 s de audio**, y esa
+        tubería se llena porque el motor escribe más rápido que lo que suena. Medido el
+        2026-10-01 con micrófono: lo escrito tardaba ~1,03 s en sonar. El colchón contra
+        cortes ya lo da el buffer de `pw-play` (`latencia_ms`); la tubería solo sumaba
+        retraso. `None` deja el valor del sistema.
+        """
         if not nodos:
             msg = "no se indicó ningún parlante"
             raise ValueError(msg)
         self.nodos = nodos
         self.sr = sr
         self.latencia_ms = latencia_ms
+        self.tuberia_ms = tuberia_ms
+        self.tuberia_bytes: int | None = None
         self._procesos: dict[str, subprocess.Popen] = {}
 
     def __enter__(self) -> Self:
@@ -155,9 +224,20 @@ class Reproductor:
                     "--channels",
                     "1",
                     "--format",
-                    "s16",
+                    "f32",
                     "--latency",
                     f"{self.latencia_ms}ms",
+                    # **Que WirePlumber no pueda mover este stream.** Al aparecer el sink
+                    # `aurasync`, WirePlumber lo pone como salida por defecto (lo recuerda en
+                    # ~/.local/state/wireplumber/default-nodes) y se lleva el stream que iba a
+                    # la salida por defecto anterior, aunque tenga `--target`. MEDIDO el
+                    # 2026-10-01: sin esto, con Red como salida por defecto, su stream terminaba
+                    # en `aurasync` en cada arranque; con `node.dont-move` se queda en Red.
+                    # `dont-reconnect`: si el parlante desaparece, el stream no se engancha a otra
+                    # salida. `dont-fallback`: si el parlante no existe al arrancar, no va a la
+                    # salida por defecto (el lazo de realimentación de experimentos/09).
+                    "-P",
+                    "{ node.dont-move = true node.dont-reconnect = true node.dont-fallback = true }",
                     "--raw",
                     "-",
                 ],
@@ -165,6 +245,11 @@ class Reproductor:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            if self.tuberia_ms is not None and self._procesos[nodo].stdin is not None:
+                pedido = max(4096, int(self.sr * 4 * self.tuberia_ms / 1000))
+                with contextlib.suppress(OSError):
+                    # El núcleo redondea hacia arriba a páginas de 4 KB.
+                    self.tuberia_bytes = fcntl.fcntl(self._procesos[nodo].stdin.fileno(), fcntl.F_SETPIPE_SZ, pedido)
         return self
 
     def __exit__(self, *_) -> None:
@@ -207,7 +292,7 @@ class Reproductor:
                     enlaces[int(salida)] = int(entrada)
 
         resultado: dict[str, str | None] = {}
-        for nodo, proceso in self._procesos.items():
+        for nodo, proceso in list(self._procesos.items()):
             cliente = cliente_de_pid.get(proceso.pid)
             stream = next(
                 (
@@ -268,19 +353,49 @@ class Reproductor:
             subprocess.run(["pactl", "move-sink-input", str(indice), nodo], capture_output=True, check=False)
         return perdidos
 
+    def nivel_ms(self) -> float | None:
+        """El menor nivel entre las tuberías de los parlantes, en ms."""
+        niveles = [
+            n / 4 / self.sr * 1000
+            for p in self._procesos.values()
+            if p is not None and p.stdin is not None and (n := bytes_en_tuberia(p.stdin)) is not None
+        ]
+        return min(niveles) if niveles else None
+
     def escribir(self, bloques: dict[str, np.ndarray]) -> None:
         """Un bloque mono por parlante. Las claves son nombres de nodo."""
         for nodo, x in bloques.items():
             proceso = self._procesos.get(nodo)
             if proceso is None or proceso.stdin is None:
                 continue
-            pcm = (np.clip(x, -1.0, 1.0) * 32767).astype("<i2")
+            # Flotante de 32 bits: con el volumen bajo, en 16 bits la música perdía resolución.
+            pcm = np.clip(x, -1.0, 1.0).astype("<f4")
             try:
                 proceso.stdin.write(pcm.tobytes())
             except BrokenPipeError:
                 # El parlante se desconectó. No se corta la reproducción de los demás: en
                 # una instalación es preferible seguir sonando con los que quedan.
                 self._procesos.pop(nodo, None)
+
+    def soltar(self, nodo: str) -> None:
+        """Cierra el stream de un parlante y sigue con los demás.
+
+        Para un parlante que se apagó: su `pw-play` no siempre muere, y WirePlumber puede
+        mover el stream huérfano a otra salida —los parlantes del equipo, o el propio sink
+        virtual, que es el lazo de realimentación de experimentos/09—. Cerrarlo es lo único
+        que garantiza que ese audio no suene en otro lado.
+        """
+        proceso = self._procesos.pop(nodo, None)
+        if proceso is None:
+            return
+        if proceso.stdin is not None:
+            with contextlib.suppress(BrokenPipeError):
+                proceso.stdin.close()
+        proceso.terminate()
+        try:
+            proceso.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proceso.kill()
 
     def cerrar(self) -> None:
         for proceso in self._procesos.values():
@@ -297,6 +412,210 @@ class Reproductor:
     @property
     def vivos(self) -> list[str]:
         return [n for n, p in self._procesos.items() if p.poll() is None]
+
+    @property
+    def pids(self) -> dict[str, int]:
+        """El pid de cada `pw-play` vivo, por nodo. Para el panel."""
+        return {n: p.pid for n, p in list(self._procesos.items()) if p.poll() is None}
+
+
+class ReproductorCombinado:
+    """Lo mismo que `Reproductor`, pero **un solo stream de N canales** con un solo reloj.
+
+    **Por qué existe** (MEDIDO el 2026-10-01, experimentos/10 §5). Cada sink Bluetooth es su
+    propio *driver* en PipeWire, con su propio reloj. Con un `pw-play` por parlante, la
+    diferencia de ritmo entre el sink virtual (por donde entra el audio) y cada parlante se
+    acumula en su tubería, hasta que ese `pw-play` se queda sin datos un cuantum entero
+    (xruns en `pw-top`). Resultado: saltos de exactamente 2048 muestras (42,67 ms) en **un**
+    parlante, que lo desalinean de los demás.
+
+    Acá el motor escribe un solo stream de N canales (cada canal ya es la señal de un
+    parlante) a un sink de `libpipewire-module-combine-stream`, que lo reparte con remuestreo
+    adaptativo por salida: la diferencia de reloj se corrige de a poco, no a saltos. Y si el
+    stream se queda sin datos, les pasa a todos a la vez y no los desalinea. Es el mecanismo
+    con el que E6 midió "pocos ms" (experimentos/05).
+
+    El módulo vive en un `pw-cli -m` hijo: muere con el proceso y no deja nada (P1).
+    """
+
+    def __init__(
+        self,
+        nodos: list[str],
+        sr: int = SR,
+        latencia_ms: int = 200,
+        tuberia_ms: float | None = None,
+        nombre: str = "aurasync_salida",
+    ) -> None:
+        if not nodos:
+            msg = "no se indicó ningún parlante"
+            raise ValueError(msg)
+        self.nodos = nodos
+        self.sr = sr
+        self.latencia_ms = latencia_ms
+        self.tuberia_ms = tuberia_ms
+        self.nombre = nombre
+        self.canales = [f"AUX{i}" for i in range(len(nodos))]
+        self._modulo: subprocess.Popen | None = None
+        self._play: subprocess.Popen | None = None
+        self._soltados: set[str] = set()
+        self.volumen_completo: bool | None = None
+
+    def configuracion(self) -> str:
+        reglas = " ".join(
+            f'{{ matches = [ {{ node.name = "{nodo}" }} ] actions = {{ create-stream = {{ '
+            f"combine.audio.position = [ {canal} ] audio.position = [ MONO ] "
+            f"node.dont-reconnect = true node.dont-move = true }} }} }}"
+            for nodo, canal in zip(self.nodos, self.canales, strict=True)
+        )
+        return (
+            f'{{ combine.mode = sink node.name = "{self.nombre}" node.description = "aurasync (salida a los parlantes)" '
+            f"combine.latency-compensate = false "
+            f"combine.props = {{ audio.position = [ {' '.join(self.canales)} ] node.dont-move = true }} "
+            f"stream.rules = [ {reglas} ] }}"
+        )
+
+    def __enter__(self) -> Self:
+        self._modulo = subprocess.Popen(
+            ["pw-cli", "-m", "load-module", "libpipewire-module-combine-stream", self.configuracion()],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        for _ in range(60):
+            if nodo_existe(self.nombre):
+                break
+            time.sleep(0.05)
+        else:
+            self.cerrar()
+            msg = f"no apareció el sink combinado {self.nombre!r}"
+            raise RuntimeError(msg)
+        # El sink combinado tiene que estar al 100 %: el volumen lo pone el motor. WirePlumber
+        # le restauraba uno guardado (MEDIDO el 2026-10-01: 46 %, -20 dB, que se sumaban al
+        # volumen del panel y la música sonaba apagada). Se fija y se comprueba.
+        self.volumen_completo = fijar_volumen_completo(self.nombre)
+        self._play = subprocess.Popen(
+            [
+                "pw-play",
+                "--target",
+                self.nombre,
+                "--rate",
+                str(self.sr),
+                "--channels",
+                str(len(self.nodos)),
+                "--channel-map",
+                ",".join(self.canales),
+                "--format",
+                "f32",
+                "--latency",
+                f"{self.latencia_ms}ms",
+                "-P",
+                "{ node.dont-move = true node.dont-reconnect = true node.dont-fallback = true }",
+                "--raw",
+                "-",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if self.tuberia_ms is not None and self._play.stdin is not None:
+            pedido = max(4096, int(self.sr * 4 * len(self.nodos) * self.tuberia_ms / 1000))
+            with contextlib.suppress(OSError):
+                fcntl.fcntl(self._play.stdin.fileno(), fcntl.F_SETPIPE_SZ, pedido)
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.cerrar()
+
+    def nivel_ms(self) -> float | None:
+        """Cuánto audio espera en la tubería hacia `pw-play`, en ms. 0: los parlantes se
+        quedan sin nada que tocar."""
+        if self._play is None or self._play.stdin is None:
+            return None
+        n = bytes_en_tuberia(self._play.stdin)
+        return None if n is None else n / (4 * len(self.nodos)) / self.sr * 1000
+
+    def escribir(self, bloques: dict[str, np.ndarray]) -> None:
+        """Un bloque mono por parlante; se intercalan en un solo stream de N canales."""
+        if self._play is None or self._play.stdin is None:
+            return
+        n = len(next(iter(bloques.values()))) if bloques else 0
+        marco = np.zeros((n, len(self.nodos)))
+        for i, nodo in enumerate(self.nodos):
+            if nodo in bloques and nodo not in self._soltados:
+                marco[:, i] = bloques[nodo]
+        pcm = np.clip(marco, -1.0, 1.0).astype("<f4")
+        try:
+            self._play.stdin.write(pcm.tobytes())
+        except BrokenPipeError:
+            self._play = None
+
+    def destinos_reales(self) -> dict[str, str | None]:
+        """A qué parlante llega de verdad cada salida del sink combinado, y si el stream de
+        entrada llega al sink combinado. La clave es el parlante pedido."""
+        objetos = _pw_dump()
+        nodos = {
+            o["id"]: (o.get("info") or {}).get("props") or {} for o in objetos if str(o.get("type")).endswith("Node")
+        }
+        nombre = {i: str(p.get("node.name", "")) for i, p in nodos.items()}
+        enlaces: dict[int, set[int]] = {}
+        for o in objetos:
+            props = (o.get("info") or {}).get("props") or {}
+            if str(o.get("type")).endswith("Link") and "link.output.node" in props:
+                enlaces.setdefault(int(props["link.output.node"]), set()).add(int(props["link.input.node"]))
+        combinado = {i for i, n in nombre.items() if n == self.nombre}
+        entra = self._play is not None and any(
+            combinado & destinos
+            for i, destinos in enlaces.items()
+            if str(nodos[i].get("application.process.id", "")) == str(self._play.pid)
+            or nodos[i].get("target.object") == self.nombre
+        )
+        resultado: dict[str, str | None] = {}
+        for nodo in self.nodos:
+            salida = next((i for i, n in nombre.items() if n.startswith(f"output.{self.nombre}") and nodo in n), None)
+            destinos = [nombre.get(d) for d in enlaces.get(salida, set())] if salida is not None else []
+            resultado[nodo] = (nodo if nodo in destinos else (destinos[0] if destinos else None)) if entra else None
+        return resultado
+
+    def mal_ruteados(self) -> dict[str, str | None]:
+        return {pedido: real for pedido, real in self.destinos_reales().items() if real != pedido}
+
+    def reparar_ruteo(self) -> dict[str, str | None]:
+        """Nada que mover: las salidas del sink combinado no se pueden mover (`dont-move`)."""
+        return self.mal_ruteados()
+
+    def soltar(self, nodo: str) -> None:
+        """El parlante se perdió: su canal pasa a silencio y deja de contarse como vivo."""
+        self._soltados.add(nodo)
+
+    def cerrar(self) -> None:
+        if self._play is not None:
+            if self._play.stdin is not None:
+                with contextlib.suppress(BrokenPipeError):
+                    self._play.stdin.close()
+            try:
+                self._play.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._play.kill()
+            self._play = None
+        if self._modulo is not None:
+            self._modulo.terminate()
+            try:
+                self._modulo.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._modulo.kill()
+            self._modulo = None
+
+    @property
+    def vivos(self) -> list[str]:
+        if self._play is None or self._play.poll() is not None:
+            return []
+        return [n for n in self.nodos if n not in self._soltados]
+
+    @property
+    def pids(self) -> dict[str, int]:
+        if self._play is None or self._play.poll() is not None:
+            return {}
+        return dict.fromkeys(self.vivos, self._play.pid)
 
 
 class SinkVirtual:
@@ -328,6 +647,7 @@ class SinkVirtual:
         self.descripcion = descripcion
         self.sr = sr
         self._proceso: subprocess.Popen | None = None
+        self._resto = b""
 
     def __enter__(self) -> Self:
         propiedades = (
@@ -343,8 +663,10 @@ class SinkVirtual:
                 str(self.sr),
                 "--channels",
                 "2",
+                # Flotante: en 16 bits, con la aplicación a volumen bajo, la música llegaba
+                # al motor con pocos bits (2026-10-01).
                 "--format",
-                "s16",
+                "f32",
                 "--raw",
                 "-",
             ],
@@ -366,6 +688,11 @@ class SinkVirtual:
             self._proceso.kill()
         self._proceso = None
 
+    @property
+    def pid(self) -> int | None:
+        p = self._proceso
+        return p.pid if p is not None and p.poll() is None else None
+
     def leer(self, muestras: int, espera_s: float = 0.05) -> tuple[np.ndarray, np.ndarray] | None:
         """Un bloque estéreo, o `None` si no hay nada reproduciéndose todavía.
 
@@ -374,7 +701,8 @@ class SinkVirtual:
         """
         if self._proceso is None or self._proceso.stdout is None:
             return None
-        faltan = muestras * 2 * 2  # dos canales, dos bytes
+        marco_bytes = 2 * 4  # dos canales, f32
+        faltan = muestras * marco_bytes - len(self._resto)
         trozos: list[bytes] = []
         while faltan > 0:
             listos, _, _ = select.select([self._proceso.stdout], [], [], espera_s)
@@ -385,12 +713,15 @@ class SinkVirtual:
                 break
             trozos.append(leido)
             faltan -= len(leido)
-        crudo = b"".join(trozos)
-        if not crudo:
+        crudo = self._resto + b"".join(trozos)
+        # Un bloque puede llegar cortado, incluso a mitad de una muestra: se usan los marcos
+        # enteros y los bytes que sobran quedan para la próxima lectura. Antes se tiraban, y
+        # una lectura cortada a mitad de marco corría todo lo que seguía (L y R cambiados).
+        enteros = len(crudo) // marco_bytes * marco_bytes
+        self._resto = crudo[enteros:]
+        if enteros == 0:
             return None
-        marco = np.frombuffer(crudo, dtype="<i2").astype(float) / 32768
-        # Un bloque puede llegar cortado; se usa lo que haya y el resto llega después.
-        marco = marco[: (len(marco) // 2) * 2].reshape(-1, 2)
+        marco = np.frombuffer(crudo[:enteros], dtype="<f4").astype(float).reshape(-1, 2)
         return marco[:, 0], marco[:, 1]
 
 
@@ -451,6 +782,11 @@ class MicrofonoContinuo:
         except subprocess.TimeoutExpired:
             self._proceso.kill()
         self._proceso = None
+
+    @property
+    def pid(self) -> int | None:
+        p = self._proceso
+        return p.pid if p is not None and p.poll() is None else None
 
     def bombear(self, espera_s: float = 0.0) -> int:
         """Pasa al anillo todo lo que haya llegado. Devuelve cuántas muestras entraron."""

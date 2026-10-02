@@ -28,32 +28,55 @@ from __future__ import annotations
 
 import numpy as np
 
-LARGO_POR_DEFECTO = 128
-"""Largo del filtro en muestras. El paper usa ~100 polos y ceros; 128 es la potencia de
-dos más cercana, que hace la convolución por FFT más barata."""
+LARGO_POR_DEFECTO = 256
+"""Largo del filtro en muestras (5,3 ms a 48 kHz). Subió de 128 a 256 el 2026-10-01: con fase
+suave (ver `filtro_todo_paso`) hace falta lugar para un retardo de grupo que varía entre
+1 y 4 ms."""
+
+RETARDO_MEDIO_MS = 2.5
+"""El retardo de grupo medio, **igual en todos los filtros**: así el decorrelador no corre a un
+parlante respecto de otro, que era otro efecto lateral del diseño anterior (hasta 1-2 ms)."""
+VARIACION_MS = 1.5
+"""Cuánto se aparta el retardo de grupo del medio, de una frecuencia a otra."""
+SUAVIZADO_BINS = 6
+"""Ancho del suavizado del retardo de grupo, en bins: lo que hace que la fase no salte."""
 
 MAXIMO_FIJOS = 6
 """Cuántas salidas totalmente decorrelacionadas se pueden sacar con filtros fijos."""
 
 
-def filtro_todo_paso(largo: int = LARGO_POR_DEFECTO, semilla: int | None = None) -> np.ndarray:
-    """Un filtro FIR todo-paso con fase aleatoria.
+def filtro_todo_paso(largo: int = LARGO_POR_DEFECTO, semilla: int | None = None, sr: int = 48000) -> np.ndarray:
+    """Un filtro FIR todo-paso con fase aleatoria **y suave**.
 
-    Se construye en frecuencia: magnitud exactamente 1 en todos los bins y fase aleatoria,
-    con simetría hermítica para que la respuesta al impulso sea real. Así el filtro no
-    colorea —la magnitud del espectro de la señal no cambia— y solo revuelve la fase.
+    **Por qué suave, y qué falló antes** (MEDIDO el 2026-10-01, experimentos/10 §6). La versión
+    anterior ponía magnitud 1 y una fase independiente al azar en cada uno de sus bins de
+    diseño. Era exactamente plana *en esos bins*, pero entre ellos —que es donde está casi
+    toda la música— la fase saltaba y la respuesta tenía huecos de hasta 46 dB (±9,5 dB en
+    tercios de octava): un ecualizador al azar distinto en cada parlante. El test que la
+    validaba miraba solo los bins de diseño.
+
+    Ahora lo aleatorio es el **retardo de grupo**: ruido suavizado entre bins, con media
+    `RETARDO_MEDIO_MS` y apartamiento `VARIACION_MS`, y la fase es su integral. Una fase sin
+    saltos interpola bien entre bins: la respuesta continua queda plana a ±0,1 dB, y la
+    correlación entre salidas con ruido rosa baja de 0,67 a ~0,53.
     """
     rng = np.random.default_rng(semilla)
     n_bins = largo // 2 + 1
-    fase = rng.uniform(-np.pi, np.pi, n_bins)
+    borde = 2 * SUAVIZADO_BINS
+    ruido = rng.standard_normal(n_bins + 2 * borde)
+    ventana = np.hanning(2 * SUAVIZADO_BINS + 1)
+    ventana /= ventana.sum()
+    retardo = np.convolve(ruido, ventana, mode="same")[borde : borde + n_bins]
+    retardo = (retardo - retardo.mean()) / (np.abs(retardo - retardo.mean()).max() + 1e-12)
+    retardo_s = (RETARDO_MEDIO_MS + VARIACION_MS * retardo) / 1000
+    fase = -np.cumsum(2 * np.pi * (sr / largo) * retardo_s)
+    fase -= fase[0]
     # Los bins de continua y de Nyquist tienen que ser reales, o la respuesta al impulso
     # sale compleja.
     fase[0] = 0.0
     if largo % 2 == 0:
-        fase[-1] = 0.0
+        fase[-1] = np.round(fase[-1] / np.pi) * np.pi
     h = np.fft.irfft(np.exp(1j * fase), n=largo)
-    # La energía queda repartida por todo el filtro; normalizar la deja comparable entre
-    # semillas sin tocar la planitud de la magnitud.
     return h / np.sqrt((h**2).sum())
 
 
@@ -77,6 +100,23 @@ def correlacion_cruzada_maxima(a: np.ndarray, b: np.ndarray) -> float:
     if na == 0 or nb == 0:
         return 1.0
     return float(np.abs(np.correlate(a, b, mode="full")).max() / (na * nb))
+
+
+def correlacion_rosa(a: np.ndarray, b: np.ndarray, sr: int = 48000) -> float:
+    """La correlación entre las salidas de dos filtros con material de espectro rosa, en [0, 1].
+
+    Es la medida que importa para el envolvimiento: cuánto se parecen, a retardo cero, lo que
+    suenan dos parlantes con música (que tiene más energía en graves). Reemplazó al pico de la
+    correlación de las respuestas al impulso, que con fase suave elegía filtros cuyas salidas
+    se correlacionaban 0,68.
+    """
+    n = 16384
+    f = np.fft.rfftfreq(n, 1 / sr)
+    peso = np.where(f > 20, 1 / np.maximum(f, 1), 0.0)  # noqa: PLR2004
+    ha, hb = np.fft.rfft(a, n), np.fft.rfft(b, n)
+    cruzada = np.sum(peso * np.real(ha * np.conj(hb)))
+    norma = np.sqrt(np.sum(peso * np.abs(ha) ** 2) * np.sum(peso * np.abs(hb) ** 2))
+    return float(abs(cruzada) / norma) if norma > 0 else 1.0
 
 
 def banco_decorrelador(
@@ -111,7 +151,7 @@ def banco_decorrelador(
     while len(elegidos) < n:
         mejor_idx, mejor_peor = 0, np.inf
         for i, cand in enumerate(pool):
-            peor = max(correlacion_cruzada_maxima(cand, e) for e in elegidos)
+            peor = max(correlacion_rosa(cand, e) for e in elegidos)
             if peor < mejor_peor:
                 mejor_idx, mejor_peor = i, peor
         elegidos.append(pool.pop(mejor_idx))
@@ -119,12 +159,10 @@ def banco_decorrelador(
 
 
 def ortogonalidad(filtros: list[np.ndarray]) -> float:
-    """La peor correlación cruzada entre cualquier par del banco. Más chico es mejor."""
+    """La peor correlación (con espectro rosa) entre cualquier par del banco. Más chico es mejor."""
     minimo_para_comparar = 2
     if len(filtros) < minimo_para_comparar:
         return 0.0
     return max(
-        correlacion_cruzada_maxima(filtros[i], filtros[j])
-        for i in range(len(filtros))
-        for j in range(i + 1, len(filtros))
+        correlacion_rosa(filtros[i], filtros[j]) for i in range(len(filtros)) for j in range(i + 1, len(filtros))
     )

@@ -59,8 +59,9 @@ en cada vuelta.
 
 from __future__ import annotations
 
+import multiprocessing
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -232,12 +233,21 @@ class MedicionEnSegundoPlano:
     (`docs/research/experimentos/05-e6-a2dp-un-canal-por-parlante.md`): la medición habría
     destruido justamente lo que quería medir.
 
-    El hilo funciona porque el trabajo es casi todo FFT de numpy, que suelta el GIL.
+    **Un hilo, no un proceso: MEDIDO el 2026-10-02.** Se probó `en_proceso=True` sospechando
+    que la medición le quitaba el GIL al motor. Fue peor: con un proceso, el hilo que lanza
+    se frenó hasta 15 ms (serializar ~2 MB de referencias) y el primer lanzamiento tardó 23 ms;
+    con el hilo, la pausa máxima fue de 1 a 4 ms. La FFT de numpy suelta el GIL, como decía
+    esta nota. Y un proceso con `forkserver` re-importa el script principal: sin la guarda
+    `if __name__ == "__main__"`, el lanzamiento falló y tiró abajo la sesión. La opción queda
+    para comparar; la sesión usa el hilo.
     """
 
-    def __init__(self, funcion: Callable[..., object]) -> None:
+    def __init__(self, funcion: Callable[..., object], *, en_proceso: bool = False) -> None:
         self.funcion = funcion
-        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-medicion")
+        if en_proceso:
+            self._pool = ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("forkserver"))
+        else:
+            self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-medicion")
         self._futuro: Future | None = None
         self.lanzadas = 0
 
