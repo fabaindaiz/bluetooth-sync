@@ -1,0 +1,8 @@
+2026-10-01T15:56:58-03:00 · cambio temporal: pw-metadata -n settings 0 log.level 4 (revertir: log.level 2)
+2026-10-01T15:57:43-03:00 · revertido: log.level 2
+2026-10-01T15:57:58-03:00 · cambio temporal: wpctl set-log-level 4 (revertir: wpctl set-log-level 2)
+2026-10-01T15:58:48-03:00 · revertido: wpctl set-log-level 2
+2026-10-01T16:00:08-03:00 · experimento: /home/fadiaz/.config/wireplumber/wireplumber.conf.d/51-aurasync-mono.conf (bluez5.default.channels = 1) + systemctl --user restart wireplumber. Revertir: rm /home/fadiaz/.config/wireplumber/wireplumber.conf.d/51-aurasync-mono.conf && systemctl --user restart wireplumber
+2026-10-01T16:11:11-03:00 · cambio temporal: wpctl set-log-level 4 (revertir: wpctl set-log-level 2)
+2026-10-01T16:12:01-03:00 · revertido: wpctl set-log-level 2
+2026-10-01T16:12:12-03:00 · revertido el experimento mono: borrado 51-aurasync-mono.conf y reiniciado wireplumber

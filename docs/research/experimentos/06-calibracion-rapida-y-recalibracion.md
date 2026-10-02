@@ -285,3 +285,14 @@ más grande que concuerda**, con al menos dos canales.
    explica ([05](05-e6-a2dp-un-canal-por-parlante.md)).
 3. **Revisar el umbral de confianza** con datos reales.
 4. Decidir la frecuencia y la ganancia del lazo de recalibración, que dependen del drift.
+
+---
+
+**Nota del 2026-10-01 (después de este experimento).** Lo que aquí se dice de que "la
+calibración inicial iguala los niveles" descansaba en `medicion.niveles`, y ese estimador
+tenía dos errores que destapó la calibración del panel simulado: dividía por la energía de
+la referencia (con ruido rosa, hasta **11,4 dB** de error según qué realización le tocaba a
+cada parlante) y perdía al parlante que llega antes que la mediana. Sus 0,3 dB entre
+corridas eran repetibilidad con la misma semilla, no exactitud. Las ganancias que escribió
+`calibrate` antes de esa fecha no se deben tomar como medidas. Detalle y corrección en
+[10](10-servicio-de-control-con-3-go-4.md) §3.

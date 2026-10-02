@@ -1,0 +1,8 @@
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel: http://192.168.100.11:8731 · http://10.241.98.125:8731 · http://10.242.98.125:8731 · http://127.0.0.1:8731  (the token is in service.json; not printed to a file)
+[00:38:45] panel: set: ok {"changes": {"decorrelate": false}}
+[00:38:49] panel: set: ok {"changes": {"decorrelate": true}}
+[00:39:31] panel: set: ok {"changes": {"layout": "lcrs"}}
+[00:39:32] panel: set: ok {"changes": {"layout": "quad"}}

@@ -1,0 +1,10 @@
+Salida creada: "aurasync (envolvente)"
+  Elegila como dispositivo de salida en tu sistema, o mandale una aplicación.
+  3 parlantes · ambiente sí · decorrelación sí · volumen -20 dB
+  latencia estimada: ~328 ms
+
+  Ctrl-C para terminar. Al salir, la salida desaparece sola.
+
+
+.1     → bluez_output.90_F2_60_75_4A_83.1
+  ✓ pw-play        pedido bluez_output.90_F2_60_E3_07_39.1     → bluez_output.90_F2_60_E3_07_39.1

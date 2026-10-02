@@ -1,0 +1,37 @@
+== 2026-10-01T14:49:50-03:00 · PC-Ryzen5
+kernel 7.2.8-1-cachyos · PulseAudio (on PipeWire 1.6.9) · Linked with libwireplumber 0.5.17 · bluetoothctl: 5.87
+AX210: Bluetooth: hci0: Firmware SHA1: 0x2925677d
+sin leer (journal)
+
+== parlantes (Modalias = vendedor, producto y versión que anuncia el firmware)
+  90:F2:60:75:4A:83  JBL Go 4 Red     conectado: yes  
+  90:F2:60:DA:66:6D  JBL Go 4 Black   conectado: yes  
+  90:F2:60:E3:07:39  JBL Go 4 Blue    conectado: yes  
+
+== aurasync doctor
+== parlantes Bluetooth ==
+  JBL Go 4 Red             bluez_output.90_F2_60_75_4A_83.1           códec sbc
+  JBL Go 4 Black           bluez_output.90_F2_60_DA_66_6D.1           códec sbc
+  JBL Go 4 Blue            bluez_output.90_F2_60_E3_07_39.1           códec sbc
+
+== micrófono ==
+  Ryzen HD Audio Controller Analog Stereo alsa_input.pci-0000_30_00.6.analog-stereo
+  fifine Microphone Analog Stereo  alsa_input.usb-3142_fifine_Microphone-00.analog-stereo  ← el que se usa
+
+== instalación ==
+  /home/fadiaz/.config/aurasync/instalacion.json: existe
+  JBL Go 4 Red     pan -0.70  ambiente 0.15  retardo   +0.00 ms  ganancia  +0.00 dB  conectado
+  JBL Go 4 Black   pan +0.70  ambiente 0.15  retardo   +0.00 ms  ganancia  +0.00 dB  conectado
+  JBL Go 4 Blue    pan +0.00  ambiente 0.55  retardo   +0.00 ms  ganancia  +0.00 dB  conectado
+
+== veredicto ==
+  ✓ todo en su lugar
+
+== restos de una prueba anterior
+  ✓ no hay sink 'aurasync'
+  ✓ el puerto 8731 está libre
+  sink por defecto: bluez_output.90_F2_60_75_4A_83.1
+
+== ruteo actual
+  sink virtual 'aurasync': no existe
+  ✓ speech-dispatcher-dummy pedido (ninguno)                            → bluez_output.90_F2_60_75_4A_83.1

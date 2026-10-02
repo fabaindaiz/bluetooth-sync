@@ -1,0 +1,3 @@
+{"t": 1790910998.845145, "clase": "api", "metodo": "POST", "ruta": "/shutdown", "cuerpo": null, "respuesta": {"v": 1, "ok": true, "result": {}}}
+{"t": 1790910999.4056184, "clase": "servicio", "texto": "detenido; el sink 'aurasync' desapareció"}
+{"t": 1790910999.973262, "clase": "servicio", "texto": "arrancado (log en /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/servicio-2026-10-02.log)"}

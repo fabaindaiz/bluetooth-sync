@@ -5,3 +5,8 @@ __pycache__/
 .coverage
 dist/
 build/
+
+# Raw recordings stay on the machine that made them: too big for git (~12 MB per
+# calibration, up to 28 MB per recording). Their results are written in docs/research/.
+docs/research/experimentos/datos/**/*.wav
+docs/research/experimentos/datos/**/*.npz

@@ -1,0 +1,1481 @@
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/.local/share/aurasync/mediciones
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[14:56:13] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[14:56:13] panel: start: ok 
+[15:05:13] panel: set: ok {"changes": {"layout": "lcrs"}}
+[15:05:24] panel: assign: rejected: conflict: FR is taken by JBL Go 4 Black; give it another role first
+[15:05:27] panel: assign: rejected: conflict: FL is taken by JBL Go 4 Red; give it another role first
+[15:05:32] panel: assign: rejected: conflict: RC is taken by JBL Go 4 Blue; give it another role first
+[15:05:37] panel: set: ok {"changes": {"layout": "quad"}}
+[15:05:48] panel: assign: rejected: conflict: FR is taken by JBL Go 4 Black; give it another role first
+[15:05:51] panel: assign: rejected: conflict: FL is taken by JBL Go 4 Red; give it another role first
+[15:05:53] panel: assign: ok {"speaker": "JBL Go 4 Black", "role": "RR"}
+[15:05:55] panel: assign: rejected: conflict: FL is taken by JBL Go 4 Red; give it another role first
+[15:06:04] panel: assign: rejected: conflict: FL is taken by JBL Go 4 Red; give it another role first
+[15:06:08] panel: assign: ok {"speaker": "JBL Go 4 Red", "role": "FR"}
+[15:06:10] panel: assign: ok {"speaker": "JBL Go 4 Blue", "role": "FL"}
+[15:06:34] panel: save: ok 
+[15:07:47] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:07:47] panel: recalibrate: ok {"active": true}
+[15:08:08] recalibration: descartado: cambio de +5.3 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:08:28] recalibration: descartado: cambio de +4.5 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:08:48] recalibration: descartado: cambio de +3.7 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:09:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:09:27] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:09:47] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:10:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:10:28] recalibration: descartado: cambio de +15.8 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:10:48] recalibration: descartado: cambio de +14.3 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:11:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:11:28] recalibration: descartado: cambio de +3.9 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:11:48] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[15:12:08] recalibration: descartado: cambio de +3.9 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:12:28] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:12:49] recalibration: descartado: cambio de +17.4 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:13:09] recalibration: descartado: cambio de +15.5 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:13:28] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:13:48] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:14:08] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:14:28] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:14:48] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:15:08] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:15:29] recalibration: descartado: cambio de +6.4 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:15:48] recalibration: sin señal: no hay contenido sonando: no se mide
+[15:16:09] recalibration: descartado: cambio de +4.8 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:16:29] recalibration: descartado: cambio de +5.3 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:16:49] recalibration: descartado: cambio de +3.9 ms en 'JBL Go 4 Black': se espera confirmación (1/2)
+[15:17:08] panel: preset_save: ok {"name": "mis-ajustes"}
+[15:17:08] panel: shutdown: ok 
+[15:17:08] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[15:17:11] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:17:11] panel: start: ok 
+[15:17:11] panel: preset_load: ok {"name": "mis-ajustes"}
+[15:17:21] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:17:21] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:17:34] calibration: calibración: terminada: done
+[15:17:35] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151735.json
+[15:17:35] panel: measurement_save: ok {"note": "A1: desde las correcciones actuales"}
+[15:17:35] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[15:17:35] panel: calibration_apply: ok 
+[15:17:35] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:17:35] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:17:48] calibration: calibración: terminada: done
+[15:17:49] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151749.json
+[15:17:49] panel: measurement_save: ok {"note": "A2: cierre, después de aplicar A1"}
+[15:17:49] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 4.0}}
+[15:17:50] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:17:50] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:18:03] calibration: calibración: terminada: done
+[15:18:03] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151803.json
+[15:18:03] panel: measurement_save: ok {"note": "B: +4 ms a propósito en JBL Go 4 Black"}
+[15:18:03] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[15:18:03] panel: calibration_apply: ok 
+[15:18:04] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:18:04] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:18:17] calibration: calibración: terminada: done
+[15:18:17] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151817.json
+[15:18:17] panel: measurement_save: ok {"note": "B2: cierre después de deshacerlo"}
+[15:18:17] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -6.0}}
+[15:18:18] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:18:18] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:18:31] calibration: calibración: terminada: done
+[15:18:31] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151831.json
+[15:18:31] panel: measurement_save: ok {"note": "C: -6 dB a propósito en JBL Go 4 Red"}
+[15:18:31] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[15:18:31] panel: calibration_apply: ok 
+[15:18:32] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:18:32] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:18:45] calibration: calibración: terminada: done
+[15:18:45] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151845.json
+[15:18:45] panel: measurement_save: ok {"note": "D1"}
+[15:18:45] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:18:45] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:18:58] calibration: calibración: terminada: done
+[15:18:59] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-151859.json
+[15:18:59] panel: measurement_save: ok {"note": "D2"}
+[15:19:53] panel: shutdown: ok 
+[15:19:54] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[15:19:56] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:19:56] panel: start: ok 
+[15:19:56] panel: preset_load: ok {"name": "mis-ajustes"}
+[15:22:22] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:22:22] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:22:34] calibration: calibración: terminada: error
+[15:22:59] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:22:59] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:23:11] calibration: calibración: terminada: error
+[15:24:54] panel: shutdown: ok 
+[15:24:55] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[15:24:58] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:24:58] panel: start: ok 
+[15:24:58] panel: preset_load: ok {"name": "mis-ajustes"}
+[15:29:13] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:29:13] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:29:26] calibration: calibración: terminada: done
+[15:29:27] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-152926.json
+[15:29:27] panel: measurement_save: ok {"note": "diagnóstico"}
+[15:29:29] panel: calibration_dump: ok 
+[15:30:16] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:30:16] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:30:29] calibration: calibración: terminada: done
+[15:30:30] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153029.json
+[15:30:30] panel: measurement_save: ok {"note": "A1: desde las correcciones actuales"}
+[15:30:30] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[15:30:30] panel: calibration_apply: ok 
+[15:30:31] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:30:31] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:30:44] calibration: calibración: terminada: done
+[15:30:45] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153044.json
+[15:30:45] panel: measurement_save: ok {"note": "A2: cierre, después de aplicar A1"}
+[15:30:46] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 4.0}}
+[15:30:47] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:30:47] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:31:00] calibration: calibración: terminada: done
+[15:31:01] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153100.json
+[15:31:01] panel: measurement_save: ok {"note": "B: +4 ms a propósito en JBL Go 4 Black"}
+[15:31:01] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[15:31:01] panel: calibration_apply: ok 
+[15:31:02] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:31:02] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:31:15] calibration: calibración: terminada: done
+[15:31:16] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153115.json
+[15:31:16] panel: measurement_save: ok {"note": "B2: cierre después de deshacerlo"}
+[15:31:16] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -10.52}}
+[15:31:17] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:31:17] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:31:30] calibration: calibración: terminada: done
+[15:31:32] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153130.json
+[15:31:32] panel: measurement_save: ok {"note": "C: -6 dB a propósito en JBL Go 4 Red"}
+[15:31:32] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black
+[15:31:32] panel: calibration_apply: ok 
+[15:34:16] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:34:16] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:34:29] calibration: calibración: terminada: done
+[15:34:31] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153430.json
+[15:34:31] panel: measurement_save: ok {"note": "P1"}
+[15:34:36] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:34:36] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:34:49] calibration: calibración: terminada: done
+[15:34:50] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153449.json
+[15:34:50] panel: measurement_save: ok {"note": "P2"}
+[15:34:56] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:34:56] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:35:09] calibration: calibración: terminada: done
+[15:35:10] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-153509.json
+[15:35:10] panel: measurement_save: ok {"note": "P3"}
+[15:35:16] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:35:16] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:35:28] calibration: calibración: terminada: error
+[15:35:37] panel: calibration_dump: ok 
+[15:39:41] panel: shutdown: ok 
+[15:39:42] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[15:39:44] routing: ruteo: se desvió a aurasync: bluez_output.90_F2_60_75_4A_83.1 — devuelto
+[15:39:55] panel: start: rejected: unavailable: the streams did not reach their speakers: bluez_output.90_F2_60_75_4A_83.1 → aurasync
+[15:39:56] routing: ruteo: se desvió a aurasync: bluez_output.90_F2_60_75_4A_83.1 — devuelto
+[15:40:07] panel: start: rejected: unavailable: the streams did not reach their speakers: bluez_output.90_F2_60_75_4A_83.1 → aurasync
+[15:40:20] routing: ruteo: se desvió a aurasync: bluez_output.90_F2_60_75_4A_83.1 — devuelto
+[15:40:31] panel: start: rejected: unavailable: the streams did not reach their speakers: bluez_output.90_F2_60_75_4A_83.1 → aurasync
+[15:40:31] panel: stop: ok 
+[15:40:33] routing: ruteo: se desvió a aurasync: bluez_output.90_F2_60_75_4A_83.1 — devuelto
+[15:40:44] panel: start: rejected: unavailable: the streams did not reach their speakers: bluez_output.90_F2_60_75_4A_83.1 → aurasync
+[15:40:44] panel: stop: ok 
+[15:40:46] routing: ruteo: se desvió a aurasync: bluez_output.90_F2_60_75_4A_83.1 — devuelto
+[15:40:57] panel: start: rejected: unavailable: the streams did not reach their speakers: bluez_output.90_F2_60_75_4A_83.1 → aurasync
+[15:40:57] panel: stop: ok 
+[15:43:40] panel: shutdown: ok 
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[15:43:43] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:43:43] panel: start: ok 
+[15:43:46] session: session closed
+[15:43:46] panel: stop: ok 
+[15:43:48] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:43:48] panel: start: ok 
+[15:43:51] session: session closed
+[15:43:51] panel: stop: ok 
+[15:43:54] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:43:54] panel: start: ok 
+[15:43:56] session: session closed
+[15:43:56] panel: stop: ok 
+[15:43:59] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:43:59] panel: start: ok 
+[15:43:59] panel: preset_load: ok {"name": "mis-ajustes"}
+[15:44:07] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:44:07] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:44:22] calibration: calibración: terminada: done
+[15:44:23] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154422.json
+[15:44:23] panel: measurement_save: ok {"note": "P1"}
+[15:44:28] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:44:28] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:44:43] calibration: calibración: terminada: done
+[15:44:44] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154443.json
+[15:44:44] panel: measurement_save: ok {"note": "P2"}
+[15:44:49] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:44:49] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:45:04] calibration: calibración: terminada: done
+[15:45:05] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154504.json
+[15:45:05] panel: measurement_save: ok {"note": "P3"}
+[15:45:10] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:45:10] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:45:25] calibration: calibración: terminada: done
+[15:45:26] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154525.json
+[15:45:26] panel: measurement_save: ok {"note": "P4"}
+[15:45:31] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:45:31] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:45:46] calibration: calibración: terminada: done
+[15:45:47] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154546.json
+[15:45:47] panel: measurement_save: ok {"note": "P5"}
+[15:45:52] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:45:52] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:46:07] calibration: calibración: terminada: done
+[15:46:08] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154607.json
+[15:46:08] panel: measurement_save: ok {"note": "P6"}
+[15:46:13] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:46:13] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:46:28] calibration: calibración: terminada: done
+[15:46:29] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154628.json
+[15:46:29] panel: measurement_save: ok {"note": "V0: JBL Go 4 Red al 80%"}
+[15:46:30] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:46:30] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:46:45] calibration: calibración: terminada: done
+[15:46:46] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154645.json
+[15:46:46] panel: measurement_save: ok {"note": "V1: JBL Go 4 Red al 64% (-6 dB por AVRCP)"}
+[15:46:47] panel: set: ok {"changes": {"player_latency_ms": 200}}
+[15:46:47] session: session closed
+[15:46:49] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:46:49] panel: service_restart: ok {"name": "session"}
+[15:46:53] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:46:53] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:47:07] calibration: calibración: terminada: done
+[15:47:08] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154707.json
+[15:47:08] panel: measurement_save: ok {"note": "R: buffer 200 ms, streams recién abiertos"}
+[15:47:08] panel: set: ok {"changes": {"player_latency_ms": 100}}
+[15:47:09] session: session closed
+[15:47:10] session: session open: 3 speakers, block 4096, pw-play buffer 100 ms, recalibration off
+[15:47:10] panel: service_restart: ok {"name": "session"}
+[15:47:14] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:47:14] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:47:28] calibration: calibración: terminada: done
+[15:47:29] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154728.json
+[15:47:29] panel: measurement_save: ok {"note": "R: buffer 100 ms, streams recién abiertos"}
+[15:47:29] panel: set: ok {"changes": {"player_latency_ms": 400}}
+[15:47:30] session: session closed
+[15:47:31] session: session open: 3 speakers, block 4096, pw-play buffer 400 ms, recalibration off
+[15:47:31] panel: service_restart: ok {"name": "session"}
+[15:47:35] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:47:35] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:47:49] calibration: calibración: terminada: done
+[15:47:50] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154749.json
+[15:47:50] panel: measurement_save: ok {"note": "R: buffer 400 ms, streams recién abiertos"}
+[15:47:50] panel: set: ok {"changes": {"player_latency_ms": 200}}
+[15:47:51] session: session closed
+[15:47:52] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:47:52] panel: service_restart: ok {"name": "session"}
+[15:47:56] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:47:56] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:48:10] calibration: calibración: terminada: done
+[15:48:11] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-154810.json
+[15:48:11] panel: measurement_save: ok {"note": "R: buffer 200 ms, streams recién abiertos"}
+[15:48:11] panel: set: ok {"changes": {"player_latency_ms": 200}}
+[15:50:37] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:50:37] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:50:51] calibration: calibración: terminada: error
+[15:51:00] panel: calibration_dump: ok 
+[15:54:05] panel: shutdown: ok 
+[15:54:05] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[15:54:08] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[15:54:08] panel: start: ok 
+[15:54:08] panel: preset_load: ok {"name": "mis-ajustes"}
+[15:54:09] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:54:09] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:54:24] calibration: calibración: terminada: done
+[15:54:25] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-155424.json
+[15:54:25] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[15:54:26] panel: calibration_dump: ok 
+[15:54:32] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:54:32] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:54:46] calibration: calibración: terminada: done
+[15:54:47] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-155446.json
+[15:54:47] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[15:54:49] panel: calibration_dump: ok 
+[15:54:54] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:54:54] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:55:08] calibration: calibración: terminada: done
+[15:55:10] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-155508.json
+[15:55:10] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[15:55:11] panel: calibration_dump: ok 
+[15:55:16] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:55:16] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:55:30] calibration: calibración: terminada: done
+[15:55:32] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-155531.json
+[15:55:32] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[15:55:33] panel: calibration_dump: ok 
+[15:55:38] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:55:38] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:55:52] calibration: calibración: terminada: done
+[15:55:54] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-155553.json
+[15:55:54] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[15:55:55] panel: calibration_dump: ok 
+[15:56:00] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[15:56:00] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[15:56:14] calibration: calibración: terminada: done
+[15:56:16] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-155615.json
+[15:56:16] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[15:56:17] panel: calibration_dump: ok 
+[16:00:09] session: session failed: every speaker disconnected
+[16:00:09] session: session closed: every speaker disconnected
+[16:01:44] panel: stop: ok 
+[16:01:46] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[16:01:46] panel: start: ok 
+[16:01:46] panel: preset_load: ok {"name": "mis-ajustes"}
+[16:02:01] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:02:01] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:02:15] calibration: calibración: terminada: done
+[16:02:17] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160216.json
+[16:02:17] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[16:02:18] panel: calibration_dump: ok 
+[16:02:23] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:02:23] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:02:37] calibration: calibración: terminada: done
+[16:02:39] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160238.json
+[16:02:39] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[16:02:40] panel: calibration_dump: ok 
+[16:02:45] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:02:45] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:02:59] calibration: calibración: terminada: done
+[16:03:01] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160300.json
+[16:03:01] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[16:03:02] panel: calibration_dump: ok 
+[16:03:07] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:03:07] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:03:22] calibration: calibración: terminada: done
+[16:03:23] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160322.json
+[16:03:23] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[16:03:24] panel: calibration_dump: ok 
+[16:03:29] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:03:29] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:03:44] calibration: calibración: terminada: done
+[16:03:45] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160344.json
+[16:03:45] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[16:03:46] panel: calibration_dump: ok 
+[16:03:51] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:03:51] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:04:06] calibration: calibración: terminada: done
+[16:04:07] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160406.json
+[16:04:07] panel: measurement_save: ok {"note": "monitores: misma calibración por el aire y por el monitor"}
+[16:04:08] panel: calibration_dump: ok 
+[16:07:20] panel: shutdown: ok 
+[16:07:20] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://127.0.0.1:8731/
+  panel (the link carries the token; keep it private):
+    http://127.0.0.1:8731/?t=<token censurado>
+[16:07:23] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[16:07:23] panel: start: ok 
+[16:07:23] panel: preset_load: ok {"name": "mis-ajustes"}
+[16:07:34] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:07:34] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:07:49] calibration: calibración: terminada: done
+[16:07:50] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160749.json
+[16:07:50] panel: measurement_save: ok {"note": "P1"}
+[16:07:55] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:07:55] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:08:10] calibration: calibración: terminada: done
+[16:08:11] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160810.json
+[16:08:11] panel: measurement_save: ok {"note": "P2"}
+[16:08:17] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:08:17] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:08:31] calibration: calibración: terminada: done
+[16:08:33] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160831.json
+[16:08:33] panel: measurement_save: ok {"note": "P3"}
+[16:08:38] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:08:38] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:08:52] calibration: calibración: terminada: done
+[16:08:54] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160852.json
+[16:08:54] panel: measurement_save: ok {"note": "P4"}
+[16:08:59] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:08:59] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:09:13] calibration: calibración: terminada: done
+[16:09:15] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160914.json
+[16:09:15] panel: measurement_save: ok {"note": "P5"}
+[16:09:20] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:09:20] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:09:34] calibration: calibración: terminada: done
+[16:09:36] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160935.json
+[16:09:36] panel: measurement_save: ok {"note": "P6"}
+[16:09:41] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:09:41] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:09:55] calibration: calibración: terminada: done
+[16:09:57] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-160956.json
+[16:09:57] panel: measurement_save: ok {"note": "P7"}
+[16:10:02] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:10:02] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:10:16] calibration: calibración: terminada: done
+[16:10:18] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-161017.json
+[16:10:18] panel: measurement_save: ok {"note": "P8"}
+[16:12:13] session: parlante perdido: bluez_output.90_F2_60_75_4A_83.1 ya no existe; su stream iba a ningún destino
+[16:12:13] session: parlante perdido: bluez_output.90_F2_60_DA_66_6D.1 ya no existe; su stream iba a ningún destino
+[16:12:13] session: parlante perdido: bluez_output.90_F2_60_E3_07_39.1 ya no existe; su stream iba a ningún destino
+[16:12:13] session: session failed: every speaker disconnected
+[16:12:13] session: session closed: every speaker disconnected
+[16:13:35] panel: stop: ok 
+[16:13:37] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[16:13:37] panel: start: ok 
+[16:13:37] panel: preset_load: ok {"name": "mis-ajustes"}
+[16:13:57] panel: source: ok {"kind": "tone"}
+[16:14:01] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 5.0}}
+[16:14:01] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:14:01] panel: recalibrate: ok {"active": true}
+[16:14:22] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:14:42] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:15:02] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:15:22] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:15:42] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:16:02] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:16:16] recalibration: lazo: recalibración apagada
+[16:16:16] panel: recalibrate: ok {"active": false}
+[16:16:16] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 0.0}}
+[16:16:16] panel: source: ok {"kind": "system"}
+[16:24:51] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:24:51] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[16:25:05] calibration: calibración: terminada: done
+[16:25:07] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-162506.json
+[16:25:07] panel: measurement_save: ok {"note": "alinear para el uso, salida combinada"}
+[16:25:07] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[16:25:07] panel: calibration_apply: ok 
+[16:28:55] panel: save: ok 
+[16:29:21] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:29:21] panel: service_start: ok {"name": "recalibration"}
+[16:29:41] recalibration: sin señal: no hay contenido sonando: no se mide
+[16:30:01] recalibration: sin señal: no hay contenido sonando: no se mide
+[16:30:22] recalibration: ajuste: aplicado: el mayor ajuste fue de 0.00 ms
+[16:30:24] session: session closed
+[16:30:24] panel: stop: ok 
+[16:30:28] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:30:28] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration on
+[16:30:28] panel: start: ok {"recalibrate": true}
+[16:30:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:31:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:31:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:31:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:31:56] panel: shutdown: ok 
+[16:31:56] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[16:31:59] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[16:31:59] panel: start: ok 
+[16:31:59] panel: preset_load: ok {"name": "mis-ajustes"}
+[16:31:59] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"delay_ms": 13.56, "gain_db": -2.43}}
+[16:31:59] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 0.0, "gain_db": -0.7}}
+[16:31:59] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"delay_ms": 11.59, "gain_db": 0.0}}
+[16:32:10] panel: save: ok 
+[16:33:50] panel: shutdown: ok 
+[16:33:50] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[16:33:53] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[16:33:53] panel: start: ok 
+[16:33:53] panel: preset_load: ok {"name": "mis-ajustes"}
+[16:33:53] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"delay_ms": 13.56, "gain_db": -2.43}}
+[16:33:53] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 0.0, "gain_db": -0.7}}
+[16:33:53] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"delay_ms": 11.59, "gain_db": 0.0}}
+[16:34:08] session: session closed
+[16:34:08] panel: stop: ok 
+[16:34:12] session: session open: 3 speakers, block 4096, pw-play buffer 200 ms, recalibration off
+[16:34:12] panel: start: ok {"recalibrate": false}
+[16:34:14] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[16:34:14] panel: service_start: ok {"name": "recalibration"}
+[16:34:35] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:34:55] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:35:15] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:35:35] recalibration: descartado: cambio de +7.7 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[16:35:55] recalibration: descartado: cambio de +8.8 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[16:36:15] recalibration: descartado: cambio de +26.2 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:36:35] recalibration: descartado: cambio de -11.7 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[16:36:55] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:37:15] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:37:35] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:37:56] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:38:16] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:38:17] panel: set: ok {"changes": {"layout": "lcrs"}}
+[16:38:19] panel: set: ok {"changes": {"layout": "quad"}}
+[16:38:35] recalibration: sin señal: no hay contenido sonando: no se mide
+[16:38:41] panel: set: ok {"changes": {"volume_db": -44.0}}
+[16:38:41] panel: set: ok {"changes": {"volume_db": -44.0}}
+[16:38:42] panel: set: ok {"changes": {"volume_db": -51.0}}
+[16:38:42] panel: set: ok {"changes": {"volume_db": -51.0}}
+[16:38:43] panel: set: ok {"changes": {"volume_db": -5.0}}
+[16:38:43] panel: set: ok {"changes": {"volume_db": -5.0}}
+[16:38:45] panel: set: ok {"changes": {"volume_db": -13.0}}
+[16:38:45] panel: set: ok {"changes": {"volume_db": -13.0}}
+[16:38:47] panel: set: ok {"changes": {"volume_db": -21.0}}
+[16:38:47] panel: set: ok {"changes": {"volume_db": -21.0}}
+[16:38:56] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:38:56] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.85}}
+[16:38:56] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.85}}
+[16:38:57] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.7}}
+[16:38:57] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.7}}
+[16:39:13] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.8}}
+[16:39:13] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.75}}
+[16:39:13] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.4}}
+[16:39:14] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.25}}
+[16:39:16] recalibration: descartado: hubo un corte durante la medición
+[16:39:16] panel: assign: ok {"speaker": "JBL Go 4 Red", "role": "FL"}
+[16:39:21] panel: assign: rejected: conflict: FL is taken by JBL Go 4 Red; give it another role first
+[16:39:29] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"muted": true}}
+[16:39:31] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"muted": false}}
+[16:39:36] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:39:51] panel: assign: ok {"speaker": "JBL Go 4 Red", "role": "FR"}
+[16:39:53] panel: assign: ok {"speaker": "JBL Go 4 Blue", "role": "FL"}
+[16:39:56] recalibration: descartado: hubo un corte durante la medición
+[16:40:16] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:40:36] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:40:56] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:41:01] panel: save: ok 
+[16:41:16] recalibration: descartado: cambio de +63.8 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:41:36] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:41:56] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:42:16] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:42:36] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:42:56] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:43:16] recalibration: descartado: cambio de +59.6 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:43:37] recalibration: descartado: cambio de +21.1 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:43:57] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:44:17] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:44:37] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:44:57] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:45:17] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:45:37] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:45:57] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:46:17] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:46:37] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:46:57] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:47:17] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:47:37] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:47:57] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:48:17] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:48:37] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:48:58] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:49:18] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:49:38] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:49:58] recalibration: descartado: cambio de +9.0 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[16:50:18] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:50:38] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:50:58] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:51:18] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:51:38] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:51:58] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:52:18] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:52:38] recalibration: descartado: cambio de +48.8 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:52:58] recalibration: descartado: cambio de +52.1 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:53:18] recalibration: descartado: cambio de +51.4 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:53:38] recalibration: descartado: cambio de +50.5 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:53:58] recalibration: descartado: cambio de +49.6 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:54:17] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:54:38] recalibration: descartado: cambio de +48.4 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[16:54:58] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:55:18] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:55:38] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:55:59] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:56:19] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:56:39] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:56:59] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:57:18] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[16:57:39] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:57:59] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:58:19] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:58:39] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:58:59] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[16:59:19] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[16:59:39] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[16:59:59] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[17:00:19] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:00:39] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:00:59] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:01:19] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:01:39] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[17:02:00] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:02:20] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:02:40] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:03:00] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:03:20] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:03:40] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:04:00] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[17:04:20] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:04:40] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:05:00] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:05:20] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:05:40] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[17:06:00] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:06:20] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:06:40] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:07:00] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:07:21] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:07:41] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:08:01] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:08:21] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:08:41] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:08:50] panel: shutdown: ok 
+[17:08:50] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[17:08:53] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration off
+[17:08:53] panel: start: ok 
+[17:08:53] panel: preset_load: ok {"name": "mis-ajustes"}
+[17:08:53] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"delay_ms": 13.56, "gain_db": -2.43}}
+[17:08:53] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 0.0, "gain_db": -0.7}}
+[17:08:53] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"delay_ms": 11.59, "gain_db": 0.0}}
+[17:10:12] panel: set: ok {"changes": {"output_mode": "separado"}}
+[17:10:15] panel: set: ok {"changes": {"output_mode": "combinado"}}
+[17:15:20] panel: shutdown: ok 
+[17:15:21] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[17:15:24] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration off
+[17:15:24] panel: start: ok 
+[17:15:24] panel: preset_load: ok {"name": "mis-ajustes"}
+[17:15:24] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"delay_ms": 13.56, "gain_db": -2.43}}
+[17:15:24] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"delay_ms": 0.0, "gain_db": -0.7}}
+[17:15:24] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"delay_ms": 11.59, "gain_db": 0.0}}
+[17:16:29] session: session closed
+[17:16:29] panel: stop: ok 
+[17:26:11] panel: shutdown: ok 
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[17:26:14] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration off
+[17:26:14] panel: start: ok 
+[17:26:14] panel: preset_load: ok {"name": "mis-ajustes"}
+[17:26:15] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:26:15] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[17:26:30] calibration: calibración: terminada: done
+[17:26:31] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-172630.json
+[17:26:31] panel: measurement_save: ok {"note": "con el decorrelador plano, y respuesta por parlante"}
+[17:26:31] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[17:26:31] panel: calibration_apply: ok 
+[17:28:38] panel: shutdown: ok 
+[17:28:39] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[17:28:42] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration off
+[17:28:42] panel: start: ok 
+[17:28:42] panel: preset_load: ok {"name": "mis-ajustes"}
+[17:28:42] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:28:42] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[17:28:57] calibration: calibración: terminada: done
+[17:28:58] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-172857.json
+[17:28:58] panel: measurement_save: ok {"note": "cierre con decorrelador plano 1"}
+[17:28:58] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black; kept as they were: JBL Go 4 Blue
+[17:28:58] panel: calibration_apply: ok 
+[17:28:59] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:28:59] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[17:29:14] calibration: calibración: terminada: done
+[17:29:16] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-172915.json
+[17:29:16] panel: measurement_save: ok {"note": "cierre con decorrelador plano 2"}
+[17:36:01] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:36:01] panel: service_start: ok {"name": "recalibration"}
+[17:36:22] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:36:42] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:37:03] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:37:23] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:37:43] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:38:03] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:38:23] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:38:43] recalibration: descartado: cambio de +36.4 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[17:39:02] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[17:39:23] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:39:43] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:40:03] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:40:23] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:40:43] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:41:03] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:41:23] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:41:43] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:42:03] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:42:23] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[17:42:43] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[17:43:03] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[17:43:23] recalibration: descartado: cambio de +30.6 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[17:43:43] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[17:44:03] recalibration: descartado: cambio de +29.7 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[17:44:16] panel: shutdown: ok 
+[17:44:16] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[17:44:19] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration off
+[17:44:19] panel: start: ok 
+[17:44:19] panel: preset_load: ok {"name": "mis-ajustes"}
+[17:44:19] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:44:19] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[17:44:34] calibration: calibración: terminada: done
+[17:44:35] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-174434.json
+[17:44:35] panel: measurement_save: ok {"note": "antes de ecualizar"}
+[17:44:35] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[17:44:35] panel: calibration_apply: ok 
+[17:44:37] calibration: EQ applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[17:44:37] panel: eq_apply: ok 
+[17:44:38] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:44:38] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[17:44:53] calibration: calibración: terminada: done
+[17:44:54] calibration: measurement saved to /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10/calibracion-20261001-174453.json
+[17:44:54] panel: measurement_save: ok {"note": "después de ecualizar (cierre del espectro)"}
+[17:59:21] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:22] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:23] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:24] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:24] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:25] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:27] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:33] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:36] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:36] calibration: calibración: 10 s a amplitud 0.1, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[17:59:36] panel: calibrate: ok {"seconds": 10.0, "amplitude": 0.1}
+[17:59:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:42] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:42] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:51] calibration: calibración: terminada: done
+[17:59:53] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:53] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[17:59:53] panel: calibration_apply: ok 
+[17:59:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[17:59:59] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:00] panel: set: ok {"changes": {"layout": "lcrs"}}
+[18:00:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:01] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:01] panel: set: ok {"changes": {"layout": "quad"}}
+[18:00:02] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:02] panel: set: ok {"changes": {"layout": "lcrs"}}
+[18:00:04] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:04] panel: set: ok {"changes": {"layout": "quad"}}
+[18:00:06] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:07] calibration: calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[18:00:07] panel: calibration_apply: ok 
+[18:00:11] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:13] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:00:59] panel: set: ok {"changes": {"volume_db": -19.0}}
+[18:01:00] panel: set: ok {"changes": {"volume_db": -12.0}}
+[18:01:00] panel: set: ok {"changes": {"volume_db": -8.0}}
+[18:01:00] panel: set: ok {"changes": {"volume_db": -9.0}}
+[18:01:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:00] panel: set: ok {"changes": {"volume_db": -9.0}}
+[18:01:02] panel: set: ok {"changes": {"volume_db": -10.0}}
+[18:01:02] panel: set: ok {"changes": {"volume_db": -19.0}}
+[18:01:02] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:02] panel: set: ok {"changes": {"volume_db": -19.0}}
+[18:01:03] panel: set: ok {"changes": {"volume_db": -18.0}}
+[18:01:04] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:04] panel: set: ok {"changes": {"volume_db": -15.0}}
+[18:01:15] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:17] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:18] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:30] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:30] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:31] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:31] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:32] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:01:33] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:35] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.2}}
+[18:06:36] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.75}}
+[18:06:36] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.7}}
+[18:06:36] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:36] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.7}}
+[18:06:37] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.6}}
+[18:06:37] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.75}}
+[18:06:37] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:37] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.75}}
+[18:06:38] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.2}}
+[18:06:38] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.75}}
+[18:06:38] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:38] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.75}}
+[18:06:39] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.75}}
+[18:06:39] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.85}}
+[18:06:40] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:40] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.95}}
+[18:06:40] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.8}}
+[18:06:40] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:40] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 1.0}}
+[18:06:41] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.8}}
+[18:06:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:41] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 1.0}}
+[18:06:42] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.95}}
+[18:06:43] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:43] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.0}}
+[18:06:43] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.95}}
+[18:06:44] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.05}}
+[18:06:44] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:44] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.0}}
+[18:06:44] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.9}}
+[18:06:45] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:45] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.0}}
+[18:06:48] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.05}}
+[18:06:48] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:48] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.1}}
+[18:06:48] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.1}}
+[18:06:49] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.05}}
+[18:06:49] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.15}}
+[18:06:49] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.1}}
+[18:06:49] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:49] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.1}}
+[18:06:50] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.05}}
+[18:06:50] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.1}}
+[18:06:50] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:50] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.1}}
+[18:06:53] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -1.5}}
+[18:06:53] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -1.0}}
+[18:06:53] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -0.5}}
+[18:06:54] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.5}}
+[18:06:54] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.0}}
+[18:06:54] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:54] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.0}}
+[18:06:55] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -2.5}}
+[18:06:55] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -1.5}}
+[18:06:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -1.0}}
+[18:06:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.0}}
+[18:06:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.5}}
+[18:06:57] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.0}}
+[18:06:57] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -0.5}}
+[18:06:57] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.0}}
+[18:06:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:06:58] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.0}}
+[18:06:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:10:47] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:10:56] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:11:50] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:11:51] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:11:55] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:12:44] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:12:45] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:12:45] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:12:46] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:12:47] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:13:40] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:17] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:21] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:23] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:23] session: session closed
+[18:22:23] panel: stop: ok 
+[18:22:25] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:27] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration off
+[18:22:27] panel: start: ok 
+[18:22:45] panel: set: ok {"changes": {"volume_db": -16.0}}
+[18:22:46] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:46] panel: set: ok {"changes": {"volume_db": -19.0}}
+[18:22:46] panel: set: ok {"changes": {"volume_db": -19.0}}
+[18:22:48] panel: set: ok {"changes": {"volume_db": -20.0}}
+[18:22:48] panel: set: ok {"changes": {"volume_db": -21.0}}
+[18:22:48] panel: set: ok {"changes": {"volume_db": -24.0}}
+[18:22:49] panel: set: ok {"changes": {"volume_db": -21.0}}
+[18:22:50] panel: set: ok {"changes": {"volume_db": -20.0}}
+[18:22:50] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:50] panel: set: ok {"changes": {"volume_db": -20.0}}
+[18:22:51] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:52] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:53] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:57] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -2.0}}
+[18:22:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:58] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -17.0}}
+[18:22:58] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -2.0}}
+[18:22:58] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -15.0}}
+[18:22:59] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:22:59] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -17.0}}
+[18:22:59] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -2.0}}
+[18:23:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:00] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -13.5}}
+[18:23:00] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -13.5}}
+[18:23:00] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.15}}
+[18:23:00] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.7}}
+[18:23:01] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 1.0}}
+[18:23:01] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:01] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 1.0}}
+[18:23:01] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.95}}
+[18:23:02] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.45}}
+[18:23:02] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:02] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.0}}
+[18:23:02] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.0}}
+[18:23:02] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.05}}
+[18:23:03] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:03] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.0}}
+[18:23:03] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.15}}
+[18:23:03] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:03] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.0}}
+[18:23:04] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -16.5}}
+[18:23:04] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -3.0}}
+[18:23:05] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": 0.0}}
+[18:23:05] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:05] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": 0.0}}
+[18:23:05] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": -16.0}}
+[18:23:06] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.0}}
+[18:23:06] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:06] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.0}}
+[18:23:07] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": -13.0}}
+[18:23:07] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.0}}
+[18:23:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:07] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"gain_db": 0.0}}
+[18:23:09] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.05}}
+[18:23:10] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:10] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.8}}
+[18:23:10] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.8}}
+[18:23:11] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.75}}
+[18:23:11] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.0}}
+[18:23:12] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:12] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.0}}
+[18:23:14] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.05}}
+[18:23:14] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.15}}
+[18:23:14] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.5}}
+[18:23:15] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:15] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.75}}
+[18:23:16] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.8}}
+[18:23:16] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:16] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 1.0}}
+[18:23:17] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.95}}
+[18:23:18] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:18] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.55}}
+[18:23:19] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.5}}
+[18:23:19] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.35}}
+[18:23:19] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:19] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.25}}
+[18:23:21] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.2}}
+[18:23:21] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.0}}
+[18:23:21] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:21] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.0}}
+[18:23:24] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:25] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:25] panel: set: ok {"changes": {"layout": "lcrs"}}
+[18:23:27] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:28] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:29] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:29] panel: set: ok {"changes": {"layout": "quad"}}
+[18:23:31] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:31] panel: scan: ok 
+[18:23:37] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:40] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:23:57] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:25:23] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:33:54] panel: shutdown: ok 
+[18:33:55] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[18:33:55] panel: set: ok {"changes": {"volume_db": -38.0}}
+[18:33:56] panel: eq_reset: ok 
+[18:33:56] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"kind": "go4"}}
+[18:33:56] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"kind": "go4"}}
+[18:33:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"kind": "go4"}}
+[18:34:03] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[18:34:03] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration on
+[18:34:03] panel: start: ok 
+[18:34:13] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"ambience": 0.1}}
+[18:34:13] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.1}}
+[18:34:14] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"ambience": 0.1}}
+[18:34:23] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:34:43] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:35:03] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:35:23] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:35:43] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:36:03] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:36:23] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:36:43] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:37:04] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:37:24] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:37:44] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:38:04] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:38:24] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:38:44] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:39:04] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:39:24] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:39:44] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:40:04] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:40:24] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:40:44] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:41:04] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:41:15] panel: set: ok {"changes": {"volume_db": -37.0}}
+[18:41:15] panel: set: ok {"changes": {"volume_db": -18.0}}
+[18:41:15] panel: set: ok {"changes": {"volume_db": -9.0}}
+[18:41:15] panel: set: ok {"changes": {"volume_db": -7.0}}
+[18:41:16] panel: set: ok {"changes": {"volume_db": -5.0}}
+[18:41:16] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:41:16] panel: set: ok {"changes": {"volume_db": -5.0}}
+[18:41:17] panel: set: ok {"changes": {"volume_db": -6.0}}
+[18:41:17] panel: set: ok {"changes": {"volume_db": -11.0}}
+[18:41:17] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:41:17] panel: set: ok {"changes": {"volume_db": -12.0}}
+[18:41:17] panel: set: ok {"changes": {"volume_db": -13.0}}
+[18:41:18] panel: set: ok {"changes": {"volume_db": -19.0}}
+[18:41:18] panel: set: ok {"changes": {"volume_db": -18.0}}
+[18:41:18] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[18:41:18] panel: set: ok {"changes": {"volume_db": -18.0}}
+[18:41:25] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:41:45] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:42:05] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:42:25] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:42:45] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:43:05] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:43:25] recalibration: descartado: cambio de +12.2 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[18:43:46] recalibration: ajuste: confirmado, aplicado: el mayor ajuste fue de 6.23 ms
+[18:44:06] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:44:26] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:44:46] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:45:06] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:45:26] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:45:46] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:46:06] recalibration: descartado: cambio de +18.8 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[18:46:26] recalibration: descartado: cambio de +18.8 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[18:46:46] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[18:47:06] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:47:26] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:47:46] recalibration: descartado: cambio de +18.8 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[18:48:06] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:48:25] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:48:45] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:49:05] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:49:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:49:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:50:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:50:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:50:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:51:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:51:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:51:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:52:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:52:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:52:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:53:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:53:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:53:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:54:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:54:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:54:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[18:55:07] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[18:55:28] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[18:55:48] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[18:56:08] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[18:56:28] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[18:56:48] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:57:07] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[18:57:28] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:57:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[18:58:08] recalibration: descartado: cambio de +18.6 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[18:58:28] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:58:48] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[18:59:08] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[18:59:27] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[18:59:48] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:00:08] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[19:00:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:00:48] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:01:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:01:28] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[19:01:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:02:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:02:29] recalibration: descartado: cambio de +18.7 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[19:02:49] recalibration: ajuste: confirmado, aplicado: el mayor ajuste fue de 9.29 ms
+[19:03:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:03:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:03:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:04:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:04:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:04:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:05:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:05:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:05:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:06:10] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:06:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:06:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:07:10] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:07:30] recalibration: descartado: cambio de -29.1 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[19:07:50] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[19:08:09] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[19:08:30] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:08:50] recalibration: descartado: la medición no es estable en: JBL Go 4 Blue
+[19:09:10] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:09:30] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:09:50] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:10:10] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:10:30] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:10:50] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:11:09] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[19:11:29] recalibration: descartado: no se pudo alinear la grabación con las referencias
+[19:11:51] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:12:09] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:12:29] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:12:49] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:13:09] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:13:30] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:13:50] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:14:10] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:14:30] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:14:50] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:15:10] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:15:30] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:15:42] panel: save: ok 
+[19:15:42] panel: shutdown: ok 
+[19:15:42] session: session closed
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.20.0.2:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[19:15:43] panel: set: ok {"changes": {"volume_db": -18.0}}
+[19:15:45] recalibration: lazo: recalibración encendida, con alsa_input.usb-3142_fifine_Microphone-00.analog-stereo
+[19:15:45] session: session open: 3 speakers, block 4096, pw-play buffer 50 ms, recalibration on
+[19:15:45] panel: start: ok 
+[19:16:05] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:16:25] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:16:45] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:17:05] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:17:25] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:17:45] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:18:05] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:18:25] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:18:45] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:19:05] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:19:25] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:19:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:20:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:20:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:20:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:21:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:21:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:21:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:22:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:22:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:22:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:23:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:23:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:23:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:24:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:24:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:24:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:25:06] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:25:26] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:25:46] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:26:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:26:27] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:26:47] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:27:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:27:27] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:27:47] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:28:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:28:27] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:28:47] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:29:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:29:27] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:29:47] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:30:07] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:30:27] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:30:47] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:31:09] recalibration: ajuste: aplicado: el mayor ajuste fue de 0.00 ms
+[19:31:10] panel: set: ok {"changes": {"volume_db": -19.0}}
+[19:31:11] panel: set: ok {"changes": {"volume_db": -23.0}}
+[19:31:11] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:11] panel: set: ok {"changes": {"volume_db": -21.0}}
+[19:31:12] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": -3.0}}
+[19:31:13] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": 0.0}}
+[19:31:13] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:13] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"gain_db": 0.0}}
+[19:31:14] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.0}}
+[19:31:14] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:14] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"gain_db": 0.0}}
+[19:31:29] recalibration: descartado: cambio de +16.9 ms en 'JBL Go 4 Blue': se espera confirmación (1/2)
+[19:31:30] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:35] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:43] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:31:50] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"pan": -0.55}}
+[19:31:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"pan": 0.0}}
+[19:31:56] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:56] panel: set: ok {"speaker": "JBL Go 4 Blue", "changes": {"pan": 0.0}}
+[19:31:57] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"pan": 0.65}}
+[19:31:57] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:57] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"pan": 0.15}}
+[19:31:58] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"pan": 0.6}}
+[19:31:58] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"pan": 0.0}}
+[19:31:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:58] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"pan": 0.0}}
+[19:31:59] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.65}}
+[19:31:59] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:31:59] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:31:59] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:31:59] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:32:04] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": -0.15}}
+[19:32:05] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:32:05] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 1.0}}
+[19:32:05] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 1.0}}
+[19:32:06] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.95}}
+[19:32:06] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:32:06] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:32:06] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:32:06] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:32:07] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.15}}
+[19:32:07] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.2}}
+[19:32:07] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.25}}
+[19:32:08] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.3}}
+[19:32:08] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:32:08] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.3}}
+[19:32:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:32:10] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.2}}
+[19:32:10] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:32:10] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:32:10] panel: set: ok {"speaker": "JBL Go 4 Red", "changes": {"pan": 0.0}}
+[19:32:17] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:32:19] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:32:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:32:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:33:08] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:33:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:33:12] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:33:13] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:33:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:33:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black
+[19:34:09] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:34:18] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:20] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:20] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:34:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:34:53] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:54] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:57] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:57] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:34:59] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:05] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:08] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:08] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:09] recalibration: descartado: cambio de +26.7 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[19:35:10] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:10] panel: set: ok {"changes": {"layout": "lcrs"}}
+[19:35:18] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:19] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:19] panel: assign: ok {"speaker": "JBL Go 4 Black", "role": "FL"}
+[19:35:19] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:20] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:20] panel: assign: rejected: conflict: FC is taken by JBL Go 4 Red; give it another role first
+[19:35:26] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:27] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:35:29] recalibration: descartado: cambio de +26.2 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[19:35:49] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:36:09] recalibration: descartado: cambio de +27.2 ms en 'JBL Go 4 Red': se espera confirmación (1/2)
+[19:36:29] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:36:50] recalibration: descartado: la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue
+[19:36:53] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:36:55] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:37:08] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:37:28] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:37:31] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:37:32] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:37:48] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:37:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:37:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:38:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:38:03] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:38:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:38:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:38:08] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:38:09] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:38:29] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:38:49] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:39:09] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:39:29] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:39:49] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:40:09] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:40:29] recalibration: sin señal: no hay contenido sonando: no se mide
+[19:40:48] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:40:48] session: session closed
+[19:40:48] panel: stop: ok 
+[19:40:54] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:41:18] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.1}}
+[19:41:19] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:41:19] panel: set: ok {"speaker": "JBL Go 4 Black", "changes": {"ambience": 0.1}}
+[19:41:19] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:41:31] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:41:39] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:41:41] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[19:58:01] service: closing
+aurasync service stopped
+instalación: /home/fadiaz/.config/aurasync/instalacion.json
+micrófono: alsa_input.usb-3142_fifine_Microphone-00.analog-stereo · mediciones: /home/fadiaz/Desktop/Projects/bluetooth-sync/docs/research/experimentos/datos/10
+aurasync service 0.0.0 listening on http://0.0.0.0:8731/
+  panel (the link carries the token; keep it private):
+    http://192.168.100.11:8731/?t=<token censurado>
+    http://10.241.98.125:8731/?t=<token censurado>
+    http://10.242.98.125:8731/?t=<token censurado>
+    http://127.0.0.1:8731/?t=<token censurado>
+  phone, same network:
+
+[21:57:13] panel: set: ok {"changes": {"volume_db": -21.0}}
+[21:57:18] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[21:57:18] panel: start: rejected: unavailable: not connected: JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[21:57:22] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:39:57] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:48:05] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:48:06] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:48:49] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:27] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:31] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:46] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:48] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:49] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:50] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:50] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:51] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:52] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:52] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:53] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:53] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:54] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:54] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:55] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:56] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:56] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:57] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:58] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:49:59] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:00] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:01] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:02] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:03] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:04] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:04] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:07] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:08] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:09] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:50:09] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:51:05] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:51:43] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[22:52:13] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[00:00:36] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[00:01:40] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[00:01:46] service: rejected: out_of_range: layout must be one of ['quad', 'lcrs']; got 'pestanas'
+[00:16:38] panel: shutdown: ok 
+aurasync service stopped

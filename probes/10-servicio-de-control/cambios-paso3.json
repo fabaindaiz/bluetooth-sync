@@ -1,0 +1,19 @@
+[
+  {"ruta": "/speakers/JBL%20Go%204%20Red", "cuerpo": {"pan": 0.7}, "escuchar": "Red pasa de la izquierda a la derecha en medio segundo, sin clic"},
+  {"ruta": "/speakers/JBL%20Go%204%20Red", "cuerpo": {"pan": -0.7}, "escuchar": "Red vuelve a la izquierda"},
+  {"ruta": "/speakers/JBL%20Go%204%20Blue", "cuerpo": {"ambience": 0.6}, "escuchar": "Blue cambia apenas, SIN corte (su retardo se mueve 0,6 ms con rampa)"},
+  {"ruta": "/speakers/JBL%20Go%204%20Blue", "cuerpo": {"ambience": 0.55}, "escuchar": "Blue vuelve, sin corte"},
+  {"ruta": "/speakers/JBL%20Go%204%20Blue", "cuerpo": {"ambience": 0.8}, "escuchar": "Blue más difuso, CON un corte breve de todo (160 ms): su retardo salta 3 ms"},
+  {"ruta": "/speakers/JBL%20Go%204%20Blue", "cuerpo": {"ambience": 0.55}, "escuchar": "Blue vuelve, con otro corte breve. ¿El corte molesta?"},
+  {"ruta": "/global", "cuerpo": {"volume_db": -30}, "escuchar": "todo baja 10 dB en un tercio de segundo"},
+  {"ruta": "/global", "cuerpo": {"volume_db": -20}, "escuchar": "vuelve al volumen anterior"},
+  {"ruta": "/speakers/JBL%20Go%204%20Black", "cuerpo": {"gain_db": -6}, "escuchar": "Black baja 6 dB en un segundo"},
+  {"ruta": "/speakers/JBL%20Go%204%20Black", "cuerpo": {"gain_db": 0}, "escuchar": "Black vuelve"},
+  {"ruta": "/global", "cuerpo": {"extract_ambience": false}, "escuchar": "sin ambiente extraído: Blue reproduce solo el directo, sin corte"},
+  {"ruta": "/global", "cuerpo": {"extract_ambience": true}, "escuchar": "vuelve el ambiente"},
+  {"ruta": "/global", "cuerpo": {"decorrelate": false}, "escuchar": "corte breve, y después todo suena más 'junto', menos envolvente"},
+  {"ruta": "/global", "cuerpo": {"decorrelate": true}, "escuchar": "corte breve, y vuelve el envolvimiento"},
+  {"ruta": "/global", "cuerpo": {"rear_delay_ms": 13}, "escuchar": "casi nada: Blue se atrasa 0,55 ms con rampa, sin corte"},
+  {"ruta": "/global", "cuerpo": {"rear_delay_ms": 20}, "escuchar": "corte breve: Blue se atrasa 4 ms más"},
+  {"ruta": "/global", "cuerpo": {"rear_delay_ms": 12}, "escuchar": "corte breve, vuelve al inicio"}
+]

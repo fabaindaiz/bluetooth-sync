@@ -1,0 +1,165 @@
+{
+  "kind": "calibration",
+  "mark": "MEDIDO",
+  "saved_at": "2026-10-01T15:44:43-03:00",
+  "note": "P2",
+  "environment": {
+    "host": "PC-Ryzen5",
+    "kernel": "7.2.8-1-cachyos",
+    "pipewire": [
+      "Linked with libpipewire 1.6.9"
+    ],
+    "wireplumber": [
+      "Linked with libwireplumber 0.5.17"
+    ],
+    "bluez": "bluetoothctl: 5.87",
+    "aurasync": "0.0.0"
+  },
+  "speakers": [
+    {
+      "name": "JBL Go 4 Red",
+      "sink": "bluez_output.90_F2_60_75_4A_83.1",
+      "address": "90:F2:60:75:4A:83",
+      "pan": 0.7,
+      "ambience": 0.15,
+      "gain_db": 0.0,
+      "delay_ms": 0.0,
+      "delay_now_ms": 1.8,
+      "role": "FR",
+      "muted": false,
+      "playing": true,
+      "connected": true,
+      "codec": "sbc",
+      "rssi_dbm": null,
+      "modalias": null,
+      "pid": 230788
+    },
+    {
+      "name": "JBL Go 4 Black",
+      "sink": "bluez_output.90_F2_60_DA_66_6D.1",
+      "address": "90:F2:60:DA:66:6D",
+      "pan": 0.7,
+      "ambience": 0.55,
+      "gain_db": 0.0,
+      "delay_ms": 0.0,
+      "delay_now_ms": 6.6,
+      "role": "RR",
+      "muted": false,
+      "playing": true,
+      "connected": true,
+      "codec": "sbc",
+      "rssi_dbm": null,
+      "modalias": null,
+      "pid": 230789
+    },
+    {
+      "name": "JBL Go 4 Blue",
+      "sink": "bluez_output.90_F2_60_E3_07_39.1",
+      "address": "90:F2:60:E3:07:39",
+      "pan": -0.7,
+      "ambience": 0.15,
+      "gain_db": 0.0,
+      "delay_ms": 0.0,
+      "delay_now_ms": 1.8,
+      "role": "FL",
+      "muted": false,
+      "playing": true,
+      "connected": true,
+      "codec": "sbc",
+      "rssi_dbm": null,
+      "modalias": null,
+      "pid": 230790
+    }
+  ],
+  "settings": {
+    "volume_db": -20.0,
+    "extract_ambience": true,
+    "decorrelate": true,
+    "layout": "quad",
+    "block_size": 4096,
+    "player_latency_ms": 200,
+    "sink_description": "aurasync (envolvente)",
+    "recalibrate_every_s": 20.0,
+    "recalibrate_measure_s": 10.0
+  },
+  "installation": {
+    "parlantes": [
+      {
+        "nombre": "JBL Go 4 Red",
+        "sink": "bluez_output.90_F2_60_75_4A_83.1",
+        "x": null,
+        "y": null,
+        "retardo_ms": 0.0,
+        "ganancia_db": 0.0,
+        "pan": 0.7,
+        "ambiente": 0.15
+      },
+      {
+        "nombre": "JBL Go 4 Black",
+        "sink": "bluez_output.90_F2_60_DA_66_6D.1",
+        "x": null,
+        "y": null,
+        "retardo_ms": 0.0,
+        "ganancia_db": 0.0,
+        "pan": 0.7,
+        "ambiente": 0.55
+      },
+      {
+        "nombre": "JBL Go 4 Blue",
+        "sink": "bluez_output.90_F2_60_E3_07_39.1",
+        "x": null,
+        "y": null,
+        "retardo_ms": 0.0,
+        "ganancia_db": 0.0,
+        "pan": -0.7,
+        "ambiente": 0.15
+      }
+    ],
+    "oyente_x": 0.0,
+    "oyente_y": 0.0,
+    "retardo_traseros_ms": 12.0
+  },
+  "calibration": {
+    "state": "done",
+    "progress": 1.0,
+    "seconds": 10.0,
+    "amplitude": 0.1,
+    "results": [
+      {
+        "speaker": "JBL Go 4 Red",
+        "delay_ms": 8.803,
+        "gain_db": -2.25,
+        "stability_ms": 0.0,
+        "silent": false,
+        "doubtful": false,
+        "applied_delay_ms": 0.0,
+        "applied_gain_db": 0.0
+      },
+      {
+        "speaker": "JBL Go 4 Black",
+        "delay_ms": 13.666,
+        "gain_db": -0.76,
+        "stability_ms": 0.003,
+        "silent": false,
+        "doubtful": false,
+        "applied_delay_ms": 0.0,
+        "applied_gain_db": 0.0
+      },
+      {
+        "speaker": "JBL Go 4 Blue",
+        "delay_ms": 0.0,
+        "gain_db": 0.0,
+        "stability_ms": 0.004,
+        "silent": false,
+        "doubtful": false,
+        "applied_delay_ms": 0.0,
+        "applied_gain_db": 0.0
+      }
+    ],
+    "reliable": true,
+    "error": null,
+    "measured_at": "2026-10-01T15:44:43-03:00",
+    "latency_ms": 500.3
+  },
+  "recalibration_history": []
+}
