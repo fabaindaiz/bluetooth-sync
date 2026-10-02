@@ -26,6 +26,12 @@ dependencies = [
   # sin dependencias; es la que eligió el diseño del panel (docs/research/09-panel… en la
   # rama panel-demo).
   "segno==1.6.6",
+  # El HTTPS del servicio con su raíz propia (tls.py, d-7c8794-37f9bc). Ya venía instalada
+  # porque Bumble la exige (>=44.0.3); se declara porque tls.py la importa directo. Tiene
+  # ruedas abi3 para Linux aarch64 (la Pi) y macOS arm64. Se prefirió a llamar a `openssl`:
+  # el del Mac es LibreSSL, con otras opciones, y las restricciones de nombre se arman mejor
+  # como objetos que como archivo de configuración.
+  "cryptography>=44.0.3",
 ]
 
 [project.scripts]
@@ -41,6 +47,11 @@ path = "src/aurasync/__init__.py"
 [tool.hatch.envs.default]
 installer = "uv"
 python = "3.12"
+
+# Los tipos TypeScript del contrato para la aplicación web del panel (d-7c8794-6da524):
+# `hatch run gen-types` escribe web/src/contract.gen.ts; con `--check` solo comprueba.
+[tool.hatch.envs.default.scripts]
+gen-types = "python -m aurasync.contract_types {args}"
 
 [tool.hatch.envs.hatch-test]
 installer = "uv"
@@ -92,11 +103,13 @@ css = "tailwindcss -i src/aurasync/panel/tailwind.input.css -o src/aurasync/pane
 # El contrato del servicio de control (spec 2026-09-29): `ContractError(code, message)` lleva
 # un código estable como primer argumento y el mensaje es para quien llama, no un texto que
 # convenga repetir en una variable. EM y TRY003 piden lo contrario en cada `raise`.
-"src/aurasync/{control,presets,service,rest,session}.py" = ["EM101", "EM102", "TRY003"]
+"src/aurasync/{control,presets,service,rest,session,access,clients,pairing}.py" = ["EM101", "EM102", "TRY003"]
 # Las fuentes y el observador llaman a pw-play, pactl, systemctl y bluetoothctl por nombre,
 # por la misma razón que sonido.py; y sus errores son mensajes para el panel.
 "src/aurasync/{sources,system}.py" = ["S607", "EM101", "EM102", "TRY003"]
 # El servicio llama a `ip` y a `pipewire --version` por nombre, igual que sonido.py.
 "src/aurasync/service.py" = ["S607"]
+# Los scripts de host/scripts/ se corren sueltos (scripts/check.sh) e imprimen su veredicto.
+"scripts/*" = ["INP001", "T201"]
 # Los tests de navegador siguen las mismas excepciones que hatch da a tests/.
 "tests_browser/**/*" = ["ARG001", "PLC0415", "PLR2004", "PLR6301", "S", "TC003", "TID252"]

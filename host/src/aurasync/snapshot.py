@@ -14,7 +14,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from aurasync import __version__, control
+from aurasync import __version__, chain, control
 from aurasync.dsp import profiles
 from aurasync.session import pipe_size_ms
 
@@ -68,6 +68,7 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
                     "connected": (output is not None) if observer.get("at") else None,
                     "codec": output.get("codec") if output else None,
                     "rssi_dbm": device.get("rssi_dbm"),
+                    "battery_pct": device.get("battery_pct"),
                     "modalias": device.get("modalias"),
                     "pid": (pids.get("players") or {}).get(p.nombre),
                     "eq_db": p.ecualizacion_db,
@@ -114,6 +115,10 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "trials": len(svc.ab.trials),
             "correct": sum(t["correct"] for t in svc.ab.trials),
             "last": svc.ab.trials[-1] if svc.ab.trials else None,
+            "match_loudness": svc.ab.match,
+            # Measured only while A or B plays, never X (it would say which one X is).
+            "loudness_lu": svc.ab.loudness(),
+            "compensation_db": dict(svc.ab.compensation),
         }
     elif svc.ab_last is not None:
         ab = {"active": False, **svc.ab_last}
@@ -147,6 +152,11 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
         "speaker_kinds": [{"key": k, "label": v.label} for k, v in profiles.PROFILES.items()],
         "preset": svc.preset,
         "presets": sorted(svc.preset_store.presets),
+        # The chain (spec 2026-10-02 §4.3): the algorithm of each stage and the latency they
+        # add; the whole description is the `chain` operation.
+        "chain_summary": chain.summary(svc.settings.chain),
+        "chain_latency_ms": chain.latency_ms(svc.settings.chain),
+        "chain_pending": [stage for stage, waiting in chain.pending(svc.settings.chain).items() if waiting],
         "source": source,
         "apps": [a["name"] for a in observer.get("apps", [])],
         "devices": [
@@ -176,11 +186,41 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "apps": [{"name": a["name"], "sample_spec": a.get("sample_spec")} for a in observer.get("apps", [])],
         },
         "calibration": calibration,
+        "sync": _sync(session),
+        # Spec 2026-10-02 §6.3: the polling fallback of the stream's `quality` and `radio`.
+        "quality": svc.quality,
+        "radio": svc.radio_view(),
+        "radio_log": _radio_log(svc),
+        "volume_avrcp": svc.bt_volume.status(),
         "ab": ab,
         "pairing": svc.pairing,
         "logs_last": svc.logs.last_seq,
         "warnings": _warnings(svc, lost),
     }
+
+
+def _sync(session: Any) -> dict[str, Any]:
+    """The residual misalignment the recalibration loop measured last (spec 2026-10-02 §7.3.4).
+
+    Each loop round measures it through the corrections in place; it used to reach only the log.
+    `age_s` says how old it is: the panel does not show a stale number as the present one."""
+    last = getattr(session, "last_residual", None) if session is not None else None
+    if not last:
+        return {"residual_ms": None, "measured_at": None, "age_s": None, "speakers": []}
+    return {
+        "residual_ms": last["residual_ms"],
+        "measured_at": last["measured_at"],
+        "age_s": round(time.monotonic() - last["t"], 1),
+        "speakers": list(last["speakers"]),
+    }
+
+
+def _radio_log(svc: Service) -> dict[str, Any]:
+    level = svc.log_level
+    if level is None:
+        return {"available": False, "active": False, "mode": None, "pending": False, "error": None}
+    path = level.changes_file
+    return {"available": True, **level.status(), "changes_file": str(path) if path is not None else None}
 
 
 def _config(svc: Service) -> dict[str, Any]:
@@ -348,6 +388,7 @@ def _health(svc: Service, block_ms: float, lost: list[str]) -> dict[str, Any]:
         "pipe_level_ms": round(session.pipe_ms, 1) if getattr(session, "pipe_ms", None) is not None else None,
         "bt_discovering": bool(svc.observer.view.get("discovering")),
         "cuts": session.cuts.summary() if session is not None and hasattr(session, "cuts") else None,
+        "streams_open": svc.streams.get("open", 0),
     }
 
 
@@ -367,4 +408,12 @@ def _warnings(svc: Service, lost: list[str]) -> list[str]:
         warnings.append(f"streams moved back to their speaker {repairs} time(s) during this session")
     if svc.dirty:
         warnings.append("the installation has unsaved changes")
+    warnings.extend(svc.bt_volume.warnings())
+    level = svc.log_level
+    if level is not None and level.mode == "heavy":
+        warnings.append("the radio log is at debug for everything: journald may drop lines")
+    if level is not None and level.mode is not None and level.verified is False:
+        warnings.append("the radio log level was asked but reads back different")
+    if level is not None and level.error:
+        warnings.append(f"radio log: {level.error}")
     return warnings

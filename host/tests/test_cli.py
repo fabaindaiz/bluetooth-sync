@@ -92,6 +92,29 @@ def test_init_avisa_si_no_hay_parlantes(tmp_path, monkeypatch):
     assert main(["--config", str(tmp_path / "i.json"), "init"]) == 1
 
 
+# `doctor` también lista los micrófonos (`pw-dump`) y resuelve el que se usa (`pactl` y
+# `service.json`). Se sustituyen en el borde del subproceso, con la forma que da `pw-dump`,
+# para que el test no dependa de que el equipo tenga PipeWire (en el Mac no lo tiene) ni de
+# la configuración real del usuario.
+FIFINE = "alsa_input.usb-fifine_Microphone-00.analog-stereo"
+
+
+def _sin_pipewire(monkeypatch, tmp_path):
+    from aurasync import sonido
+
+    dump = [
+        {
+            "type": "PipeWire:Interface:Node",
+            "info": {
+                "props": {"media.class": "Audio/Source", "node.name": FIFINE, "node.description": "fifine Microphone"}
+            },
+        }
+    ]
+    monkeypatch.setattr(sonido, "_pw_dump", lambda: dump)
+    monkeypatch.setattr(sonido, "microfono_por_defecto", lambda: FIFINE)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+
 def test_doctor_marca_los_codecs_mezclados(tmp_path, monkeypatch, capsys):
     """Es el problema que más caro sale: 45 a 150 ms de desfase entre parlantes."""
     from aurasync import sonido
@@ -101,6 +124,7 @@ def test_doctor_marca_los_codecs_mezclados(tmp_path, monkeypatch, capsys):
         SalidaBluetooth("bluez_output.A.1", "uno", "sbc"),
         SalidaBluetooth("bluez_output.B.1", "dos", "aac"),
     ]
+    _sin_pipewire(monkeypatch, tmp_path)
     monkeypatch.setattr(sonido, "salidas_bluetooth", lambda: mezclados)
     assert main(["--config", str(tmp_path / "i.json"), "doctor"]) == 1
     assert "códec" in capsys.readouterr().out.lower()
@@ -110,6 +134,7 @@ def test_doctor_marca_mas_de_tres_parlantes(tmp_path, monkeypatch, capsys):
     """Medido: con 4 streams A2DP el enlace se desestabiliza."""
     from aurasync import sonido
 
+    _sin_pipewire(monkeypatch, tmp_path)
     monkeypatch.setattr(sonido, "salidas_bluetooth", lambda: _salidas(4))
     assert main(["--config", str(tmp_path / "i.json"), "doctor"]) == 1
     assert "3 streams" in capsys.readouterr().out
@@ -118,12 +143,15 @@ def test_doctor_marca_mas_de_tres_parlantes(tmp_path, monkeypatch, capsys):
 def test_doctor_aprueba_una_instalacion_sana(tmp_path, monkeypatch, capsys):
     from aurasync import sonido
 
+    _sin_pipewire(monkeypatch, tmp_path)
     monkeypatch.setattr(sonido, "salidas_bluetooth", lambda: _salidas(3))
     destino = tmp_path / "instalacion.json"
     main(["--config", str(destino), "init"])
     capsys.readouterr()
     assert main(["--config", str(destino), "doctor"]) == 0
-    assert "todo en su lugar" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "todo en su lugar" in out
+    assert f"{FIFINE}  ← el que se usa" in out
 
 
 def test_run_sin_instalacion_avisa(tmp_path, capsys):

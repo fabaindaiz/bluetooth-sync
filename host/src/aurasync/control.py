@@ -12,6 +12,13 @@ one method of a `Controllable`, which raises `ContractError` for what depends on
 
 It also owns the only translation between the contract's English field names and the
 Spanish ones of `config.py`, until i-7c8794-f30928 renames those.
+
+**The chain** (`chain.py`, spec 2026-10-02 §4.3): `chain`, `chain_set` and `chain_reset`
+are additive. `chain_set` is checked here against the descriptors (stage, algorithm, each
+param's type, range and choices, and whether it needs a speaker); what depends on the
+installation (availability, the speaker's name, the bass speakers) the service checks again.
+The old fields stay, as aliases of the chain (`chain.ON_OFF_ALIASES`, `GLOBAL_ALIASES`,
+`SPEAKER_ALIASES`).
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from aurasync import chain
 from aurasync.dsp.profiles import PROFILES
 
 VERSION = 1
@@ -39,6 +47,8 @@ HTTP_STATUS = {
     "conflict": 409,
     "unavailable": 409,
     "unauthorized": 401,
+    "forbidden": 403,
+    "rate_limited": 429,
     "busy": 503,
     "internal": 500,
 }
@@ -186,6 +196,9 @@ NAME = Field(str, 1, 64)
 SPEAKER = Field(str, 1, 64)
 ADDRESS = Field(str, pattern=MAC)
 SERVICE = Field(str, 1, 64)
+SCOPE = Field(str, choices=("read", "control", "admin"))
+CLIENT_ID = Field(str, pattern=r"^[0-9a-f]{8}$")
+REQUEST_ID = Field(str, pattern=r"^[A-Za-z0-9_-]{8,64}$")
 
 
 @dataclass(frozen=True)
@@ -230,10 +243,27 @@ OPS: dict[str, Op] = {
     "service_start": Op(required={"name": SERVICE}),
     "service_stop": Op(required={"name": SERVICE}),
     "service_restart": Op(required={"name": SERVICE}),
-    "ab_start": Op(required={"a": NAME, "b": NAME}),
+    "ab_start": Op(required={"a": NAME, "b": NAME}, optional={"match_loudness": Field(bool)}),
     "ab_play": Op(required={"which": Field(str, choices=("a", "b", "x"))}),
     "ab_answer": Op(required={"x_is": Field(str, choices=("a", "b"))}),
     "ab_stop": Op(),
+    # The chain (spec 2026-10-02 §4.3):
+    "chain": Op(),
+    "chain_set": Op(
+        required={"stage": Field(str, 1, 64)},
+        optional={"algorithm": Field(str, 1, 64), "params": Field(dict), "speaker": SPEAKER},
+    ),
+    "chain_reset": Op(required={"stage": Field(str, 1, 64)}, optional={"param": Field(str, 1, 64), "speaker": SPEAKER}),
+    # The radio (spec 2026-10-02 §3.2): raise the bluez5 log level so the radio monitor sees drops.
+    "radio_log": Op(required={"active": Field(bool)}, optional={"mode": Field(str, choices=("light", "heavy"))}),
+    # Clients and pairing (d-7c8794-37f9bc, `access.py`): they never touch the engine.
+    "pair_start": Op(optional={"seconds": Field(float, 30.0, 600.0)}),
+    "pair_status": Op(),
+    "pair_approve": Op(required={"request": REQUEST_ID}, optional={"scope": SCOPE}),
+    "pair_deny": Op(required={"request": REQUEST_ID}),
+    "clients": Op(),
+    "client_revoke": Op(required={"client": CLIENT_ID}),
+    "client_rename": Op(required={"client": CLIENT_ID, "name": NAME}),
 }
 ENVELOPE = {"v", "id", "op"}
 
@@ -273,6 +303,15 @@ def parse(message: Any) -> Command:
         args[key] = check_value(key, spec, value)
     if op_name == "set":
         args["changes"] = check_changes(args["changes"], speaker="speaker" in args)
+    try:
+        if op_name == "chain_set":
+            change = chain.validate_set(args["stage"], args.get("algorithm"), args.get("params"), args.get("speaker"))
+            if "params" in args:
+                args["params"] = change.params
+        elif op_name == "chain_reset":
+            chain.validate_reset(args["stage"], args.get("param"), args.get("speaker"))
+    except chain.ChainError as exc:
+        raise ContractError(exc.code, exc.message) from exc
     return Command(op_name, args, message.get("id"))
 
 

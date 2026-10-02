@@ -8,7 +8,12 @@ browser on any machine. What is real and what is not:
   returns;
 - **simulated**: the speakers' streams, the virtual sink (it delivers the test signal of
   `sources.py` when a source is chosen), the Bluetooth devices, the system services, and
-  the room: each speaker reaches the microphone with a fixed delay and gain plus noise.
+  the room: each speaker reaches the microphone with a fixed delay and gain plus noise,
+  times its Bluetooth volume (`SimulatedVolumes`, what `volume.avrcp` moves);
+- **simulated, and marked so**: the radio (`SimulatedRadio` writes journal lines like
+  WirePlumber's, with a dropped packet now and then, only while the radio log is "on";
+  `state.radio.simulated` is true) and the log level (`simulated_log_level`, which runs no
+  `wpctl` and writes its changes file in the simulation's folder).
 
 The panel shows a SIMULADO badge, and `measurement_save` refuses a simulated calibration:
 a simulated number must never end up in `docs/research/experimentos/` as MEDIDO.
@@ -17,6 +22,8 @@ a simulated number must never end up in `docs/research/experimentos/` as MEDIDO.
 from __future__ import annotations
 
 import itertools
+import re
+import subprocess
 import threading
 import time
 from typing import TYPE_CHECKING, Any, Self
@@ -24,10 +31,14 @@ from typing import TYPE_CHECKING, Any, Self
 import numpy as np
 
 from aurasync.dsp import eq, response
+from aurasync.radio import MONITOR_TOPIC, SINK_TOPIC, LogLevel, RadioMonitor
 from aurasync.session import AudioSession
 from aurasync.sources import probe_signal
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from aurasync.config import Instalacion
 
 ROOM_DELAYS_MS = (3.0, 7.5, 12.0, 5.0, 9.0, 1.5)
@@ -45,11 +56,38 @@ the equaliser something real to correct."""
 _pids = itertools.count(41000)
 
 
+class SimulatedVolumes:
+    """The speakers' Bluetooth volume (PipeWire percent per sink), for `bt_volume.BluetoothVolume`.
+
+    A speaker takes a volume in AVRCP steps (127), as a Go 4 does; `deaf` sinks ignore it."""
+
+    def __init__(self, start_pct: float = 100.0) -> None:
+        self.start_pct = start_pct
+        self.percents: dict[str, float] = {}
+        self.deaf: set[str] = set()
+
+    def unavailable(self) -> str | None:
+        return None
+
+    def set_percent(self, sink: str, percent: float) -> bool:
+        if sink not in self.deaf:
+            self.percents[sink] = round(max(0.0, min(percent, 100.0)) / 100 * 127) / 127 * 100
+        return True
+
+    def get_percent(self, sink: str) -> float | None:
+        return self.percents.get(sink, self.start_pct)
+
+    def gain(self, sink: str) -> float:
+        """Linear gain of the cubic curve: 80 % is -5.81 dB."""
+        return (self.get_percent(sink) / 100) ** 3
+
+
 class Room:
     """What the microphone hears: every speaker's output, delayed and scaled, plus noise."""
 
-    def __init__(self, names: list[str], rate: int) -> None:
+    def __init__(self, names: list[str], rate: int, volume: Callable[[str], float] | None = None) -> None:
         self.rate = rate
+        self.volume = volume or (lambda _: 1.0)
         self.delays = {n: int(ROOM_DELAYS_MS[i % len(ROOM_DELAYS_MS)] * rate / 1000) for i, n in enumerate(names)}
         self.gains = {n: ROOM_GAINS[i % len(ROOM_GAINS)] for i, n in enumerate(names)}
         self._tails = {n: np.zeros(d) for n, d in self.delays.items()}
@@ -63,7 +101,7 @@ class Room:
         mix = np.zeros(n)
         for name, x in blocks.items():
             joined = np.concatenate([self._tails[name], self._colour[name].process(x)])
-            mix += self.gains[name] * joined[:n]
+            mix += self.gains[name] * self.volume(name) * joined[:n]
             self._tails[name] = joined[n:]
         mix += ROOM_NOISE * self._rng.standard_normal(n)
         with self._lock:
@@ -191,10 +229,16 @@ class SimulatedSource:
 
 
 class SimulatedSession(AudioSession):
+    bt_volumes: SimulatedVolumes | None = None
+    """Set by the service: the speakers' Bluetooth volume the room applies."""
+
     def open(self) -> None:
         o = self.options
         time.sleep(0.3)
-        self.room = Room(list(self._sinks), o.rate)
+        volumes = self.bt_volumes if isinstance(self.bt_volumes, SimulatedVolumes) else None
+        self.room = Room(
+            list(self._sinks), o.rate, (lambda name: volumes.gain(self._sinks[name])) if volumes is not None else None
+        )
         self._player = SimulatedPlayer(self._sinks, self.room)
         self._input = SimulatedInput(o.rate, self)
         self._stack.callback(self._recal_stack.close)
@@ -210,6 +254,9 @@ class SimulatedSession(AudioSession):
         return SimulatedSource()
 
 
+SIMULATED_BATTERY_PCT = (90, 75, 60, 45)
+
+
 class SimulatedObserver:
     """The system view of a machine with the installation's speakers connected, and one more nearby."""
 
@@ -223,10 +270,13 @@ class SimulatedObserver:
                 "modalias": "bluetooth:v0ECBp2063d0100",
                 "audio_sink": True,
                 "rssi_dbm": None,
+                # A battery each, as BlueZ reports a Go 4's (`org.bluez.Battery1`): the panel
+                # shows it and warns at 20 % (spec 2026-10-02 §7.3.3).
+                "battery_pct": SIMULATED_BATTERY_PCT[i % len(SIMULATED_BATTERY_PCT)],
                 "busy": False,
                 "sink": p.sink,
             }
-            for p in speakers
+            for i, p in enumerate(speakers)
         }
         self._devices["F8:5C:7D:00:11:22"] = {
             "name": "JBL Flip 7",
@@ -300,3 +350,109 @@ class SimulatedObserver:
         from aurasync.sonido import SalidaBluetooth  # noqa: PLC0415
 
         return [SalidaBluetooth(o["sink"], o["name"], o["codec"]) for o in self.view["outputs"]]
+
+
+# -- the radio and its log level ------------------------------------------------------------
+
+_LEVEL = re.compile(r"\S+")
+
+
+def simulated_log_level(changes_file: Path) -> LogLevel:
+    """A `LogLevel` whose `wpctl` and `pw-metadata` are an in-memory WirePlumber.
+
+    It writes its changes file like the real one (with its reversal), so the panel's flow and
+    the kill switch can be tried without a Linux machine; it changes nothing in the system."""
+    level: dict[str, str | None] = {"value": None}
+
+    def run(args: list[str], _timeout: float) -> subprocess.CompletedProcess[str]:
+        name = args[0].rsplit("/", 1)[-1]
+        if name == "wpctl" and args[1:2] == ["set-log-level"]:
+            level["value"] = None if args[2] == "-" else args[2]
+            return subprocess.CompletedProcess(args, 0, "", "")
+        if name == "pw-metadata":
+            lines = "update: id:0 key:'log.level' value:'2' type:''\n"
+            if level["value"] is not None:
+                lines += f"update: id:57 key:'log.level' value:'{level['value']}' type:''\n"
+            return subprocess.CompletedProcess(args, 0, lines, "")
+        return subprocess.CompletedProcess(args, 1, "", "unknown command")
+
+    log_level = LogLevel(changes_file, run=run, which=lambda name: f"/usr/bin/{name}")
+    log_level.simulated = True  # type: ignore[attr-defined]
+    return log_level
+
+
+class SimulatedRadio(RadioMonitor):
+    """A `RadioMonitor` fed with journal lines like WirePlumber's instead of `journalctl`.
+
+    While `logging()` is true it writes, every second and per speaker, the healthy
+    `increase bitpool`, and now and then (`drop_every_s` on average, per speaker) a
+    `reduce bitpool`: a dropped packet. The mapping lines (transport → address, sink →
+    transport) come first, as when a speaker starts playing with the log raised.
+    """
+
+    simulated = True
+
+    def __init__(
+        self,
+        sinks: Callable[[], list[str]],
+        logging: Callable[[], bool],
+        *,
+        drop_every_s: float = 45.0,
+        seed: int | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._sinks_now = sinks
+        self._logging = logging
+        self.drop_every_s = drop_every_s
+        self._rng = np.random.default_rng(seed)
+        self._bitpool: dict[str, int] = {}
+        self._pointers: dict[str, tuple[str, str]] = {}
+        self._sim_thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._sim_thread is not None:
+            return
+        self._started_at = self.clock()
+        self._stopping.clear()
+        self._sim_thread = threading.Thread(target=self._simulate, name="aurasync-radio-sim", daemon=True)
+        self._sim_thread.start()
+
+    def stop(self, timeout: float = 2.0) -> None:
+        self._stopping.set()
+        if self._sim_thread is not None:
+            self._sim_thread.join(timeout)
+            self._sim_thread = None
+
+    def _entry(self, topic: str, message: str) -> dict[str, Any]:
+        return {"__REALTIME_TIMESTAMP": str(int(self.clock() * 1e6)), "TOPIC": topic, "MESSAGE": message}
+
+    def tick(self) -> None:
+        """One second of journal (the thread calls it; tests can too)."""
+        if not self._logging():
+            self._pointers.clear()
+            return
+        for k, sink in enumerate(self._sinks_now()):
+            if sink not in self._pointers:
+                address = sink.removeprefix("bluez_output.").split(".")[0]
+                node, transport = f"0x5a1{k:04x}0", f"0x7f2{k:04x}0"
+                self._pointers[sink] = (node, transport)
+                path = f"/org/bluez/hci0/dev_{address}/sep1/fd{k + 3}"
+                self.feed(self._entry(MONITOR_TOPIC, f"transport {transport}: Acquired {path}, fd 4{k} MTU 895:895"))
+                self.feed(self._entry(SINK_TOPIC, f"{node}: transport {transport} state 1->2"))
+            node, _ = self._pointers[sink]
+            bitpool = self._bitpool.get(sink, 40)
+            if self._rng.random() < 1.0 / self.drop_every_s:
+                bitpool = max(2, bitpool - 2)
+                self.feed(self._entry(SINK_TOPIC, f"{node}: reduce bitpool: {bitpool}"))
+            else:
+                bitpool = min(40, bitpool + 1)
+                self.feed(self._entry(SINK_TOPIC, f"{node}: increase bitpool: {bitpool}"))
+            self._bitpool[sink] = bitpool
+
+    def _simulate(self) -> None:
+        while not self._stopping.wait(1.0):
+            try:
+                self.tick()
+            except Exception:  # noqa: BLE001 - a simulation must not take the service down
+                time.sleep(1.0)

@@ -45,9 +45,17 @@ pero **no converge** en el parlante de `ambiente` alto. Sigue apagado por defect
 | `system.py` | lo que se observa del equipo (systemd, `bluetoothctl`, aplicaciones) en un hilo propio, y conectar o desconectar parlantes | spec §15 |
 | `logbuffer.py` | el log del proceso en memoria, con cursor, para el panel | rama panel-demo |
 | `simulated.py` | `--simular`: el motor y el lazo reales sobre una sala simulada | spec §15.5 |
-| `panel/` | el panel web: `index.html`, `app.js` y `tailwind.css`, compilado de `tailwind.input.css` con `hatch run web:css` (sin Node; se versiona) | [10-panel-de-control](../docs/research/10-panel-de-control.md) |
+| `panel/` | el panel web: `index.html`, `app.js`, `tailwind.css` (compilado de `tailwind.input.css` con `hatch run web:css`, sin Node) y `cadena.js` (compilado de `host/web/` con `npm run build`); todo se versiona | [10-panel-de-control](../docs/research/10-panel-de-control.md) |
 | `dsp/eq.py` · `dsp/response.py` | ecualización por parlante desde la respuesta medida en la calibración | experimentos/10 §6 |
-| `cli.py` | `doctor`, `sinks`, `init`, `calibrate`, `run`, `play`, `service` | — |
+| `chain.py` | la cadena como datos: cada etapa, sus algoritmos y sus perillas, con sus valores por defecto (el sonido de siempre, bit a bit) y lo que se guarda | spec 2026-10-02 §4 |
+| `chain_stages.py` | las etapas nuevas enchufadas al motor: difusión, graves (`protect`, `crossover`) y el limitador de pico real | spec 2026-10-02 §5 |
+| `dsp/crossover.py` · `dsp/virtual_bass.py` · `dsp/diffuse.py` · `dsp/limiter.py` | Linkwitz-Riley, graves psicoacústicos (NLD), cola difusa por parlante, limitadores de pico y de pico real | [11](../docs/research/11-procesamiento-calidad-canales-y-panel.md) R1-R6 |
+| `dsp/loudness.py` · `quality.py` | sonoridad BS.1770 (M/S/I), pico real ×4 y PSR; en vivo, entrada contra salidas, ganancia neta y si la cadena aplana | [11](../docs/research/11-procesamiento-calidad-canales-y-panel.md) §1, spec 2026-10-02 §6 |
+| `bt_volume.py` | `volume.avrcp`: el volumen en los parlantes (`pactl`), **leído de vuelta**, sin saltos de nivel al cambiar de modo | experimentos/10 §5.4, spec 2026-10-02 §5 |
+| `radio.py` · `cuts.py` | los paquetes que el Bluetooth descarta (`reduce bitpool` en el journal de WirePlumber) y el registro de cortes | spec 2026-10-02 §3, [experimentos/12](../docs/research/experimentos/12-microcortes-con-3-go-4.md) |
+| `access.py` · `clients.py` · `pairing.py` | quién puede hablar con el servicio: un token por cliente guardado como hash, alcances (`read`, `control`, `admin`), emparejamiento, intentos fallidos por dirección, tickets del stream y CORS | d-7c8794-37f9bc, [`docs/control-api.md`](docs/control-api.md) |
+| `tls.py` · `lan.py` · `remote.py` · `mdns.py` | HTTPS con una raíz propia limitada a la red local, los nombres de la máquina (recalculados si cambia la IP), los puertos HTTP y HTTPS, y el anuncio mDNS opcional | d-7c8794-37f9bc |
+| `cli.py` | `doctor`, `sinks`, `init`, `calibrate`, `run`, `play`, `service`, `radio-log`, `clients`, `tls` | — |
 
 ## Cómo se usa
 
@@ -59,7 +67,77 @@ aurasync run         # el modo de uso real (ver abajo)
 aurasync play tema.wav --sin-decorrelar   # el A/B que muestra el efecto
 aurasync run --recalibrar --volumen-db -12 --registro ~/lazo.jsonl   # sin validar todavía
 aurasync service     # programa persistente con API REST (ver docs/control-api.md)
+aurasync radio-log on    # registro de radio: ver los paquetes que el Bluetooth descarta
+aurasync radio-log off   # devuelve el nivel de registro a como estaba
+aurasync clients list    # dispositivos emparejados y solicitudes pendientes
+aurasync clients code    # un código de 6 dígitos para emparejar un teléfono
+aurasync tls info        # la raíz del HTTPS, su huella y cómo instalarla
 ```
+
+**El panel como PWA desde GitHub Pages** (d-7c8794-37f9bc, 2026-10-02; el servicio y la PWA
+están construidos y probados en Chromium contra el servicio simulado por HTTPS; **sin probar en
+teléfonos**; la publicación la activa el usuario, ver *La aplicación web* abajo). El servicio escucha **HTTPS en el
+8443** además del HTTP de siempre (8731, que sigue sirviendo el panel local como respaldo).
+Un `service.json` nuevo trae `"tls": true`; uno anterior sigue sin HTTPS hasta agregarle esa
+clave. Al primer arranque con TLS genera en `~/.config/aurasync/tls/` una **raíz propia** (10
+años) y con ella el certificado del servidor (397 días, para `aurasync.local`, el nombre del
+equipo, `localhost` y sus IP; se rehace solo si cambia la IP o faltan 30 días). La raíz **solo
+puede certificar nombres `.local` y direcciones privadas** (`NameConstraints`), así que
+instalarla en un teléfono no le da poder sobre otros sitios.
+
+Conectar un teléfono, la primera vez:
+
+1. **Instalar la raíz** (una vez por teléfono; sin ella, el navegador avisa y la PWA no
+   conecta). `aurasync tls info` imprime los links.
+   - **iPhone:** abrir en Safari `http://<ip>:8731/v1/tls/root.mobileconfig` → Permitir →
+     Ajustes → *Perfil descargado* → Instalar. Después, **Ajustes → General → Información →
+     Ajustes de confianza de certificados** → activar *aurasync local root*. Sin ese segundo
+     paso iOS instala el perfil pero no confía en la raíz.
+   - **Android:** descargar `http://<ip>:8731/v1/tls/root.crt` → Ajustes → Seguridad (o
+     *Seguridad y privacidad → Más ajustes*) → *Encriptación y credenciales* → *Instalar un
+     certificado* → *Certificado de CA*. Chrome confía en las CA del usuario; Firefox para
+     Android necesita además activar las CA de terceros en sus ajustes (REPORTADO, sin probar).
+   - Comprobar la huella: la que muestra el teléfono tiene que coincidir con el `sha256` de
+     `aurasync tls info`.
+2. **Emparejar.** En la PWA (`https://fabaindaiz.github.io/bluetooth-sync/`): *Agregar equipo*
+   con la dirección (`aurasync.local:8443` o `IP:8443`), o escaneando el QR de **Conectar
+   teléfono** en el panel del equipo, que abre la PWA con la dirección y la huella de la raíz (y
+   ningún token). La PWA pregunta `GET /v1/hello`, muestra nombre, versión y huella (y se niega a
+   emparejar si la huella no coincide con la del QR); si el `fetch` falla, explica los dos
+   caminos: instalar la raíz (paso 1) o abrir `https://<equipo>:8443` y aceptar el aviso. Después
+   pide acceso con un nombre, muestra un número de comprobación de 4 dígitos y espera la
+   aprobación:
+   - si el servicio **no tiene ningún cliente**, la primera solicitud en los 10 minutos
+     siguientes a arrancarlo se aprueba sola, como `admin` (`pair_window_s`; 0 la apaga);
+   - si ya hay clientes, se aprueba desde un teléfono `admin`, con `aurasync clients approve
+     <id>`, o escribiendo en la PWA el código de `aurasync clients code` (o el que imprime la
+     terminal al arrancar).
+3. Desde ahí la PWA usa su token (`Authorization: Bearer`), que el servicio guarda solo como
+   hash en `clients.json` (0600). `aurasync clients revoke <id>` lo corta, también el stream que
+   tenga abierto. Rotar el token maestro de `service.json` no desconecta a nadie.
+
+Cómo revertirlo: `"tls": false` en `service.json` apaga el HTTPS; borrar
+`~/.config/aurasync/tls/` hace una raíz nueva al próximo arranque (hay que reinstalarla en cada
+teléfono); en el iPhone se quita el perfil en Ajustes → General → VPN y gestión de
+dispositivos, y en Android en *Credenciales de usuario*. `clients.json` borrado deja sin
+clientes (el token maestro sigue valiendo). El anuncio mDNS (`"mdns": true`, apagado por
+defecto) usa `avahi-publish-service` como proceso hijo: no deja archivos en `/etc` y termina
+con el servicio. Nada de esto está probado todavía en un iPhone ni en Android.
+
+**La cadena tiene todas sus etapas conectadas** (2026-10-02, sin validar con parlantes):
+difusión (`diffuse.noise_tail`), graves (`bass.protect` con armónicos opcionales,
+`bass.crossover` a un parlante apto), volumen en el parlante (`volume.avrcp`) y limitador de
+pico real (`limiter.true_peak`), además de las perillas nuevas de la ecualización y del
+decorrelador. **Todo lo nuevo viene apagado**: con los valores por defecto el motor suena
+bit a bit como antes (`tests/test_chain_golden.py`). Se eligen desde el panel o con
+`chain_set` ([`docs/control-api.md`](docs/control-api.md)). El costo con todo encendido se
+mide con `probes/18-costo-de-la-cadena/costo.py`.
+
+**El registro de radio es un cambio de sistema**: `aurasync radio-log on` (o el botón del
+panel) sube el nivel de registro de WirePlumber solo para los temas de bluez5, y antes de
+hacerlo anota el cambio y cómo revertirlo en `~/.config/aurasync/cambios-de-sistema.txt`.
+El servicio lo revierte al cerrarse (también con Ctrl-C y SIGTERM) y si la sesión falla; si
+un proceso muerto lo dejó puesto, lo revierte al arrancar.
 
 **`aurasync service` trae un panel web** (2026-10-01, d-7c8794-09d10f, sin validar con
 parlantes): el link con el token que imprime al arrancar abre todo lo del panel de
@@ -96,6 +174,53 @@ desaparece al cerrarlo.
 **Nada pide números.** `init` toma lo que hay conectado y `calibrate` mide lo demás. Lo
 único que tiene sentido ajustar a mano en `instalacion.json` es `pan` y `ambiente` de cada
 parlante: qué reproduce cada uno, que es una decisión artística y no algo medible.
+
+## La aplicación web (`host/web/`)
+
+El panel se escribe en dos partes que conviven (d-7c8794-6da524): `src/aurasync/panel/app.js`, a
+mano y sin build, y las pantallas en **Vite + TypeScript + Preact** en `host/web/src/`, que se
+compilan a un solo `cadena.js`. **npm va directo, fuera de hatch** (Node del sistema; probado con
+Node 26.10 y npm 11.19):
+
+```bash
+cd host/web
+npm ci                 # las dependencias exactas de package-lock.json
+npm run check          # tipos (tsc)
+npm test               # vitest: transporte, enlace del QR, build de la PWA, privacidad
+npm run build          # el panel local: escribe ../src/aurasync/panel/cadena.js y su sello (se versionan)
+npm run build:pwa      # la PWA: arma host/web/dist-pwa/ (no se versiona)
+```
+
+- **Un solo transporte** (`src/transport.ts`): `app.js` y Preact lo usan por `window.aurasync.api`.
+  En el panel que sirve el equipo usa la cookie; en la PWA, el token del cliente (`Authorization:
+  Bearer`) y el stream por ticket. Avisa una vez de cada 401 (revocado: volver a emparejar), 403,
+  429 (con `Retry-After`) y de un equipo que no contesta.
+- **La pantalla de conexión** (`src/connect/`): equipos recordados (nombre, dirección, última vez
+  visto, huella de la raíz), agregar por dirección o por el QR, emparejar, elegir, olvidar; con un
+  token `admin`, las solicitudes pendientes, los clientes (renombrar, revocar) y un código de
+  emparejamiento (lo mismo aparece en el diálogo **Conectar teléfono** del panel local). Los
+  equipos se guardan en IndexedDB, o en localStorage si no hay.
+- **La PWA** (`npm run build:pwa`, `pwa/build.ts`): el mismo `index.html` (rutas relativas, para
+  funcionar bajo `/bluetooth-sync/`), `app.js`, `cadena.js` y `tailwind.css`, más
+  `manifest.webmanifest`, íconos dibujados en el build (`pwa/icons.ts`), `build.json` (versión y
+  commit) y un **service worker propio** (`pwa/sw.js`) con las reglas de `thom-music-player`: cache
+  first con la página incluida, cada archivo con su SHA-256, actualización atómica que baja solo
+  lo que cambió, y la versión nueva se aplica sola **salvo durante una calibración o un A/B**, que
+  esperan. Diagnóstico → Servicios muestra su línea de estado (`sw active 10/10  upd idle  0.0.0
+  <commit>`). Nunca guarda respuestas de la API del equipo. El build **falla si encuentra algo
+  privado** (MAC, IP privada, token `asc_`, nombre de un sink o de un equipo; `pwa/privacy.ts`).
+- `scripts/check.sh` no necesita Node: comprueba con `scripts/web_stamp.py` que `cadena.js`
+  corresponde a `host/web/`, y que `dist-pwa/` no está versionado.
+- **Tests de navegador de la PWA:** `npm run build:pwa` y después `hatch run browser:test`
+  (`tests_browser/test_pwa.py`, solo Chromium: sirve `dist-pwa/` en `http://localhost:5173` bajo
+  `/bluetooth-sync/`, que tiene que estar libre, contra el servicio simulado por HTTPS).
+
+**Publicarla (lo hace el usuario, una vez).** `.github/workflows/pages.yml` la arma y la publica
+en cada push a `main` que toque `host/web/` o el panel, y a mano (*Actions → pages → Run
+workflow*). Para activarla: en GitHub, **Settings → Pages → Build and deployment → Source:
+GitHub Actions**, y correr el workflow una vez. El sitio es público aunque el repositorio sea
+privado (GitHub Pro); no lleva ningún dato de los equipos. Para apagarla: *Settings → Pages →
+Unpublish site* y borrar el workflow.
 
 ## Requisitos
 

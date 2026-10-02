@@ -42,10 +42,33 @@ SUAVIZADO_BINS = 6
 """Ancho del suavizado del retardo de grupo, en bins: lo que hace que la fase no salte."""
 
 MAXIMO_FIJOS = 6
+LLENADO_MAXIMO = 0.75
+"""El retardo de grupo más largo (medio más variación) no pasa de esta fracción del filtro: más
+allá, la respuesta al impulso da la vuelta (es circular) y deja de ser un todo-paso suave."""
+
+
+def largo_necesario(largo: int, retardo_medio_ms: float, variacion_ms: float, sr: int = 48000) -> int:
+    """El largo a usar: `largo`, o el múltiplo de 128 que haga entrar el retardo pedido.
+
+    Con los valores por defecto (2,5 + 1,5 ms = 192 muestras) 256 alcanza justo y no cambia.
+    """
+    maximo = (retardo_medio_ms + variacion_ms) * sr / 1000
+    while maximo > LLENADO_MAXIMO * largo:
+        largo += 128
+    return largo
+
+
 """Cuántas salidas totalmente decorrelacionadas se pueden sacar con filtros fijos."""
 
 
-def filtro_todo_paso(largo: int = LARGO_POR_DEFECTO, semilla: int | None = None, sr: int = 48000) -> np.ndarray:
+def filtro_todo_paso(
+    largo: int = LARGO_POR_DEFECTO,
+    semilla: int | None = None,
+    sr: int = 48000,
+    *,
+    retardo_medio_ms: float = RETARDO_MEDIO_MS,
+    variacion_ms: float = VARIACION_MS,
+) -> np.ndarray:
     """Un filtro FIR todo-paso con fase aleatoria **y suave**.
 
     **Por qué suave, y qué falló antes** (MEDIDO el 2026-10-01, experimentos/10 §6). La versión
@@ -59,6 +82,9 @@ def filtro_todo_paso(largo: int = LARGO_POR_DEFECTO, semilla: int | None = None,
     `RETARDO_MEDIO_MS` y apartamiento `VARIACION_MS`, y la fase es su integral. Una fase sin
     saltos interpola bien entre bins: la respuesta continua queda plana a ±0,1 dB, y la
     correlación entre salidas con ruido rosa baja de 0,67 a ~0,53.
+
+    `retardo_medio_ms` y `variacion_ms` son las perillas `decorrelate.mean_ms` y `spread_ms` de
+    la cadena; con sus valores por defecto el filtro es exactamente el de siempre.
     """
     rng = np.random.default_rng(semilla)
     n_bins = largo // 2 + 1
@@ -68,7 +94,7 @@ def filtro_todo_paso(largo: int = LARGO_POR_DEFECTO, semilla: int | None = None,
     ventana /= ventana.sum()
     retardo = np.convolve(ruido, ventana, mode="same")[borde : borde + n_bins]
     retardo = (retardo - retardo.mean()) / (np.abs(retardo - retardo.mean()).max() + 1e-12)
-    retardo_s = (RETARDO_MEDIO_MS + VARIACION_MS * retardo) / 1000
+    retardo_s = (retardo_medio_ms + variacion_ms * retardo) / 1000
     fase = -np.cumsum(2 * np.pi * (sr / largo) * retardo_s)
     fase -= fase[0]
     # Los bins de continua y de Nyquist tienen que ser reales, o la respuesta al impulso
@@ -124,6 +150,9 @@ def banco_decorrelador(
     largo: int = LARGO_POR_DEFECTO,
     candidatos: int = 64,
     semilla: int = 0,
+    *,
+    retardo_medio_ms: float = RETARDO_MEDIO_MS,
+    variacion_ms: float = VARIACION_MS,
 ) -> list[np.ndarray]:
     """`n` filtros todo-paso lo más ortogonales entre sí que se pueda.
 
@@ -145,7 +174,9 @@ def banco_decorrelador(
 
     rng = np.random.default_rng(semilla)
     semillas = rng.integers(0, 2**31 - 1, candidatos)
-    pool = [filtro_todo_paso(largo, int(s)) for s in semillas]
+    pool = [
+        filtro_todo_paso(largo, int(s), retardo_medio_ms=retardo_medio_ms, variacion_ms=variacion_ms) for s in semillas
+    ]
 
     elegidos = [pool.pop(0)]
     while len(elegidos) < n:

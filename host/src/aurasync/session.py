@@ -35,6 +35,7 @@ from aurasync.cuts import LATE_MS, LOW_MS, CutLog
 from aurasync.dsp import eq, response
 from aurasync.dsp.input_analysis import InputAnalyzer
 from aurasync.dsp.retardo import LineaDeRetardo
+from aurasync.quality import QualityMeter
 from aurasync.sources import Source
 from aurasync.telemetry import Telemetry
 
@@ -302,6 +303,10 @@ class AudioSession:
         self.last_recalibration: dict[str, Any] | None = None
         self.recalibration_history: list[dict] = []
         """The delay the loop applied to each speaker, after each decision (for the chart)."""
+        self.last_residual: dict[str, Any] | None = None
+        """The residual misalignment the loop measured last, through the corrections in place
+        (the spread of the measured delays, the speakers heard), with its clock: the panel's
+        "Sincronía" (spec 2026-10-02 §7.3.4). Only a reliable measurement without a cut."""
         self.lost: list[str] = []
         """Speakers whose stream died. The rest keep playing, as `run` always did."""
         self.routing_repairs = 0
@@ -309,6 +314,8 @@ class AudioSession:
         self.meters = Meters()
         self.input_analysis = InputAnalyzer(options.rate)
         self.telemetry = Telemetry(options.rate)
+        self.quality = QualityMeter(options.rate, [p.nombre for p in installation.parlantes])
+        """Loudness in and out, PSR, true peak (spec 2026-10-02 §6.2): 0.3 ms per block."""
         self.cuts = CutLog()
         self._routing_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-ruteo")
         self._routing_future = None
@@ -456,6 +463,7 @@ class AudioSession:
                 self.telemetry.set_latency(measured)
             limiter = getattr(self.motor, "reduccion_limitador_db", None)
             self.telemetry.record(blocks, pair, limiter() if limiter else None)
+            self.quality.push(pair, blocks)
         except Exception:  # noqa: BLE001 - a report must never stop the audio (best-effort side channel)
             self._telemetry_failures = getattr(self, "_telemetry_failures", 0) + 1
             if self._telemetry_failures == 1:
@@ -630,6 +638,7 @@ class AudioSession:
                 # it would be measuring a cut signal (spec §6.5).
                 self._record("descartado", motivo="hubo un corte durante la medición")
             else:
+                self._note_residual(result)
                 adjustment = self.loop.proponer(result)
                 self._record(
                     "ajuste" if adjustment.aceptado else "descartado",
@@ -661,6 +670,21 @@ class AudioSession:
             # tried again next round. On 2026-10-02 one (in another process) took the session down.
             self._record("error", motivo=f"la medición no arrancó ({exc!r}); se intenta en la próxima vuelta")
 
+    def _note_residual(self, result: Any) -> None:
+        """Keep what a reliable measurement of the loop said was still misaligned."""
+        if result is None or not getattr(result, "confiable", False):
+            return
+        silent = set(result.sin_sonar()) if hasattr(result, "sin_sonar") else set()
+        heard = {n: v for n, v in result.retardos_ms.items() if n not in silent and np.isfinite(v)}
+        if len(heard) < 2:  # noqa: PLR2004 - a misalignment needs two speakers
+            return
+        self.last_residual = {
+            "residual_ms": round(max(heard.values()) - min(heard.values()), 3),
+            "measured_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "t": time.monotonic(),
+            "speakers": sorted(heard),
+        }
+
     def _record(self, kind: str, **fields: Any) -> None:
         t = round(time.monotonic() - self._started, 2)
         self.last_recalibration = {"t": t, "kind": kind, "reason": fields.get("motivo", "")}
@@ -685,7 +709,9 @@ class AudioSession:
             self.disable_recalibration()
         applied = {p.nombre: (p.retardo_ms, p.ganancia_db) for p in self.installation.parlantes}
         eq_on = getattr(self.motor, "ecualizacion_activa", True) and getattr(self.motor, "ecualizar", False)
-        applied_eq = {p.nombre: (p.ecualizacion_db if eq_on else None) for p in self.installation.parlantes}
+        # The curve that plays (with the chain's max boost, treble cap and budget), not the stored one.
+        sounding = getattr(self.motor, "curva_sonando", lambda p: p.ecualizacion_db)
+        applied_eq = {p.nombre: (sounding(p) if eq_on else None) for p in self.installation.parlantes}
         cal = Calibration(list(self._sinks), seconds, amplitude, self.options.rate, applied, applied_eq)
         self._cal_mic = self._microphone(microphone, cal.total / self.options.rate + 3.0)
         self._cal_mic.__enter__()

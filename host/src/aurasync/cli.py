@@ -434,14 +434,32 @@ def cmd_service(args) -> int:
         if presets.exists():
             shutil.copy(presets, tmp / "presets.json")
         instalacion, presets = copia, tmp / "presets.json"
+        from aurasync.bt_volume import BluetoothVolume
+        from aurasync.simulated import SimulatedRadio, SimulatedVolumes, simulated_log_level
+
+        # El registro de radio y el volumen de los parlantes también se simulan: nada toca el
+        # sistema, y los descartes simulados se marcan como tales (`state.radio.simulated`).
+        nivel = simulated_log_level(tmp / "cambios-de-sistema.txt")
+        sim_inst = Instalacion.cargar(copia)
         extra = {
             "session_factory": SimulatedSession,
-            "observer": SimulatedObserver(Instalacion.cargar(copia)),
+            "observer": SimulatedObserver(sim_inst),
             "simulated": True,
+            "log_level": nivel,
+            "radio": SimulatedRadio(lambda: [p.sink for p in sim_inst.parlantes], lambda: nivel.mode is not None),
+            "bt_volume": BluetoothVolume(SimulatedVolumes()),
         }
         print(f"SIMULADO: sin parlantes ni PipeWire; los cambios van a {tmp}")
     else:
-        extra = {"observer": Observer()}
+        from aurasync.radio import LogLevel, RadioMonitor
+
+        # El monitor de radio vive con el servicio; el nivel de registro se anota, con cómo
+        # revertirlo, en <config>/cambios-de-sistema.txt antes de tocarlo.
+        extra = {
+            "observer": Observer(),
+            "radio": RadioMonitor(),
+            "log_level": LogLevel(config_dir() / "cambios-de-sistema.txt"),
+        }
     servicio = Service(
         instalacion,
         presets,
@@ -453,7 +471,238 @@ def cmd_service(args) -> int:
     )
     print(f"instalación: {instalacion}{'' if instalacion.exists() else ' (no existe)'}")
     print(f"micrófono: {microfono or 'ninguno'} · mediciones: {config.measurements_path}")
-    return serve(servicio, config, bind=args.bind, port=args.port)
+    return serve(servicio, config, bind=args.bind, port=args.port, directory=config_dir())
+
+
+def cmd_radio_log(args) -> int:
+    """Sube o devuelve el nivel de registro de bluez5, para ver los paquetes que la radio descarta.
+
+    Si el servicio está corriendo, se le pide a él (así lo revierte al cerrarse). Si no, se
+    hace acá mismo, anotado en `<config>/cambios-de-sistema.txt` con cómo revertirlo; el
+    servicio revierte al arrancar cualquier cambio que haya quedado sin su "revertido".
+    """
+    from aurasync.radio import LogLevel
+    from aurasync.service import config_dir
+
+    cambios = config_dir() / "cambios-de-sistema.txt"
+    respuesta = _al_servicio(args.accion, args.modo)
+    if respuesta is not None:
+        estado = respuesta.get("radio_log") or {}
+        if not respuesta.get("ok", True):
+            print(f"el servicio no lo hizo: {respuesta['error']['message']}", file=sys.stderr)
+            return 1
+        print(f"servicio: registro de radio {'encendido' if estado.get('active') else 'apagado'}", end="")
+        print(f" ({estado['mode']})" if estado.get("mode") else "")
+        if estado.get("error"):
+            print(f"  error: {estado['error']}", file=sys.stderr)
+        radio = respuesta.get("radio") or {}
+        print(f"  monitor: {'con datos' if radio.get('available') else radio.get('reason')}")
+        for nombre, enlace in (radio.get("speakers") or {}).items():
+            print(
+                f"  {nombre}: bitpool {enlace.get('bitpool')}, {enlace.get('drops_total')} descartes, "
+                f"{enlace.get('drops_per_min')} por minuto"
+            )
+        print(f"  cambios anotados en {estado.get('changes_file') or cambios}")
+        return 1 if estado.get("error") else 0
+    nivel = LogLevel(cambios)
+    if args.accion == "on":
+        estado = nivel.enable(args.modo)
+        if estado["error"]:
+            print(f"no se pudo: {estado['error']}", file=sys.stderr)
+            return 1
+        print(f"registro de radio encendido ({args.modo}), sin el servicio corriendo.")
+        print(f"  anotado en {cambios}; se revierte con `aurasync radio-log off` o al arrancar el servicio")
+        return 0
+    if args.accion == "off":
+        revertido = nivel.recover()
+        print("registro de radio devuelto a como estaba" if revertido else "no había un cambio pendiente que revertir")
+        return 0
+    actual = nivel.read_current()
+    print(f"el servicio no está corriendo; log.level de WirePlumber: {actual or 'sin tocar'}")
+    return 0
+
+
+def _al_servicio(accion: str, modo: str) -> dict | None:
+    """Le pide `radio_log` (o el estado) al servicio local; None si no está corriendo."""
+    import http.client
+    import json
+
+    from aurasync.service import ConfigError, config_dir, load_config
+
+    ruta = config_dir() / "service.json"
+    if not ruta.exists():
+        return None
+    try:
+        config = load_config(ruta)
+    except ConfigError:
+        return None
+    cabeceras = {"Authorization": f"Bearer {config.token}", "Content-Type": "application/json"}
+
+    def pedir(metodo: str, ruta_api: str, cuerpo: dict | None = None) -> dict:
+        conexion = http.client.HTTPConnection("127.0.0.1", config.port, timeout=5)
+        try:
+            datos = json.dumps(cuerpo) if cuerpo is not None else None
+            conexion.request(metodo, "/v1" + ruta_api, body=datos, headers=cabeceras)
+            return json.loads(conexion.getresponse().read())
+        finally:
+            conexion.close()
+
+    try:
+        if accion in {"on", "off"}:
+            orden = {"v": 1, "op": "radio_log", "active": accion == "on"}
+            if accion == "on":
+                orden["mode"] = modo
+            respuesta = pedir("POST", "/command", orden)
+            if not respuesta.get("ok"):
+                return respuesta
+            # El cambio corre en un hilo del servicio: se espera a que termine.
+            for _ in range(50):
+                estado = pedir("GET", "/state")["result"]
+                if not estado.get("radio_log", {}).get("pending"):
+                    break
+                time.sleep(0.1)
+        estado = pedir("GET", "/state")["result"]
+    except (OSError, ValueError, KeyError):
+        return None
+    return {"ok": True, "radio_log": estado.get("radio_log"), "radio": estado.get("radio")}
+
+
+def _pedir(metodo: str, ruta_api: str, cuerpo: dict | None = None) -> tuple[int, dict] | None:
+    """Una petición al servicio local con el token maestro; None si no está corriendo."""
+    import http.client
+    import json
+
+    from aurasync.service import ConfigError, config_dir, load_config
+
+    ruta = config_dir() / "service.json"
+    if not ruta.exists():
+        return None
+    try:
+        config = load_config(ruta)
+    except ConfigError:
+        return None
+    cabeceras = {"Authorization": f"Bearer {config.token}", "Content-Type": "application/json"}
+    conexion = http.client.HTTPConnection("127.0.0.1", config.port, timeout=5)
+    try:
+        datos = json.dumps(cuerpo) if cuerpo is not None else None
+        conexion.request(metodo, "/v1" + ruta_api, body=datos, headers=cabeceras)
+        respuesta = conexion.getresponse()
+        return respuesta.status, json.loads(respuesta.read())
+    except (OSError, ValueError):
+        return None
+    finally:
+        conexion.close()
+
+
+def cmd_clients(args) -> int:
+    """Los dispositivos emparejados con el servicio y las solicitudes pendientes.
+
+    Con el servicio corriendo, todo pasa por él (si se editara `clients.json` por debajo, el
+    servicio lo pisaría al escribir). Sin el servicio, `list` y `revoke` trabajan sobre el archivo.
+    """
+    from aurasync.clients import ClientStore
+    from aurasync.service import config_dir
+
+    archivo = config_dir() / "clients.json"
+    if args.accion == "list":
+        clientes = _pedir("GET", "/clients")
+        if clientes is not None and clientes[0] == 200:  # noqa: PLR2004
+            lista = clientes[1]["result"]["clients"]
+            pendientes = (_pedir("GET", "/pair") or (0, {}))[1].get("result", {})
+        elif archivo.exists():
+            lista, pendientes = ClientStore(archivo).list(), {}
+            print("(el servicio no está corriendo: leído de clients.json)")
+        else:
+            print("no hay clientes emparejados")
+            return 0
+        for c in lista:
+            print(
+                f"  {c['id']}  {c['scope']:7}  {c['name']}  · último uso {c['last_used']} desde {c['last_ip'] or '?'}"
+            )
+        if not lista:
+            print("  (ningún cliente; el token maestro de service.json sigue valiendo como admin)")
+        for r in pendientes.get("requests", []):
+            print(f"  pendiente {r['id']}  '{r['name']}' desde {r['ip']} pide {r['scope']} (control {r['check']})")
+        ventana = pendientes.get("window") or {}
+        if ventana.get("open"):
+            print(f"  ventana de primer cliente abierta: {ventana['remaining_s']:.0f} s")
+        return 0
+    if args.accion == "revoke":
+        if not args.id:
+            print("falta el id del cliente (aurasync clients list)", file=sys.stderr)
+            return 2
+        respuesta = _pedir("DELETE", f"/clients/{args.id}")
+        if respuesta is None:
+            if not archivo.exists():
+                print("no hay clients.json", file=sys.stderr)
+                return 1
+            from aurasync.control import ContractError
+
+            try:
+                ClientStore(archivo).revoke(args.id)
+            except ContractError as error:
+                print(error.message, file=sys.stderr)
+                return 1
+            print(f"cliente {args.id} revocado (en clients.json; el servicio no estaba corriendo)")
+            return 0
+        return _mostrar(respuesta, f"cliente {args.id} revocado")
+    if args.accion in {"approve", "deny"}:
+        if not args.id:
+            print("falta el id de la solicitud (aurasync clients list)", file=sys.stderr)
+            return 2
+        cuerpo = {"scope": args.alcance} if args.accion == "approve" and args.alcance else None
+        respuesta = _pedir("POST", f"/pair/{args.id}/{args.accion}", cuerpo)
+        if respuesta is None:
+            print("el servicio no está corriendo: las solicitudes viven en él", file=sys.stderr)
+            return 1
+        return _mostrar(respuesta, "aprobada" if args.accion == "approve" else "rechazada")
+    respuesta = _pedir("POST", "/pair/code", {"seconds": args.segundos})
+    if respuesta is None:
+        print("el servicio no está corriendo", file=sys.stderr)
+        return 1
+    if respuesta[0] == 200:  # noqa: PLR2004
+        r = respuesta[1]["result"]
+        print(f"código de emparejamiento: {r['code']} (vale {r['expires_in_s']:.0f} s, una vez)")
+        return 0
+    return _mostrar(respuesta, "")
+
+
+def _mostrar(respuesta: tuple[int, dict], hecho: str) -> int:
+    estado, cuerpo = respuesta
+    if estado == 200:  # noqa: PLR2004
+        print(hecho)
+        return 0
+    print(f"el servicio no lo hizo: {cuerpo.get('error', {}).get('message')}", file=sys.stderr)
+    return 1
+
+
+def cmd_tls(args) -> int:
+    """La raíz propia del servicio: dónde está, su huella y cómo instalarla en un teléfono."""
+    from aurasync.service import config_dir, lan_urls, load_config
+    from aurasync.tls import Certificates
+
+    certificados = Certificates(config_dir() / "tls")
+    if not certificados.root_pem.exists() or not certificados.server_pem.exists():
+        print(f'no hay certificados en {certificados.dir}: arrancá `aurasync service` con "tls": true en service.json')
+        return 1
+    info = certificados.info()
+    print(f"raíz: {info.root_pem}")
+    print(f"  sha256 {info.root_sha256}")
+    if args.accion == "info":
+        print(f"certificado del servidor: {info.cert_pem}")
+        print(f"  sha256 {info.cert_sha256}")
+        print(f"  nombres: {', '.join(info.names)}")
+        print(f"  vence: {info.not_after} (se renueva solo 30 días antes, o si cambia la IP)")
+        print(f"  la clave de la raíz ({certificados.root_key}) no sale de este equipo")
+    try:
+        puerto = load_config(config_dir() / "service.json").port
+    except Exception:  # noqa: BLE001 - solo para armar los links
+        puerto = 8731
+    lan = [u for u in lan_urls("0.0.0.0", puerto) if "127.0.0.1" not in u]  # noqa: S104 - una URL, no un bind
+    if lan:
+        print(f"instalar en un iPhone: abrir en Safari {lan[0]}/v1/tls/root.mobileconfig")
+        print(f"instalar en Android: {lan[0]}/v1/tls/root.crt (host/README.md explica los pasos)")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -507,6 +756,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--registro", help="archivo JSON Lines con lo que decide el lazo")
     p_run.add_argument("--guardar", action="store_true", help="escribe la instalación al terminar")
 
+    p_radio = subs.add_parser(
+        "radio-log", help="registro de radio: ver los paquetes que el Bluetooth descarta (un cambio de sistema)"
+    )
+    p_radio.add_argument("accion", choices=("on", "off", "status"))
+    p_radio.add_argument(
+        "--modo",
+        choices=("light", "heavy"),
+        default="light",
+        help="light: solo los temas de bluez5; heavy: todo en debug (journald puede perder líneas)",
+    )
+
     p_srv = subs.add_parser("service", help="programa persistente con API REST para ajustar mientras suena")
     p_srv.add_argument("--bind", help="dirección de escucha; pisa la de service.json")
     p_srv.add_argument("--port", type=int, help="puerto; pisa el de service.json")
@@ -516,6 +776,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_srv.add_argument(
         "--simular", action="store_true", help="sin parlantes ni PipeWire: el motor real sobre una sala simulada"
     )
+
+    p_cli = subs.add_parser("clients", help="los dispositivos emparejados con el servicio, y el emparejamiento")
+    p_cli.add_argument("accion", choices=("list", "revoke", "approve", "deny", "code"))
+    p_cli.add_argument("id", nargs="?", help="el id del cliente (revoke) o de la solicitud (approve, deny)")
+    p_cli.add_argument("--alcance", choices=("read", "control", "admin"), help="approve: el alcance que se da")
+    p_cli.add_argument("--segundos", type=float, default=120.0, help="code: cuánto vale el código")
+
+    p_tls = subs.add_parser("tls", help="la raíz propia del HTTPS del servicio: dónde está y su huella")
+    p_tls.add_argument("accion", choices=("info", "root"))
     return parser
 
 
@@ -538,6 +807,9 @@ COMANDOS = {
     "play": cmd_play,
     "run": cmd_run,
     "service": cmd_service,
+    "radio-log": cmd_radio_log,
+    "clients": cmd_clients,
+    "tls": cmd_tls,
 }
 
 

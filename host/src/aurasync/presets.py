@@ -6,16 +6,26 @@ recalibration loop owns, nor `volume_db`, which would bias an A/B comparison (sp
 
 The file is written atomically: a temporary file next to it, then `os.replace`. A failure
 in the middle leaves the previous file whole.
+
+**A preset's chain** (spec 2026-10-02 §4.4) goes to a second file, `presets-chain.json`,
+keyed by preset name: `presets.json` keeps exactly its shape, because its reader rejects
+unknown keys and a rollback to a version without the chain must still start (card
+*no-simultaneous-deploy*). A preset with no entry there loads exactly as before the chain
+existed; one with an entry (even `{}`) replaces the chain's choices of every stage a preset
+holds (`chain.ChainValues.with_preset`).
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from aurasync.chain import PRESET_EXCLUDED_STAGES, clean_choices
 from aurasync.control import (
     ARTISTIC_GLOBAL_FIELDS,
     ARTISTIC_SPEAKER_FIELDS,
@@ -24,6 +34,9 @@ from aurasync.control import (
     ContractError,
     check_value,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 VERSION = 1
 
@@ -118,4 +131,81 @@ class PresetStore:
             self._write()
         except BaseException:
             self.presets[name] = preset
+            raise
+
+
+def read_lenient(path: Path, log: Callable[[str], None]) -> Any:
+    """The JSON in `path`, or None. A file that cannot be read is logged and kept aside as
+    `<name>.bad`, so the next write does not destroy what a person may want to recover."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        log(f"{path}: unreadable ({exc}); kept as {path.name}.bad and ignored")
+        with contextlib.suppress(OSError):
+            shutil.copy(path, path.with_name(path.name + ".bad"))
+        return None
+
+
+class PresetChainStore:
+    """`presets-chain.json`: the chain choices of each preset, by preset name.
+
+    Lenient where `PresetStore` is strict: an invalid entry is dropped with a log line and
+    never stops the service (the chain grows stages and knobs; a file written by a newer
+    version must still be readable by this one).
+    """
+
+    def __init__(self, path: Path, log: Callable[[str], None] = lambda _: None) -> None:
+        self.path = path
+        self.parts: dict[str, dict] = {}
+        if path.exists():
+            self.parts = self._read(log)
+
+    def _read(self, log: Callable[[str], None]) -> dict[str, dict]:
+        data = read_lenient(self.path, log)
+        if data is None:
+            return {}
+        if not isinstance(data, dict) or data.get("v") != VERSION or not isinstance(data.get("presets"), dict):
+            log(f"{self.path}: expected {{'v': {VERSION}, 'presets': {{...}}}}; ignored")
+            return {}
+        parts = {}
+        for name, part in data["presets"].items():
+            clean = clean_choices(part, lambda line, name=name: log(f"preset {name!r}: {line}"))
+            parts[name] = {k: v for k, v in clean.items() if k not in PRESET_EXCLUDED_STAGES}
+        return parts
+
+    def _write(self) -> None:
+        text = json.dumps({"v": VERSION, "presets": self.parts}, indent=2, ensure_ascii=False) + "\n"
+        write_atomic(self.path, text)
+
+    def get(self, name: str) -> dict | None:
+        """The preset's chain, or None when it has none (a preset saved before the chain)."""
+        return self.parts.get(name)
+
+    def save(self, name: str, part: dict) -> None:
+        previous = self.parts.get(name)
+        self.parts[name] = {k: v for k, v in part.items() if k not in PRESET_EXCLUDED_STAGES}
+        try:
+            self._write()
+        except BaseException:
+            if previous is None:
+                self.parts.pop(name, None)
+            else:
+                self.parts[name] = previous
+            raise
+
+    def restore(self, name: str, part: dict | None) -> None:
+        """Put back what `name` had before (after a failed save of the preset itself)."""
+        if part is None:
+            self.delete(name)
+        else:
+            self.save(name, part)
+
+    def delete(self, name: str) -> None:
+        if name not in self.parts:
+            return
+        part = self.parts.pop(name)
+        try:
+            self._write()
+        except BaseException:
+            self.parts[name] = part
             raise
