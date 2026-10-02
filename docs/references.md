@@ -184,6 +184,25 @@ no.
 
   **Qué confirma:** que en el Mac no hace falta BlackHole (P1, i-7c8794-fd5f03).
 
+## Procesamiento, calidad y la cadena de códecs
+
+- **[PipeWire 1.6.9, `spa/plugins/bluez5/media-sink.c` y `a2dp-codec-sbc.c`](https://gitlab.freedesktop.org/pipewire/pipewire/-/tree/1.6.9/spa/plugins/bluez5)**
+  Con el socket lleno, el sink **descarta el paquete** y baja el bitpool (`reduce bitpool`);
+  `increase bitpool` es el latido sano. **Contradijo** la lectura de experimentos/10 §5.1 y
+  produjo d-7c8794-0022c6. También: no hay propiedad para fijar el bitpool, y el codificador
+  recibe S16 sin dither (d-7c8794-89cdc1, d-7c8794-0086cf).
+- **[ITU-R BS.1770-5](https://www.itu.int/rec/R-REC-BS.1770) y [EBU Tech 3341](https://tech.ebu.ch/docs/tech/tech3341.pdf)**
+  La sonoridad (ponderación K, compuerta, true peak ×4) con la que se miden la ganancia neta,
+  el PSR y el A/B con sonoridad igualada.
+- **[Torcoli, Kastner y Herre 2021](https://arxiv.org/pdf/2110.11438)**
+  Los modelos perceptuales (PEAQ, ViSQOL) son para pares digitales alineados: no sirven con la
+  grabación de la pieza. Confirmó que la calidad se mide en la cadena digital.
+- **[Aarts, Larsen y Schobben 2002](https://www.sps.tue.nl/rmaarts/RMA_papers/aar02n4.pdf) y [Moliner et al., DAFx-20](https://dafx2020.mdw.ac.at/proceedings/papers/DAFx2020_paper_40.pdf)**
+  El bajo psicoacústico, y que algunos oyentes prefieren no tenerlo: va como perilla, apagado
+  por defecto (d-7c8794-d1118c).
+- **[Olive et al., AES 8994 (2013), vía resumen](https://archimago.blogspot.com/2026/07/room-target-curves-then-now-and-options.html)**
+  Los oyentes prefieren en sala graves realzados: confirmó que el EQ solo realce (d-7c8794-e8f7e3).
+
 ## Qué leer primero
 
 | Si vas a tocar… | Lee | Y cuidado con |
@@ -194,3 +213,4 @@ no.
 | A2DP con varios parlantes | [03](research/03-bluetooth-clasico-y-sync-por-software.md) §1 | combine-stream no corrige el drift |
 | La captura del audio o el upmix | [07](research/07-software-de-audio-en-el-pc.md) §2 y §4 | `4.0` no es cuadrafonía; `psd` no da traseros estéreo |
 | La herramienta del MVP | [08](research/08-integracion-y-plan.md) §2 y §6 | `wpctl set-default` deja historial; el lazo de reloj no existe en Bumble |
+| El procesamiento, la medición de calidad o los cortes | [11](research/11-procesamiento-calidad-canales-y-panel.md) | `increase bitpool` no es congestión; `reduce bitpool` es un corte; sin scipy, un IIR por muestra cuesta caro |

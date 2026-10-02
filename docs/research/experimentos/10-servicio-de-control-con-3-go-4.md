@@ -33,6 +33,14 @@ cada bloque libre. Tampoco se nota el costo de las rampas, porque se paga solo e
 bloques en los que algo se mueve. El número vuelve a importar en la Raspberry Pi Zero 2 W de
 la Fase 3, que es mucho más lenta: hay que medirlo allá.
 
+**Corrección del 2026-10-02:** esta medición es **anterior** a la lectura sinc de §8 (la noche
+del mismo día), que no se volvió a medir. Con ella el motor bajó a ~5–6× el tiempo real: la
+lectura evaluaba una función de Bessel por muestra y coeficiente, 4–7 ms por bloque y parlante.
+Ya está corregido (32× con 3 parlantes y EQ, Mac); el detalle está en
+[experimentos/12](12-microcortes-con-3-go-4.md) §1.1. **Lección:** un cambio en el camino de cada
+muestra se vuelve a medir en costo, no solo en respuesta en frecuencia. Desde ahora lo cubre
+`tests/test_interpolation.py`.
+
 ## 2. Prueba de humo del servicio, sin audio. MEDIDO
 
 Con `XDG_CONFIG_HOME` temporal y `--bind 127.0.0.1 --port 18731`, sin parlantes conectados:
@@ -185,6 +193,13 @@ Modalias). Datos crudos en `datos/10/` (`campana-*.jsonl`, `calibracion-*.json` 
 | RSSI, potencia | `btmgmt conn-info`: *Permission Denied* sin root | no se pudo leer |
 | WirePlumber en debug | "increase bitpool" ~1 vez/s por sink: el enlace se congestiona y PipeWire baja la calidad SBC | indica congestión, no la latencia |
 
+**Corrección del 2026-10-02** (research/11 §3.2, VERIFICADO en `spa/plugins/bluez5/media-sink.c`,
+tag 1.6.9): la última fila está **mal leída**. `increase bitpool` sale cada segundo cuando el
+enlace está **sano**, aunque el bitpool ya esté en el máximo. La congestión la marca
+`reduce bitpool`, y cada una de esas líneas es **al menos un paquete SBC descartado**, un corte
+de ~24–40 ms. Lo que había que contar era `reduce`, y es la medida que le faltaba a la tarjeta
+Cortes (experimentos/12).
+
 **Respuesta: el retardo entre parlantes no se puede calibrar solo con el protocolo.** Nada de
 lo que exponen BlueZ o PipeWire refleja la diferencia real, que nace en el buffer de cada
 parlante y en el camino del PC. Hace falta el micrófono para la parte fija. Lo que sí sirve
@@ -247,6 +262,13 @@ que pierde resolución—, pero hace falta medir la curva de volumen del Go 4 an
   `cambios-de-sistema.txt`): el enlace quedó en mono a 48 kHz, bitpool 29 (~198 kbps contra
   ~279 en estéreo). **No redujo la congestión**: 122 bajadas de bitpool en 50 s contra 62 en
   estéreo, en condiciones no idénticas. Se revirtió.
+  **Corrección del 2026-10-02** (research/11 §3.2): si esas "bajadas" eran líneas `reduce
+  bitpool`, son **≥2,4 y ≥1,2 cortes por segundo** entre los tres parlantes, no una baja de
+  calidad inofensiva; si eran `increase`, eran el latido sano. El registro no guardó cuáles se
+  contaron, así que **el número no se usa**. Además, SBC mono era **peor** por calidad: bitpool
+  29 contra 40, 6,7 dB menos de SNR (SIMULADO con libsbc), y la prueba se hizo antes de quitar
+  los monitores de anuncios LE de §9. Se descarta por escrito; SBC-XQ también (1,8× de aire por
+  +0,9 dB).
 - El Wi-Fi del AX210 estaba **apagado** durante todas las mediciones: la congestión es de
   Bluetooth puro, con tres enlaces A2DP en un controlador.
 
