@@ -16,6 +16,52 @@ qué choca**, qué la favorece y qué hay que decidir antes.
 
 La base de todo es [docs/research/README.md](research/README.md).
 
+## Plan desde el 2026-10-02
+
+**El foco** (d-7c8794-a5b83b): Linux completo es el camino principal y el repositorio es sobre
+audio —la cadena, el sonido envolvente, efectos y mejoras de software, cada uno con su
+experimento—. Los otros dispositivos se suman después, por iteraciones. Cada etapa se mide en
+`PC-Ryzen5` con los 3 Go 4; nada se da por bueno sin su número repetido (`CLAUDE.md`).
+
+**Etapa 1 · Medir lo construido** (lo primero en `PC-Ryzen5`):
+1. **Microcortes** ([experimentos/12](research/experimentos/12-microcortes-con-3-go-4.md),
+   i-7c8794-7d4aec): el paso 0 (el journal, el reloj de la captura y la salida con `pw-top`),
+   la línea base C2 —que es también el antes y después del arreglo de la lectura sinc— y C3,
+   una variable a la vez.
+2. **Calidad con micrófono** (experimentos/15, i-7c8794-50c1b3): si el Go 4 suma L+R, la
+   respuesta por parlante con coherencia, y "directo contra motor" con la sonoridad igualada
+   (i-7c8794-10ccb4).
+3. **Escuchar la cadena tal como quedó**, 20 minutos con la pantalla Cadena y la franja de
+   calidad abiertas.
+
+**Etapa 2 · Mejorar el sonido, una cosa por vez** (cada una con su A/B ciego con la
+sonoridad igualada, y se enciende por defecto solo si gana; d-7c8794-d1118c):
+1. Graves y volumen (experimentos/14, i-7c8794-765571): la curva AVRCP de cada Go 4, el
+   pasa-altos de protección, el bajo psicoacústico, el volumen por AVRCP y el limitador
+   true-peak.
+2. El presupuesto de realce y el techo de agudos del EQ.
+3. Envolvimiento: la cola difusa (i-7c8794-bf63c2), y la sonda enmascarada para que el lazo
+   funcione con música (i-7c8794-e3e40d, paso 2).
+4. Después, en este orden: transitorios coherentes con cola decorrelada (HPSS), el banco del
+   códec (i-7c8794-342646), el sink 5.1 y el loopback para el lip-sync (i-7c8794-ff1ce9), y el
+   upmix tipo DirAC (i-7c8794-59cb30).
+
+**Etapa 3 · Tiempo real** (i-7c8794-fd9732): la prueba de concepto de E/S nativa en Rust
+([experimentos/13](research/experimentos/13-e-s-nativa-en-rust.md)); si cumple, el motor en
+Rust etapa por etapa contra el oráculo numpy ([research/12](research/12-motor-de-audio-en-rust.md) §4).
+
+**Etapa 4 · Más de 3 parlantes:** la Pico 2 W como emisor A2DP con BTstack (control directo
+del protocolo), varios adaptadores de Bluetooth clásico, o Auracast con las SuperMini (E1–E5).
+Se comparan en [research/13](research/13-dispositivos-pi-pico-y-panel-independiente.md).
+
+**En paralelo con las etapas 1 y 2 · El panel como PWA en GitHub Pages** (i-7c8794-b10884,
+d-7c8794-37f9bc): reutilizable, offline como app instalada, conectado por la red local al
+servicio por HTTPS con un certificado propio y un token por cliente. Se construye en el Mac
+con el servicio simulado; la app nativa queda para el final.
+
+**Etapa 5 · Otros dispositivos:** la Raspberry Pi Zero 2 W como equipo independiente y la
+Pico como puente (research/13). La app nativa de Android, al final de todo.
+
 ## Dónde estamos
 
 **Fase 0 terminada (2026-09-25).** La investigación está en `docs/research/`.
@@ -1224,12 +1270,144 @@ música". Decisión: d-7c8794-560b54. Detalle en experimentos/10 §9.
 - la tubería guarda dos bloques de margen;
 - cada corte queda registrado con su causa probable y se ve en Diagnóstico → Cortes.
 
+**Agregado el 2026-10-02** (d-7c8794-0022c6, research/11 §3.2): la causa más probable de los
+microcortes no estaba a la vista. **Cada `reduce bitpool` del sink Bluetooth de PipeWire es un
+paquete descartado** (VERIFICADO en el código), y experimentos/10 §5.5 había contado ≥1,2 por
+segundo leyéndolos como congestión inofensiva. Se construye el monitor de radio (`radio.py`),
+el corte de tipo `radio` en la tarjeta, y el protocolo C2/C3 en `probes/14-microcortes/`
+([experimentos/12](research/experimentos/12-microcortes-con-3-go-4.md)).
+
 **Lo que falta, con parlantes:**
+0. El protocolo de experimentos/12: línea base de 2 × 10 min con el registro de radio
+   encendido, y una variable a la vez (2 parlantes, posiciones cambiadas, distancia, escaneo).
 1. 20 minutos de música mirando la tarjeta Cortes.
 2. Buscar dispositivos a propósito mientras suena, para confirmar o descartar el escaneo LE
    como causa.
 3. Si quedan cortes en un solo parlante con el motor a tiempo, el enlace de ese parlante:
    distancia, batería y obstáculos.
+
+### Pantalla Cadena: todas las perillas y algoritmos del motor · i-7c8794-a9189b
+**Estado: A medias (2026-10-02): construido en simulación, falta usarlo con parlantes.** Lo
+pidió el usuario: "más controles, que se vean y entiendan mejor; el panel debe poder tocar
+todas las perillas de los algoritmos y elegir entre ellos, quizás en una pantalla dedicada".
+Decisión d-7c8794-114c9c; spec `superpowers/specs/2026-10-02-microcuts-chain-and-quality-design.md`
+§4 y §7.
+
+**Qué es:** el motor como lista de etapas (ambiente, separar parlantes, difusión, alineación,
+ecualización, graves, volumen, limitador), cada una con sus algoritmos y perillas descritos en
+`chain.py`; el contrato `chain`/`chain_set`/`chain_reset`; y la pestaña **Cadena** del panel,
+dibujada desde esa descripción, con la métrica en vivo de cada etapa.
+
+**Con qué choca:** con que cambie cómo suena hoy. Lo cubre la prueba bit a bit contra el motor
+anterior. Con `presets.json` y `instalacion.json`, cuyos lectores rechazan claves nuevas: las
+elecciones van en archivos aparte.
+
+### Graves y volumen: protección, bajo psicoacústico, crossover, AVRCP y limitador true-peak · i-7c8794-765571
+**Estado: A medias (2026-10-02): construido y apagado por defecto, falta medirlo con
+parlantes** (d-7c8794-d1118c, d-7c8794-0086cf). Segunda prioridad del usuario: "faltan graves
+y volumen". Research/11 §2.2–2.3.
+
+**Lo que falta, con parlantes** (`probes/15-graves-y-volumen/`):
+1. La curva de volumen AVRCP → dB de cada Go 4, en dos sesiones.
+2. El nivel de 125 Hz contra el volumen AVRCP, con y sin el pasa-altos de protección: ¿se
+   retrasa la protección del firmware?
+3. Un A/B ciego del bajo psicoacústico con la sonoridad igualada, 30 ensayos en dos sesiones.
+4. El crossover, cuando el Charge 6 sea el cuarto parlante (por USB-C, E7).
+
+**Con qué choca:** con el techo de 3 enlaces A2DP (el Charge 6 por Bluetooth sería el
+cuarto). Con la deriva: a 100 Hz, 2 ms de desalineación hacen un hueco de ~2,2 dB en el cruce.
+
+### Medidores de calidad: sonoridad, ganancia neta, true peak y PSR · i-7c8794-50c1b3
+**Estado: A medias (2026-10-02): construido en simulación.** Research/11 §1.1. Sonoridad
+BS.1770-5 de la entrada y de cada salida, ganancia neta en LU (habría delatado los −40 dB de
+experimentos/10 §7), true peak, PSR de entrada contra salida (la métrica de "aplanada") y
+actividad del limitador. También el A/B con la sonoridad igualada.
+
+**Lo que falta, con parlantes** (`probes/16-calidad/`): la referencia medida "directo contra
+motor" de i-7c8794-10ccb4 con la sonoridad igualada; la respuesta por parlante con coherencia
+en 3 colocaciones; la prueba de si el Go 4 suma L+R.
+
+### Cola difusa por parlante para envolvimiento con mezclas secas · i-7c8794-bf63c2
+**Estado: A medias (2026-10-02): el algoritmo existe y está apagado.** Research/11 §2.4. Una
+cola de ruido con decaimiento distinta en cada parlante genera campo difuso aunque la mezcla
+no traiga ambiente, que es justo cuando Avendaño-Jot no aporta. **Falta:** una comparación
+pareada de preferencia ("¿cuál te envuelve más?") en dos sesiones, y el RT60 de la pieza con
+y sin ella.
+
+### Banco del códec SBC y del tándem con PEAQ y ViSQOL · i-7c8794-342646
+**Estado: Planificado.** Research/11 §1.2 y §3.2. En digital, con libsbc, en un entorno de
+hatch aparte: bitpool 40/34/28, la doble compresión Vorbis/AAC/Opus → SBC, puntuado con los
+MOVs de PEAQ, ViSQOL y el 2f-model. Decide si vale pedir lossless.
+
+### Sink 5.1 nativo y loopback con latencia declarada para lip-sync · i-7c8794-ff1ce9
+**Estado: Planificado.** Research/11 §3.4–3.5. Un sink `aurasync (5.1)` que no sea el por
+defecto, con mapeo a quad o 3/1; y el sink de entrada como `module-loopback` con
+`latencyOffsetNsec` igual a la latencia calibrada, para que los reproductores compensen el
+video. **Con qué choca:** con WirePlumber, que mueve streams; se comprueba el ruteo después.
+
+### Upmix tipo DirAC para cuatro esquinas · i-7c8794-59cb30
+**Estado: Planificado.** Research/11 §3.4. Dirección y difusividad por celda
+tiempo-frecuencia, lo directo paneado a las cuatro esquinas y lo difuso decorrelado. Va después
+de medir lo de arriba.
+
+### Motor de audio en Rust para el camino crítico, con Python para el resto · i-7c8794-fd9732
+**Estado: A medias (2026-10-02): la prueba de concepto de E/S nativa está en preparación**
+(`probes/17-e-s-nativa-rust/`, d-7c8794-36dde5). Lo pidió el usuario: explorar Rust para la parte
+crítica del audio y dejar el resto en Python; eligió empezar por la prueba de concepto. Investigación y plan:
+[research/12](research/12-motor-de-audio-en-rust.md). Reabre d-7c8794-c23c20 si se adopta.
+
+**Lo que ya salió de investigarlo:** la lectura sinc del retardo tenía al motor a ~5× el tiempo
+real; se corrigió en numpy (32×, experimentos/12 §1.1). Rust no arregla los descartes de radio.
+
+**El plan:** medir experimentos/12 (compuerta) → andamio con maturin y hatch → DSP etapa por
+etapa contra el oráculo numpy (golden ≤1e-9) → motor completo con la fachada `RustMotor` → E/S
+nativa en PipeWire con A/B → la Pi, Auracast y macOS. Criterios en research/12 §4.
+
+**Con qué choca:** con la velocidad de iteración (dos lenguajes); con hatch (un miembro maturin
+en un workspace no está probado); con la E/S de PipeWire, que se compila en cada equipo.
+
+**Las dudas y sus respuestas:** research/12 §5.
+
+### Panel como PWA en GitHub Pages conectado por red local con HTTPS y token por cliente · i-7c8794-b10884
+**Estado: A medias (2026-10-02): construida y probada en Chromium contra el servicio simulado;
+falta publicarla y probarla en teléfonos.** El transporte con token y ticket, la pantalla de
+conexión y emparejamiento, la administración de clientes, el service worker offline al estilo de
+`thom-music-player` y el workflow de Pages están hechos (75 tests de navegador). **Publicar es
+decisión del usuario:** Settings → Pages → Source: GitHub Actions, y push a `main`. Lo pidió el usuario: un panel reutilizable
+que exista sin el dispositivo, se actualice aparte y alivie a la Pi; por ahora siempre en la
+red local. Decisión d-7c8794-37f9bc; investigación en research/13.
+
+**Qué es:** el build de `host/web/` publicado en GitHub Pages por GitHub Actions, instalable y
+offline (service worker propio, al estilo de `thom-music-player`); el servicio con HTTPS por
+una raíz propia, CORS para el origen de Pages, tokens por cliente y emparejamiento; el
+descubrimiento por `aurasync.local`, la última IP conocida o un QR.
+
+**Lo que falta medir:** que una página en Pages llegue al dispositivo en Chrome Android,
+Chrome de escritorio, Safari del iPhone (navegador y PWA instalada) y Firefox, con la raíz
+instalada y sin ella.
+
+**Con qué choca:** con Safari, que no tiene la excepción de red local de Chrome; con Chrome,
+que cambia seguido sus reglas de red local; con `EventSource`, que no manda cabeceras (el
+stream necesita otro mecanismo).
+
+### Hasta 8 parlantes: límites y capacidades del diseño · i-7c8794-1f35a1
+**Estado: A medias (2026-10-02): el análisis en simulación está hecho**
+([experimentos/16](research/experimentos/16-ocho-parlantes-en-simulacion.md)). Encontró y se
+corrigió un error de la calibración que también afectaba a 3 parlantes (la pista del estimador
+de nivel). Lo que falta, por prioridad: calibrar en dos grupos con un ancla desde 7 parlantes;
+que el tope del decorrelador avise en vez de impedir arrancar (hoy el servicio no arranca con 7);
+asignar los filtros por la mezcla de cada rol y elegir el banco por el peor par por octava; la
+sonda simultánea en vez de por turnos (por turnos no converge desde 6 parlantes); seguir la
+deriva de cada parlante en el lazo; roles por ángulo para 5 a 8; y el panel por grupos. Meta del usuario (d-7c8794-3b7793): llegar a 8
+parlantes para probar los límites. Hardware de hoy: 3 Go 4 y 1 Charge 6.
+
+**Lo que ya se sabe que no escala:** el decorrelador acepta como mucho 6 parlantes
+(`MAXIMO_FIJOS`); los roles cubren 4 (`quad`, `lcrs`); un adaptador A2DP sostiene 2–3 enlaces;
+la calibración con un micrófono pierde exactitud con más fuentes simultáneas (a medir); el lazo
+por turnos tarda más en volver a cada parlante.
+
+**Con qué choca:** con el transporte. Para 8 hacen falta 3–4 adaptadores, 8 Picos, o Auracast
+con un BIG de 8 BIS (research/13 §2.3).
 
 ### Calibrar el retardo sin un micrófono central · i-7c8794-4745b4
 **Estado:** Planificado. Pedido del usuario el 2026-09-29. El detalle técnico, con el estado de

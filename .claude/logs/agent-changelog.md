@@ -7,6 +7,130 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-02 · s-7c8794-7142ab — Microcortes, la cadena con todas sus perillas, calidad, Rust, dispositivos y el panel como PWA
+
+**Qué.** Sesión en el **Mac** (sin parlantes), con el usuario pidiendo mejoras del motor, del
+panel y de la usabilidad, pruebas planeadas, y una investigación de procesamiento de sonido
+aplicada al plan. Sus prioridades: **microcortes**, después **graves y volumen**, después **más
+controles visibles y entendibles**. Más tarde fijó el foco (**Linux completo primero; el repo es
+sobre audio**, d-7c8794-a5b83b), la meta de **8 parlantes** (d-7c8794-3b7793), el panel como
+**PWA en GitHub Pages** (d-7c8794-37f9bc) con **npm solo para la web** (d-7c8794-6da524), y explorar
+**Rust** para el camino crítico (d-7c8794-36dde5). Trabajo hecho por agentes en paralelo, con
+archivos repartidos:
+- **Investigación:** research/11 (cómo medir la calidad, procesamiento y filtros, canales y
+  códecs, visualización y usabilidad), research/12 (motor en Rust), research/13 (Pi Zero 2 W, Pico
+  2 W, más de 3 parlantes, panel independiente). **Hallazgo central:** cada `reduce bitpool` del
+  sink Bluetooth de PipeWire es un paquete descartado (VERIFICADO en `media-sink.c` 1.6.9);
+  experimentos/10 §5.1 y §5.5 lo leían al revés y quedaron corregidos.
+- **Microcortes:** `radio.py` (descartes y bitpool por parlante desde el journal, el registro por
+  topic con `wpctl`, anotado y revertido), el corte `radio` en `cuts.py`, la op `radio_log` y la CLI,
+  y el protocolo `probes/14-microcortes/` (experimentos/12), con `rfkill block wifi` como primera
+  variable.
+- **La lectura sinc del retardo tenía al motor a ~5× el tiempo real**, no 63× (Bessel por muestra
+  y coeficiente; lo encontró la investigación de Rust). Corregida: salida idéntica con el retardo
+  quieto, ≤1e-10 en rampa; **32× con 3 parlantes y EQ** (`tests/test_interpolation.py`). Es
+  candidata a parte de los cortes "motor tarde".
+- **La cadena:** `chain.py` (descriptores de 8 etapas con algoritmos y perillas), contrato
+  `chain`/`chain_set`/`chain_reset`, persistencia dispersa en `chain.json` y `presets-chain.json`,
+  y el motor que la lee, **bit a bit igual con los valores por defecto** (golden).
+- **DSP nuevo, apagado por defecto** (d-7c8794-d1118c): crossover LR4, bajo psicoacústico NLD,
+  limitador true-peak con look-ahead, cola difusa, sonoridad BS.1770, presupuesto y techo del EQ;
+  integrado en `chain_stages.py`; volumen por AVRCP con lectura de vuelta (`bt_volume.py`);
+  calidad en vivo (`quality.py`: LUFS, ganancia, PSR, true peak, limitador) y eventos SSE
+  `quality`, `chain` y `radio`; A/B con la sonoridad igualada.
+- **Panel:** medidores sin layout forzado (421 → 17 layouts/s), el stream se cierra con la pestaña
+  oculta, avisos donde se mira, sincronía en una regla de zonas, accesibilidad, números con coma;
+  la **pantalla Cadena** en Vite + TypeScript + Preact, generada desde los descriptores, con la
+  franja de calidad, el carril de radio y el A/B con sonoridad; los tipos del contrato generados por
+  Python y lo compilado verificado sin Node (`host/scripts/web_stamp.py`).
+- **Servicio para la PWA:** HTTPS con raíz propia restringida por NameConstraints (`tls.py`),
+  tokens por cliente (`clients.py`), emparejamiento (`pairing.py`), CORS, ticket de stream, mDNS
+  opcional; y la **PWA** (`host/web/`: transporte único con token y ticket, pantalla de conexión
+  y emparejamiento, administración de clientes, service worker offline al estilo de
+  `thom-music-player`, `build:pwa` que falla si encuentra datos privados, y
+  `.github/workflows/pages.yml` sin activar). `/pairing.svg` ya no lleva el token maestro.
+- **Calibración:** **un error que también afectaba a 3 parlantes**: la pista del estimador de nivel
+  era relativa al primero cuando las referencias están alineadas a la mediana; con el primero a más
+  de 15 ms de la mediana la ganancia salía de la diafonía (2,7–6,6 dB) y se informaba confiable.
+  Corregido (`medicion.calibrar`), con tres casos nuevos en el test.
+- **Pruebas preparadas para PC-Ryzen5:** `probes/14-microcortes`, `15-graves-y-volumen`,
+  `16-calidad`, `17-e-s-nativa-rust` (la prueba de concepto de E/S nativa en Rust: compila y
+  testea en el Mac, la parte de PipeWire solo chequeada contra los headers), `18-costo-de-la-cadena`,
+  `19-ocho-parlantes`; experimentos 12 a 16 con los criterios escritos antes de medir.
+
+**Archivos.** `host/src/aurasync/`: `chain.py`, `chain_stages.py`, `quality.py`, `bt_volume.py`,
+`radio.py`, `tls.py`, `clients.py`, `pairing.py`, `access.py`, `lan.py`, `remote.py`, `mdns.py`,
+`contract_types.py`, `dsp/{crossover,virtual_bass,diffuse,loudness}.py` (nuevos); `motor.py`,
+`control.py`, `service.py`, `session.py`, `snapshot.py`, `rest.py`, `cli.py`, `presets.py`,
+`simulated.py`, `cuts.py`, `medicion.py`, `dsp/{eq,limiter,decorrelate,interpolation}.py`,
+`panel/*`; `host/web/`; `host/scripts/`; `host/tests/` y `host/tests_browser/` (nuevos y
+ajustados); `host/pyproject.toml` (`cryptography`); `scripts/check.sh`; `probes/14` a `19`;
+`docs/research/{11,12,13}-…`, `experimentos/{12,13,14,15,16}-…`, correcciones en
+`experimentos/10-…`; `docs/decisions.md` (11 decisiones nuevas), `docs/roadmap.md` (el plan desde
+el 2026-10-02 y entradas nuevas), `docs/references.md`, `docs/superpowers/specs/2026-10-02-…`,
+`CLAUDE.md`, este registro.
+
+**Por qué.** El pedido del usuario al empezar, y sus respuestas durante la sesión (las prioridades,
+el foco en Linux y audio, los 8 parlantes, la PWA, Rust, npm solo para la web).
+
+**Arquitectura.** ✅ Cumple con las decisiones nuevas y con d-7c8794-9afee2: el motor queda
+separado del emisor; el código nuevo en inglés y `motor.py` en español; lo que suena por defecto
+no cambió (golden bit a bit). **Tarjetas aplicadas:** *persist-inputs-derive-verdicts* (solo se
+guardan elecciones), *no-simultaneous-deploy* (archivos aparte para que un rollback arranque),
+*kill-switch-reaches-every-path* (el registro de radio se revierte en cada camino de salida),
+*secrets-survive-rotation* (rotar el maestro no desconecta clientes), *a-check-must-be-seen-to-fail*
+(cada test nuevo se vio fallar con una mutación).
+
+**Qué salió mal en el camino.**
+- **El 63× del motor estaba vencido desde el 2026-10-01** y la spec lo citó como vigente; nadie
+  re-midió el costo después del cambio a sinc. Lección anotada en experimentos/10 §1.
+- **Mi primer arreglo de la pista de niveles no cambió nada:** supuse que los residuos eran
+  absolutos y `calibrar_por_ventanas` los vuelve relativos al más temprano. Lo delató que el test
+  siguió fallando.
+- Un agente creó `probes/17-costo-de-la-cadena` con el mismo número que la prueba de concepto de
+  Rust: renombrado a `18`.
+- Dos agentes se cortaron por el límite de uso y se retomaron desde su transcripción.
+- Un test de tiempo real del motor fallaba con la máquina cargada (mediana 8× contra un piso de
+  10×): ahora usa el décimo más rápido.
+- Un `hatch fmt` de un agente reformateó un archivo que yo editaba (solo formato).
+- Mi `rustup show` auto-instaló el toolchain `stable` en `~/.rustup` (el usuario había instalado
+  `rust` y `rustup` con Homebrew minutos antes).
+
+**Qué quedó pendiente.**
+- **Todo lo que necesita parlantes**, en `PC-Ryzen5`: experimentos 12 (microcortes: paso 0 con el
+  journal y `pw-top`, C2, C3 empezando por `rfkill`), 13 (Rust, A/B intercalado), 14 (graves y
+  volumen), 15 (calidad con micrófono). Las etapas nuevas siguen apagadas hasta medirlas.
+- **La PWA**: **publicar** (Settings → Pages → Source: GitHub Actions, y push) lo decide el
+  usuario; después, probarla en Chrome Android, Safari del iPhone (navegador y PWA instalada) y
+  Firefox, con la raíz instalada y sin ella, y el aviso de red local de Chrome desde el origen real.
+  El QR que imprime la terminal al arrancar el servicio sigue llevando el token maestro.
+- Para 8 parlantes (experimentos/16): calibrar en dos grupos desde 7; que el tope del
+  decorrelador no impida arrancar (hoy el servicio no arranca con 7); el banco y la asignación de
+  filtros; la sonda simultánea; seguir la deriva por parlante; roles por ángulo; el panel por grupos.
+- En el PC, la organización por pestañas ya no es la más barata con Cadena (13,7 contra 10,8 del
+  menú lateral): decisión del usuario.
+- Firefox de Playwright no arranca en este Mac.
+- Probar `wpctl set-log-level` por topic en WirePlumber 0.5.17 real.
+
+**Desvío del plan.** La spec se escribió como registro y se implementó sin un plan aparte, porque
+el usuario pidió "implementar todos los cambios teóricos y preparar las pruebas". Los desvíos
+durante la construcción están en la spec §11. La PWA, Rust, los dispositivos y los 8 parlantes se
+agregaron por pedido del usuario a mitad de la sesión.
+
+**No verificado.** Nada se escuchó ni se midió con parlantes. Lo de PipeWire de la prueba de
+concepto en Rust no se ejecutó. Lo de la Zero 2 W y la Pico es estimado. La PWA no se probó en un
+teléfono.
+
+**Medido.**
+- Motor con 3 parlantes y EQ en el Mac: mediana 2,7 ms y p99 3,4 ms por bloque de 85 ms (32×);
+  antes de corregir la lectura sinc, 4–7 ms solo en esa lectura por parlante.
+- Panel (Chromium, 390×844, freno ×4): 421 → 17 layouts/s; Cadena a la vista, 3 layouts/s.
+- Stream: 16 kB/s. Prueba de concepto en Rust: ~10–27 µs por cuántum (~2000× tiempo real).
+- SBC simulado con libsbc: joint 40 con L = R da 32,8 dB de SNR; mono 29 da 26,1; dual 39 da 33,7.
+- `scripts/check.sh`: ok con 702 tests; navegador 75 de 75 dos veces (Chromium); vitest 25.
+
+---
+
 ## 2026-10-01 · s-7c8794-252141 — El servicio de control construido: contrato, REST, sesión, presets y rampas
 
 **Qué.** La primera entrega de i-7c8794-bdb678, en `PC-Ryzen5`, con la spec que el usuario

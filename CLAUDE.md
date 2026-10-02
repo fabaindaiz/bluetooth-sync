@@ -5,16 +5,24 @@ canal de audio distinto a cada uno de varios parlantes JBL** (3× Go 4 y 1× Cha
 6), **sincronizados**, para lograr estéreo real, cuadrafonía o surround simulado sin
 las limitaciones de la app de JBL.
 
-**Estado (2026-09-28): se construye el núcleo, con A2DP como primer backend emisor**
-(d-7c8794-9afee2). Lo que lo desbloqueó es que **E4 resultó imposible con el hardware
-actual** —el AX210 no puede transmitir ni escuchar un BIS— y que **A2DP con 2 o 3
-parlantes iguales alinea a pocos milisegundos**. La decisión sobre Auracast sigue
-abierta hasta que lleguen las SuperMini. **Lo próximo (2026-10-02):** con los 3 Go 4 encendidos, escuchar
-20 minutos de música mirando Diagnóstico → Cortes, para confirmar o descartar las causas de
-los cortes (`docs/research/experimentos/10-…` §9, d-7c8794-560b54); después, construir la
-sonda enmascarada en el motor (i-7c8794-e3e40d, paso 2; el paso 1 dio luz verde en
-`experimentos/11-…`). El servicio de control y su panel ya están construidos y en uso
-(`aurasync service`).
+**Foco (2026-10-02, d-7c8794-a5b83b): Linux completo es el camino principal, y el
+repositorio es ante todo sobre audio** —procesamiento de señales, la cadena del motor, el
+sonido envolvente, efectos y mejoras de software, siempre con experimentos que los
+validen— para dar la mejor experiencia posible con este hardware limitado. Los otros
+dispositivos (la Raspberry Pi Zero 2 W, la Pico 2 W como emisor, Auracast con las
+SuperMini, el panel como PWA independiente) se suman después, por iteraciones, sin cerrarles
+la puerta: el motor se mantiene separado del emisor
+(`docs/research/13-dispositivos-pi-pico-y-panel-independiente.md`).
+
+**Estado (2026-10-02): el núcleo con A2DP está construido y en uso** (d-7c8794-9afee2):
+servicio de control, panel, la cadena con todas sus perillas (d-7c8794-114c9c), las etapas
+nuevas de graves, dinámica y difusión apagadas hasta medirlas (d-7c8794-d1118c), y las
+métricas de calidad. Auracast sigue abierto: E4 espera las SuperMini. **Lo próximo:** en
+`PC-Ryzen5` con los 3 Go 4, el protocolo de los microcortes
+(`docs/research/experimentos/12-…`), que ahora separa la radio, el motor y el reloj; después
+los experimentos 14 (graves y volumen) y 15 (calidad con micrófono), y la prueba de concepto
+de E/S nativa en Rust (`experimentos/13-…`). El plan entero está en `docs/roadmap.md`,
+"Plan desde el 2026-10-02".
 
 Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
 solo el BIS de Auracast que les corresponde) solo se responde con los parlantes en la
@@ -139,6 +147,9 @@ es lo único que avisa a la siguiente.
 | ¿Cómo se integra todo en una herramienta, con qué stack y en qué orden? | `docs/research/08-integracion-y-plan.md` |
 | ¿Qué produce el efecto envolvente, cómo potenciarlo y qué considerar al implementarlo? | `docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md` |
 | ¿Qué tiene el panel, cómo se organiza y por qué así? | `docs/research/10-panel-de-control.md` |
+| ¿Qué procesamiento mejoraría el sonido, cómo se mide su calidad, cuánta pierde la cadena de códecs y cómo se muestra en el panel? | `docs/research/11-procesamiento-calidad-canales-y-panel.md` |
+| ¿Conviene un motor de audio en Rust para el camino crítico, y cómo se haría? | `docs/research/12-motor-de-audio-en-rust.md` |
+| ¿Qué corre en una Pi Zero 2 W y en una Pico 2 W, cómo pasar de 3 parlantes, y cómo funciona el panel independiente? | `docs/research/13-dispositivos-pi-pico-y-panel-independiente.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |
