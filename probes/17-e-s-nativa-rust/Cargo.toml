@@ -1,0 +1,14 @@
+# Throwaway proof of concept: native PipeWire I/O for aurasync (d-7c8794-36dde5).
+# `poc-dsp` is pure Rust and builds/tests anywhere; `poc-pw` only links PipeWire on Linux.
+[workspace]
+resolver = "3"
+members = ["poc-dsp", "poc-pw"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[profile.release]
+# Symbols for `perf`/`pw-profiler` sessions; they do not change the generated code.
+debug = 1

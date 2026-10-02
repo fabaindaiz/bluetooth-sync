@@ -1,0 +1,14 @@
+[package]
+name = "poc-dsp"
+version = "0.1.0"
+description = "Minimal real-time engine for the native-I/O proof of concept: pan, integer delay, gain and mute ramps"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+rtrb = "=0.4.0"
+
+[dev-dependencies]
+# `warn_debug` counts violations instead of aborting, so a test can also see one happen.
+assert_no_alloc = { version = "=1.1.2", default-features = false, features = ["warn_debug"] }

@@ -1,0 +1,23 @@
+[package]
+name = "poc-pw"
+version = "0.1.0"
+description = "Native PipeWire I/O proof of concept for aurasync: a virtual sink and an N-channel playback in one link-group"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+poc-dsp = { path = "../poc-dsp" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hound = "3.5"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Pinned exactly, like Bumble: pipewire-rs warns of frequent breakage (docs/research/12 §2.1).
+# `v1_2_0` turns on every wrapper gated by version, among them `Stream::time()` through
+# `pw_stream_get_time_n` (v0_3_50), `StreamFlags::TRIGGER` (v0_3_41) and `trigger_process` (v0_3_34).
+pipewire = { version = "=0.10.1", features = ["v1_2_0"] }
+bytemuck = "1"
+libc = "0.2"
+# In release too: allocations inside the callback are counted and logged, not ignored.
+assert_no_alloc = { version = "=1.1.2", default-features = false, features = ["warn_debug", "warn_release"] }

@@ -1,0 +1,558 @@
+{
+ "environment": {
+  "machine": "Fabians-MacBook-Neo.local",
+  "arch": "arm64",
+  "python": "3.12.13",
+  "numpy": "2.5.3",
+  "load_avg": [
+   16.3,
+   26.4,
+   22.1
+  ]
+ },
+ "block": 4096,
+ "budget_ms": 85.33,
+ "limit": {
+  "N7_decorrelar_true": "ValueError: 7 parlantes: con filtros fijos solo se consiguen 6 señales bien decorrelacionadas"
+ },
+ "run_a": {
+  "engine": {
+   "N3|defaults|decorr": {
+    "median_ms": 5.24,
+    "p99_ms": 7.93,
+    "x_realtime": 16.3,
+    "wall_median_ms": 5.38
+   },
+   "N4|defaults|decorr": {
+    "median_ms": 6.42,
+    "p99_ms": 9.25,
+    "x_realtime": 13.3,
+    "wall_median_ms": 6.64
+   },
+   "N5|defaults|decorr": {
+    "median_ms": 8.02,
+    "p99_ms": 11.11,
+    "x_realtime": 10.6,
+    "wall_median_ms": 8.4
+   },
+   "N6|defaults|decorr": {
+    "median_ms": 9.06,
+    "p99_ms": 13.18,
+    "x_realtime": 9.4,
+    "wall_median_ms": 9.19
+   },
+   "N7|defaults|decorr": {
+    "median_ms": 10.85,
+    "p99_ms": 15.04,
+    "x_realtime": 7.9,
+    "wall_median_ms": 11.3
+   },
+   "N8|defaults|decorr": {
+    "median_ms": 11.96,
+    "p99_ms": 16.27,
+    "x_realtime": 7.1,
+    "wall_median_ms": 12.34
+   },
+   "fit|defaults|decorr": {
+    "ms_per_speaker": 1.37,
+    "ms_fixed": 1.06
+   },
+   "N3|defaults|no_decorr": {
+    "median_ms": 5.63,
+    "p99_ms": 7.58,
+    "x_realtime": 15.2,
+    "wall_median_ms": 6.4
+   },
+   "N4|defaults|no_decorr": {
+    "median_ms": 6.97,
+    "p99_ms": 9.85,
+    "x_realtime": 12.2,
+    "wall_median_ms": 8.11
+   },
+   "N5|defaults|no_decorr": {
+    "median_ms": 8.17,
+    "p99_ms": 11.31,
+    "x_realtime": 10.4,
+    "wall_median_ms": 9.65
+   },
+   "N6|defaults|no_decorr": {
+    "median_ms": 9.45,
+    "p99_ms": 13.87,
+    "x_realtime": 9.0,
+    "wall_median_ms": 11.38
+   },
+   "N7|defaults|no_decorr": {
+    "median_ms": 10.7,
+    "p99_ms": 15.0,
+    "x_realtime": 8.0,
+    "wall_median_ms": 12.05
+   },
+   "N8|defaults|no_decorr": {
+    "median_ms": 11.92,
+    "p99_ms": 16.51,
+    "x_realtime": 7.2,
+    "wall_median_ms": 15.15
+   },
+   "fit|defaults|no_decorr": {
+    "ms_per_speaker": 1.25,
+    "ms_fixed": 1.9
+   },
+   "N3|everything_protect|decorr": {
+    "median_ms": 10.44,
+    "p99_ms": 14.64,
+    "x_realtime": 8.2,
+    "wall_median_ms": 11.6
+   },
+   "N4|everything_protect|decorr": {
+    "median_ms": 14.1,
+    "p99_ms": 19.9,
+    "x_realtime": 6.1,
+    "wall_median_ms": 15.18
+   },
+   "N5|everything_protect|decorr": {
+    "median_ms": 17.09,
+    "p99_ms": 21.8,
+    "x_realtime": 5.0,
+    "wall_median_ms": 19.24
+   },
+   "N6|everything_protect|decorr": {
+    "median_ms": 20.43,
+    "p99_ms": 27.63,
+    "x_realtime": 4.2,
+    "wall_median_ms": 21.94
+   },
+   "N7|everything_protect|decorr": {
+    "median_ms": 22.69,
+    "p99_ms": 30.27,
+    "x_realtime": 3.8,
+    "wall_median_ms": 24.61
+   },
+   "N8|everything_protect|decorr": {
+    "median_ms": 26.5,
+    "p99_ms": 33.92,
+    "x_realtime": 3.2,
+    "wall_median_ms": 29.22
+   },
+   "fit|everything_protect|decorr": {
+    "ms_per_speaker": 3.13,
+    "ms_fixed": 1.35
+   },
+   "N3|everything_protect|no_decorr": {
+    "median_ms": 12.49,
+    "p99_ms": 17.59,
+    "x_realtime": 6.8,
+    "wall_median_ms": 23.5
+   },
+   "N4|everything_protect|no_decorr": {
+    "median_ms": 15.72,
+    "p99_ms": 22.11,
+    "x_realtime": 5.4,
+    "wall_median_ms": 30.24
+   },
+   "N5|everything_protect|no_decorr": {
+    "median_ms": 20.16,
+    "p99_ms": 27.1,
+    "x_realtime": 4.2,
+    "wall_median_ms": 39.24
+   },
+   "N6|everything_protect|no_decorr": {
+    "median_ms": 23.46,
+    "p99_ms": 32.43,
+    "x_realtime": 3.6,
+    "wall_median_ms": 46.02
+   },
+   "N7|everything_protect|no_decorr": {
+    "median_ms": 25.94,
+    "p99_ms": 36.35,
+    "x_realtime": 3.3,
+    "wall_median_ms": 52.95
+   },
+   "N8|everything_protect|no_decorr": {
+    "median_ms": 30.41,
+    "p99_ms": 41.84,
+    "x_realtime": 2.8,
+    "wall_median_ms": 60.69
+   },
+   "fit|everything_protect|no_decorr": {
+    "ms_per_speaker": 3.53,
+    "ms_fixed": 1.95
+   },
+   "N3|everything_crossover|decorr": {
+    "median_ms": 9.84,
+    "p99_ms": 14.25,
+    "x_realtime": 8.7,
+    "wall_median_ms": 10.73
+   },
+   "N4|everything_crossover|decorr": {
+    "median_ms": 12.56,
+    "p99_ms": 16.58,
+    "x_realtime": 6.8,
+    "wall_median_ms": 13.79
+   },
+   "N5|everything_crossover|decorr": {
+    "median_ms": 15.45,
+    "p99_ms": 20.79,
+    "x_realtime": 5.5,
+    "wall_median_ms": 17.27
+   },
+   "N6|everything_crossover|decorr": {
+    "median_ms": 18.02,
+    "p99_ms": 24.36,
+    "x_realtime": 4.7,
+    "wall_median_ms": 19.49
+   },
+   "N7|everything_crossover|decorr": {
+    "median_ms": 20.26,
+    "p99_ms": 26.93,
+    "x_realtime": 4.2,
+    "wall_median_ms": 23.1
+   },
+   "N8|everything_crossover|decorr": {
+    "median_ms": 23.08,
+    "p99_ms": 30.5,
+    "x_realtime": 3.7,
+    "wall_median_ms": 26.36
+   },
+   "fit|everything_crossover|decorr": {
+    "ms_per_speaker": 2.62,
+    "ms_fixed": 2.1
+   },
+   "N3|everything_crossover|no_decorr": {
+    "median_ms": 8.32,
+    "p99_ms": 13.84,
+    "x_realtime": 10.3,
+    "wall_median_ms": 8.89
+   },
+   "N4|everything_crossover|no_decorr": {
+    "median_ms": 10.57,
+    "p99_ms": 16.86,
+    "x_realtime": 8.1,
+    "wall_median_ms": 10.97
+   },
+   "N5|everything_crossover|no_decorr": {
+    "median_ms": 12.87,
+    "p99_ms": 17.47,
+    "x_realtime": 6.6,
+    "wall_median_ms": 13.52
+   },
+   "N6|everything_crossover|no_decorr": {
+    "median_ms": 14.91,
+    "p99_ms": 19.69,
+    "x_realtime": 5.7,
+    "wall_median_ms": 16.24
+   },
+   "N7|everything_crossover|no_decorr": {
+    "median_ms": 17.29,
+    "p99_ms": 22.69,
+    "x_realtime": 4.9,
+    "wall_median_ms": 19.09
+   },
+   "N8|everything_crossover|no_decorr": {
+    "median_ms": 18.9,
+    "p99_ms": 27.0,
+    "x_realtime": 4.5,
+    "wall_median_ms": 20.5
+   },
+   "fit|everything_crossover|no_decorr": {
+    "ms_per_speaker": 2.15,
+    "ms_fixed": 2.01
+   }
+  },
+  "decorrelator": {
+   "256|direct": {
+    "median_ms": 0.285,
+    "p99_ms": 0.364
+   },
+   "256|fft": {
+    "median_ms": 0.163,
+    "p99_ms": 0.24
+   },
+   "512|direct": {
+    "median_ms": 0.539,
+    "p99_ms": 1.106
+   },
+   "512|fft": {
+    "median_ms": 0.134,
+    "p99_ms": 0.237
+   },
+   "1024|direct": {
+    "median_ms": 0.966,
+    "p99_ms": 2.018
+   },
+   "1024|fft": {
+    "median_ms": 0.136,
+    "p99_ms": 0.19
+   }
+  }
+ },
+ "run_b": {
+  "engine": {
+   "N3|defaults|decorr": {
+    "median_ms": 6.56,
+    "p99_ms": 9.99,
+    "x_realtime": 13.0,
+    "wall_median_ms": 7.13
+   },
+   "N4|defaults|decorr": {
+    "median_ms": 8.42,
+    "p99_ms": 11.92,
+    "x_realtime": 10.1,
+    "wall_median_ms": 9.1
+   },
+   "N5|defaults|decorr": {
+    "median_ms": 9.85,
+    "p99_ms": 12.63,
+    "x_realtime": 8.7,
+    "wall_median_ms": 10.76
+   },
+   "N6|defaults|decorr": {
+    "median_ms": 11.32,
+    "p99_ms": 15.28,
+    "x_realtime": 7.5,
+    "wall_median_ms": 12.87
+   },
+   "N7|defaults|decorr": {
+    "median_ms": 13.02,
+    "p99_ms": 17.23,
+    "x_realtime": 6.6,
+    "wall_median_ms": 14.24
+   },
+   "N8|defaults|decorr": {
+    "median_ms": 14.98,
+    "p99_ms": 18.98,
+    "x_realtime": 5.7,
+    "wall_median_ms": 16.95
+   },
+   "fit|defaults|decorr": {
+    "ms_per_speaker": 1.64,
+    "ms_fixed": 1.68
+   },
+   "N3|defaults|no_decorr": {
+    "median_ms": 6.06,
+    "p99_ms": 8.71,
+    "x_realtime": 14.1,
+    "wall_median_ms": 6.84
+   },
+   "N4|defaults|no_decorr": {
+    "median_ms": 7.47,
+    "p99_ms": 11.26,
+    "x_realtime": 11.4,
+    "wall_median_ms": 8.76
+   },
+   "N5|defaults|no_decorr": {
+    "median_ms": 8.98,
+    "p99_ms": 12.22,
+    "x_realtime": 9.5,
+    "wall_median_ms": 10.12
+   },
+   "N6|defaults|no_decorr": {
+    "median_ms": 10.44,
+    "p99_ms": 13.96,
+    "x_realtime": 8.2,
+    "wall_median_ms": 12.5
+   },
+   "N7|defaults|no_decorr": {
+    "median_ms": 11.63,
+    "p99_ms": 16.06,
+    "x_realtime": 7.3,
+    "wall_median_ms": 13.17
+   },
+   "N8|defaults|no_decorr": {
+    "median_ms": 13.3,
+    "p99_ms": 17.36,
+    "x_realtime": 6.4,
+    "wall_median_ms": 15.0
+   },
+   "fit|defaults|no_decorr": {
+    "ms_per_speaker": 1.43,
+    "ms_fixed": 1.77
+   },
+   "N3|everything_protect|decorr": {
+    "median_ms": 11.35,
+    "p99_ms": 16.24,
+    "x_realtime": 7.5,
+    "wall_median_ms": 12.56
+   },
+   "N4|everything_protect|decorr": {
+    "median_ms": 14.52,
+    "p99_ms": 21.38,
+    "x_realtime": 5.9,
+    "wall_median_ms": 16.44
+   },
+   "N5|everything_protect|decorr": {
+    "median_ms": 17.77,
+    "p99_ms": 25.25,
+    "x_realtime": 4.8,
+    "wall_median_ms": 19.59
+   },
+   "N6|everything_protect|decorr": {
+    "median_ms": 21.28,
+    "p99_ms": 28.12,
+    "x_realtime": 4.0,
+    "wall_median_ms": 23.16
+   },
+   "N7|everything_protect|decorr": {
+    "median_ms": 25.13,
+    "p99_ms": 33.72,
+    "x_realtime": 3.4,
+    "wall_median_ms": 27.53
+   },
+   "N8|everything_protect|decorr": {
+    "median_ms": 28.03,
+    "p99_ms": 35.16,
+    "x_realtime": 3.0,
+    "wall_median_ms": 30.69
+   },
+   "fit|everything_protect|decorr": {
+    "ms_per_speaker": 3.39,
+    "ms_fixed": 1.02
+   },
+   "N3|everything_protect|no_decorr": {
+    "median_ms": 10.63,
+    "p99_ms": 15.19,
+    "x_realtime": 8.0,
+    "wall_median_ms": 11.22
+   },
+   "N4|everything_protect|no_decorr": {
+    "median_ms": 13.0,
+    "p99_ms": 19.09,
+    "x_realtime": 6.6,
+    "wall_median_ms": 14.66
+   },
+   "N5|everything_protect|no_decorr": {
+    "median_ms": 16.06,
+    "p99_ms": 21.95,
+    "x_realtime": 5.3,
+    "wall_median_ms": 18.11
+   },
+   "N6|everything_protect|no_decorr": {
+    "median_ms": 19.46,
+    "p99_ms": 26.41,
+    "x_realtime": 4.4,
+    "wall_median_ms": 21.77
+   },
+   "N7|everything_protect|no_decorr": {
+    "median_ms": 22.17,
+    "p99_ms": 28.28,
+    "x_realtime": 3.8,
+    "wall_median_ms": 23.82
+   },
+   "N8|everything_protect|no_decorr": {
+    "median_ms": 25.42,
+    "p99_ms": 33.78,
+    "x_realtime": 3.4,
+    "wall_median_ms": 27.57
+   },
+   "fit|everything_protect|no_decorr": {
+    "ms_per_speaker": 3.0,
+    "ms_fixed": 1.31
+   },
+   "N3|everything_crossover|decorr": {
+    "median_ms": 9.27,
+    "p99_ms": 12.7,
+    "x_realtime": 9.2,
+    "wall_median_ms": 9.68
+   },
+   "N4|everything_crossover|decorr": {
+    "median_ms": 11.61,
+    "p99_ms": 15.45,
+    "x_realtime": 7.4,
+    "wall_median_ms": 12.57
+   },
+   "N5|everything_crossover|decorr": {
+    "median_ms": 14.17,
+    "p99_ms": 19.84,
+    "x_realtime": 6.0,
+    "wall_median_ms": 15.22
+   },
+   "N6|everything_crossover|decorr": {
+    "median_ms": 16.68,
+    "p99_ms": 22.46,
+    "x_realtime": 5.1,
+    "wall_median_ms": 17.66
+   },
+   "N7|everything_crossover|decorr": {
+    "median_ms": 19.53,
+    "p99_ms": 24.64,
+    "x_realtime": 4.4,
+    "wall_median_ms": 20.66
+   },
+   "N8|everything_crossover|decorr": {
+    "median_ms": 21.23,
+    "p99_ms": 28.66,
+    "x_realtime": 4.0,
+    "wall_median_ms": 22.37
+   },
+   "fit|everything_crossover|decorr": {
+    "ms_per_speaker": 2.46,
+    "ms_fixed": 1.89
+   },
+   "N3|everything_crossover|no_decorr": {
+    "median_ms": 7.48,
+    "p99_ms": 11.55,
+    "x_realtime": 11.4,
+    "wall_median_ms": 7.74
+   },
+   "N4|everything_crossover|no_decorr": {
+    "median_ms": 9.68,
+    "p99_ms": 14.19,
+    "x_realtime": 8.8,
+    "wall_median_ms": 10.07
+   },
+   "N5|everything_crossover|no_decorr": {
+    "median_ms": 11.47,
+    "p99_ms": 19.75,
+    "x_realtime": 7.4,
+    "wall_median_ms": 11.96
+   },
+   "N6|everything_crossover|no_decorr": {
+    "median_ms": 13.65,
+    "p99_ms": 20.51,
+    "x_realtime": 6.3,
+    "wall_median_ms": 14.18
+   },
+   "N7|everything_crossover|no_decorr": {
+    "median_ms": 15.57,
+    "p99_ms": 22.4,
+    "x_realtime": 5.5,
+    "wall_median_ms": 16.16
+   },
+   "N8|everything_crossover|no_decorr": {
+    "median_ms": 17.44,
+    "p99_ms": 25.09,
+    "x_realtime": 4.9,
+    "wall_median_ms": 18.04
+   },
+   "fit|everything_crossover|no_decorr": {
+    "ms_per_speaker": 1.99,
+    "ms_fixed": 1.6
+   }
+  },
+  "decorrelator": {
+   "256|direct": {
+    "median_ms": 0.288,
+    "p99_ms": 0.371
+   },
+   "256|fft": {
+    "median_ms": 0.138,
+    "p99_ms": 0.215
+   },
+   "512|direct": {
+    "median_ms": 0.541,
+    "p99_ms": 0.699
+   },
+   "512|fft": {
+    "median_ms": 0.133,
+    "p99_ms": 0.222
+   },
+   "1024|direct": {
+    "median_ms": 0.942,
+    "p99_ms": 1.583
+   },
+   "1024|fft": {
+    "median_ms": 0.131,
+    "p99_ms": 0.173
+   }
+  }
+ }
+}

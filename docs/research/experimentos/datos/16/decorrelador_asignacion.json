@@ -1,0 +1,29 @@
+{
+ "environment": {
+  "machine": "Fabians-MacBook-Neo.local",
+  "arch": "arm64",
+  "python": "3.12.13",
+  "numpy": "2.5.3",
+  "load_avg": [
+   14.7,
+   15.9,
+   13.9
+  ]
+ },
+ "today_music0": 0.646,
+ "today_music1": 0.445,
+ "best_order": [
+  4,
+  5,
+  3,
+  7,
+  6,
+  2,
+  1,
+  0
+ ],
+ "best_music0": 0.343,
+ "best_music1": 0.429,
+ "worst_of_tried_music0": 0.685,
+ "tried": 24
+}

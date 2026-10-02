@@ -1,0 +1,9 @@
+{
+  "rate": 48000,
+  "volume_db": 0,
+  "speakers": [
+    {"name": "Red", "sink": "bluez_output.AA_AA_AA_AA_AA_AA.1", "pan": -1.0, "delay_samples": 0, "gain_db": 0, "muted": false},
+    {"name": "Blue", "sink": "bluez_output.BB_BB_BB_BB_BB_BB.1", "pan": 1.0, "delay_samples": 650, "gain_db": -1.5, "muted": false},
+    {"name": "Black", "sink": "bluez_output.CC_CC_CC_CC_CC_CC.1", "pan": 0.0, "delay_samples": 288, "gain_db": 0, "muted": false}
+  ]
+}
