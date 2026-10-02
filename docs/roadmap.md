@@ -987,7 +987,21 @@ desde el principio y que la herramienta **avise** en vez de dejar probar algo qu
 inestable — hoy `doctor` ya lo avisa.
 
 ### Modo difusión en vivo: ajuste interactivo de niveles y retardos · i-7c8794-bdb678
-**Diseño cerrado (2026-09-29, tarde), spec escrita y pendiente de revisión; sin código.**
+**Estado (2026-10-01): construido, falta validarlo con parlantes.** El usuario aprobó la
+spec, con dos secciones nuevas: el panel de `panel-demo` será un cliente de `control.py`
+(§13), y la v1 no tiene notificaciones, así que un cliente pregunta el estado cada tanto
+(§14). Está construida la primera entrega completa: `aurasync service`, `control.py`,
+`rest.py`, `session.py` (el lazo de `run`, movido sin reescribirlo), `presets.py` y
+`dsp/ramps.py` conectado al motor. El micrófono ya no está fijo en el código. Hay 325 tests sin
+hardware, y la API está documentada en `host/docs/control-api.md`. **MEDIDO:** el motor corre a 63
+veces el tiempo real en `PC-Ryzen5`
+([experimentos/10](research/experimentos/10-servicio-de-control-con-3-go-4.md) §1).
+
+**Lo próximo:** el protocolo con los 3 Go 4 de
+[experimentos/10](research/experimentos/10-servicio-de-control-con-3-go-4.md) §4, ahora con el
+panel (i-7c8794-f3ddf8).
+
+**Diseño cerrado (2026-09-29, tarde).**
 La spec está en
 [superpowers/specs/2026-09-29-control-service-design.md](superpowers/specs/2026-09-29-control-service-design.md)
 (en inglés, d-7c8794-7b3093), y la decisión en d-7c8794-74b639. Lo que cambió respecto de
@@ -1007,8 +1021,6 @@ lo que sigue abajo, a pedido del usuario:
   mezcla; el decorrelador y los presets cambian con un fundido a silencio de 80 + 80 ms;
 - de paso resuelve el **micrófono fijado en el código** que encontró el inventario de
   `HP-O16`: `--microfono` → `service.json` → el default de PipeWire.
-
-**Lo próximo:** que el usuario revise la spec, y después el plan de implementación.
 
 **Estado anterior (2026-09-29, mañana): era lo próximo, y ya no una comodidad.** La primera escucha con
 parlantes lo dejó claro: el efecto *"se siente algo pero no tanto como esperaba"*, y sin poder
@@ -1058,8 +1070,25 @@ Acousmonium los parlantes son **de timbres y tamaños distintos a propósito**. 
 Charge 6 al lado de tres Go 4 no es un defecto a igualar, sino una voz distinta.
 
 ### A/B ciego e interfaz para el servicio de control · i-7c8794-f3ddf8
-**Estado:** Planificado. Segunda entrega del servicio de control; depende de la primera
-(i-7c8794-bdb678).
+**Estado: construido, sin validar con parlantes (2026-10-01).** El panel completo de la rama
+`panel-demo` quedó sobre el motor real como interfaz del servicio (d-7c8794-09d10f, spec
+§15). Incluye presets, el A/B ciego y `aurasync service --simular`. Hay 38 tests de
+navegador en Chromium y Firefox. Construirlo destapó dos errores en `medicion.niveles`, ya
+corregidos ([experimentos/10](research/experimentos/10-servicio-de-control-con-3-go-4.md) §3.1).
+**Lo próximo:** los pasos 8 a 10 de ese protocolo, con parlantes.
+
+**Actualización (2026-10-01, tarde): probado con los 3 Go 4 y música.** La campaña contra el
+servicio vivo destapó y corrigió cinco errores: aplicar con la música en pausa, la
+calibración que no medía el residuo, ~1 s de latencia por la tubería, la alineación con 20 ms
+de consenso, y WirePlumber moviendo un stream. Además encontró que **los saltos de 42,67 ms
+eran de reloj** (un driver por parlante) y los eliminó con la salida combinada
+(d-7c8794-a41ec9). **La calibración solo por protocolo no es posible con estos parlantes**
+([experimentos/10](research/experimentos/10-servicio-de-control-con-3-go-4.md) §5). **Lo
+próximo:** el lazo contra la música con un retraso inyectado (la fase E de `campana.py`),
+y la curva de volumen AVRCP del Go 4.
+
+**Estado anterior:** Planificado. Segunda entrega del servicio de control; depende de la
+primera (i-7c8794-bdb678).
 
 **Qué es:** dos cosas sobre la API que deja la primera entrega:
 - **A/B ciego:** el programa sortea cuál de dos presets es X, la persona elige cuál prefiere
@@ -1074,6 +1103,133 @@ Charge 6 al lado de tres Go 4 no es un defecto a igualar, sino una voz distinta.
 escucha.
 
 **Con qué choca:** con nada; es un cliente de la API.
+
+### La música primero: volumen, espectro completo y ecualización que solo realza · i-7c8794-10ccb4
+**Estado: A medias (2026-10-01).** Lo pidió el usuario: el envolvimiento es secundario y lo
+primero es oír la música bien, fuerte y con todo su espectro. Spec:
+`superpowers/specs/2026-10-01-music-first-and-masked-probe-design.md` §1–2. Decisión:
+d-7c8794-e8f7e3.
+
+**Lo que ya está construido:**
+- la ecualización que solo realza, y lee la medición con optimismo;
+- el tipo de parlante, con la banda del fabricante (Go 4 y Charge 6);
+- el limitador de pico al final de cada cadena;
+- la salida combinada al 100 %, comprobada, y la salida en f32.
+
+Pasan 352 tests unitarios y 50 de navegador.
+
+**Agregado el 2026-10-01 (noche)** (experimentos/10 §8):
+- la lectura de banda limitada en el retardo, que le quitaba hasta 3,5 dB a 12,7 kHz;
+- la entrada en f32;
+- la lectura de la entrada que ya no corre los canales;
+- la tarjeta **Entrada** del panel: mono o estéreo, correlación, lateral/central, balance,
+  ancho de banda, saturación y el formato de cada aplicación;
+- el **micrófono elegible** en la tarjeta de calibración, que se guarda en `service.json`
+  y reinicia el lazo con el nuevo, y su nivel en Niveles.
+
+**Lo que falta:**
+1. Un preset "música" (ambiente bajo en todos).
+2. **La referencia medida:** el mismo pasaje directo a un Go 4 y a través de aurasync,
+   grabado en el punto de escucha y comparado por tercio de octava y por volumen. Pasa si
+   aurasync no suena más apagado que lo directo: ±2 dB entre 100 Hz y 10 kHz con la
+   ecualización apagada.
+3. Un A/B ciego de la ecualización con música, de 16 intentos o más.
+
+**Con qué choca:** con el lazo que mide contra la música. Con poco ambiente, los parlantes
+llevan contenido más parecido y esa medición empeora (experimentos/09 §5). Lo resuelve la
+sonda enmascarada (i-7c8794-e3e40d).
+
+### Recalibración continua como parte del protocolo · i-7c8794-b0512d
+**Estado: Hecho en código (2026-10-01); falta validarlo con parlantes.** Decisión:
+d-7c8794-f94c13.
+- el lazo va encendido por defecto;
+- se apaga en vivo desde Ajustes, como opción avanzada;
+- calibrar lo pausa y lo retoma;
+- aplicar lo reinicia desde los valores aplicados.
+
+**Lo que falta:** que el lazo converja con música, que sigue pendiente desde experimentos/09
+§5. Depende de la sonda.
+
+### Sonda enmascarada bajo la música para el lazo de sincronía · i-7c8794-e3e40d
+**Estado: A medias (2026-10-02). El paso 1 está hecho y da luz verde**
+([experimentos/11](research/experimentos/11-sonda-enmascarada-en-simulacion.md), SIMULADO):
+- a −20 dB con 4 s, ninguna de 240 mediciones erra por más de 1 ms;
+- contra la música, en cambio, erran el 70 a 85 %, porque confunde a Black con Blue.
+
+Sigue el paso 2. Antes decía: Planificado (2026-10-01). La calibración pasa a ser ante todo de **latencia y
+sincronía**, no de espectro. Tiene que poder correr mientras suena la música, sin que se
+note, y prenderse y apagarse sin reiniciar. Investigación: `research/03` §3.2. Diseño: spec
+§4.
+
+**El plan, en orden:**
+1. **Simulación primero.** Música grabada sobre la sala simulada, con márgenes de −15, −20,
+   −25 y −30 dB y ventanas de 2, 4 y 8 s. Se mide el error contra los retardos conocidos,
+   con contenido correlacionado, que es el caso que hoy falla.
+2. Construir `dsp/probe.py`:
+   - ruido por parlante entre 300 Hz y 8 kHz, moldeado por tercio de octava bajo la música;
+   - un bloque de anticipación;
+   - apagado en silencio;
+   - un parlante por ventana, por turnos.
+   Después, el lazo se cambia para correlacionar contra la sonda, con los campos `probe` y
+   `probe_margin_db` y rampas de 50 ms.
+3. **Con parlantes:** un retraso inyectado de +5 ms, encontrado dos veces con semillas
+   distintas.
+4. **Inaudibilidad:** un A/B ciego con la sonda prendida y apagada en cada margen, con
+   material crítico, de 16 intentos o más. Se adopta el margen más fuerte que no llega a
+   p < 0,05.
+5. El resultado va a `experimentos/11-…`.
+
+**Con qué choca:**
+- con el SBC de bitpool bajo, que puede quitarle bits a las bandas débiles (INFERIDO). El
+  moldeado deja la sonda donde ya está la música;
+- con el piso de ruido del micrófono. Lo mide el paso 1.
+
+**Lo que la favorece:** no depende de A2DP. La misma sonda sirve para un backend Auracast.
+
+### Métricas en vivo: stream de eventos del servicio al panel · i-7c8794-530882
+**Estado: Hecho en código (2026-10-01); falta probarlo con parlantes** (d-7c8794-316465). Lo
+que falta medir: que el pico del medidor caiga dentro de un cuadro (50 ms) del pico que
+oye el micrófono. Lo pidió el usuario: que las métricas sean más en vivo, "quizás con un
+stream". Spec: `superpowers/specs/2026-09-29-control-service-design.md` §17.
+Es la adición que §14 dejó pendiente.
+
+**Qué es:** `GET /v1/stream` con Server-Sent Events. Manda:
+- `state` cuando cambia algo;
+- los medidores a 20 Hz;
+- el espectro de la entrada a 10 Hz;
+- los logs a medida que ocurren.
+
+Los medidores van **sincronizados con el oído**: cada trozo se muestra cuando suena, con la
+latencia que midió la calibración (~0,5 s). Si no, se verían adelantados respecto de lo que se
+oye. El panel deja de consultar cada 500 ms mientras el stream vive, y si el stream se cae
+vuelve a consultar.
+
+**Con qué choca:**
+- con el motor, si un cliente lento lo frenara. El motor escribe en un anillo y nunca
+  espera a nadie;
+- con el número de hilos del servidor. Se permiten 8 streams como máximo.
+
+**Lo que la favorece:** el contrato no cambia. Por serie (i-7c8794-a9f161) los mismos
+eventos se piden con un `subscribe`.
+
+### Cortes del audio: detector, causas y eliminación · i-7c8794-7d4aec
+**Estado: A medias (2026-10-01).** Lo pidió el usuario: los cortes "afectan mucho a la
+música". Decisión: d-7c8794-560b54. Detalle en experimentos/10 §9.
+
+**Lo hecho:**
+- el observador ya no abre `bluetoothctl` cada 3 s (eran ~3 monitores de anuncios LE por
+  segundo);
+- el chequeo de ruteo corre en un hilo aparte (pasar la medición del lazo a otro proceso se
+  midió y era peor; sigue en un hilo, protegida para que una falla no corte el audio);
+- la tubería guarda dos bloques de margen;
+- cada corte queda registrado con su causa probable y se ve en Diagnóstico → Cortes.
+
+**Lo que falta, con parlantes:**
+1. 20 minutos de música mirando la tarjeta Cortes.
+2. Buscar dispositivos a propósito mientras suena, para confirmar o descartar el escaneo LE
+   como causa.
+3. Si quedan cortes en un solo parlante con el motor a tiempo, el enlace de ese parlante:
+   distancia, batería y obstáculos.
 
 ### Calibrar el retardo sin un micrófono central · i-7c8794-4745b4
 **Estado:** Planificado. Pedido del usuario el 2026-09-29. El detalle técnico, con el estado de

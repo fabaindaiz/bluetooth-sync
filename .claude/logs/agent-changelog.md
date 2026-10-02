@@ -7,6 +7,339 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-01 · s-7c8794-252141 — El servicio de control construido: contrato, REST, sesión, presets y rampas
+
+**Qué.** La primera entrega de i-7c8794-bdb678, en `PC-Ryzen5`, con la spec que el usuario
+aprobó al empezar.
+- **La spec quedó aprobada** con dos secciones nuevas: el panel de `panel-demo` será un
+  cliente de `control.py` (§13), y la v1 no tiene notificaciones, así que se pregunta el
+  estado cada tanto (§14).
+- **El código nuevo, en inglés:**
+  - `control.py`: el contrato, que valida todo antes de aplicar nada y tiene un código
+    estable por error;
+  - `rest.py`: con la biblioteca estándar, el token y `/v1/command`;
+  - `service.py`: un solo hilo escribe; `service.json` con permisos `0600`; sobrevive a una
+    sesión que falla;
+  - `session.py`: el lazo de `cmd_run`, movido en el mismo orden;
+  - `presets.py`: con escritura atómica;
+  - `dsp/ramps.py`: valores suavizados, rampa en dB y el corte de 80 + 80 ms.
+- **`motor.py`**, que sigue en español: `pan` y `ambiente` suavizados, el extractor que nunca
+  se apaga, `volumen_db`, el decorrelador solo a través del corte, y
+  `actualizar_desde_control`. El lazo sigue usando `actualizar`, que nunca corta.
+- **`cli.py`:** `run` delega en `session.py`; está el subcomando `service`; y el micrófono
+  sale de `--microfono`, después de `service.json` y después de la fuente por defecto. Se
+  quitó `MICROFONO_POR_DEFECTO`.
+- **Documentación:** `host/docs/control-api.md` (la API, en inglés), `host/README.md`,
+  [experimentos/10](../../docs/research/experimentos/10-servicio-de-control-con-3-go-4.md)
+  (con el protocolo con parlantes) y el roadmap.
+- **Segunda parte, a pedido del usuario: las correcciones, y las pruebas preparadas antes de
+  conectar los parlantes.**
+  - La sesión revisa el ruteo **cada 2 s** mientras suena, y no solo al abrir. Un stream
+    desviado se devuelve a su parlante; uno cuyo parlante ya no existe se **cierra**
+    (`Reproductor.soltar`), porque WirePlumber podría moverlo al sink virtual.
+  - `state` marca cada parlante con `playing` y avisa de los perdidos y de las reparaciones.
+    La spec §7 se actualizó con esto.
+  - `probes/10-servicio-de-control/` tiene un script por paso del protocolo, una comprobación
+    de ruteo independiente (`ruteo.py`), la fuente que verifica haber llegado a `aurasync`,
+    la grabación del micrófono, el detector de clics (`clics.py`, que mide su propia
+    sensibilidad en cada grabación) y el **ensayo en seco** del paso 3 (`seco.py`).
+- **Tercera parte: el panel completo sobre el motor real** (d-7c8794-09d10f, spec §15). El
+  usuario pidió "todas las features conversadas" en vez de un panel mínimo.
+  - Todo lo de `panel-demo` está trasladado a A2DP: roles, silencio, tono, búsqueda y
+    conexión de parlantes, servicios con PID, logs, salud, niveles, configuración,
+    calibración dentro de la sesión, presets y A/B ciego.
+  - Módulos nuevos: `snapshot.py`, `sources.py`, `system.py`, `logbuffer.py`,
+    `simulated.py` y `panel/`. El contrato creció de forma aditiva, y `delay_ms` se puede
+    fijar a mano con el lazo apagado.
+  - Seguridad para el navegador: cookie `HttpOnly; SameSite=Strict`, chequeo de `Host` y de
+    `Origin`.
+  - `aurasync service --simular`.
+  - Se agregó la dependencia `segno` (el QR) y el entorno `browser` de hatch (Playwright
+    1.60, Chromium y Firefox).
+  - **Se corrigió `medicion.niveles`** (filtro de graves, normalización por la propia
+    autocorrelación, índices circulares, ventana de 20 ms). El experimento 06 tiene una
+    nota sobre esto.
+- **Quinta parte: el audio "degradado", la calidad en el panel y el espectro de cada
+  parlante** (experimentos/10 §6). Arreglos:
+  - la tubería quedaba más chica que el ciclo de `pw-play` (~10 cortes/s) — **error mío de
+    la cuarta parte**;
+  - el decorrelador coloreaba ±9,5 dB por tercio de octava; ahora es plano a ±0,2 dB y
+    decorrela más;
+  - el panel muestra los cortes por minuto y la respuesta en frecuencia de cada parlante;
+  - "Aplicar" saltea los parlantes dudosos;
+  - el servicio escucha en la red de la casa (antes anunciaba la IP de la VPN WireGuard y
+    rechazaba la de la casa por el chequeo de `Host`).
+- **Cuarta parte: pruebas con los 3 Go 4 y música, contra el servicio vivo** (a pedido del
+  usuario: el servicio corre y las pruebas son órdenes a su API; se redespliega solo cuando
+  cambia el código). Incluye su pregunta sobre si se puede calibrar solo con el protocolo
+  ([experimentos/10](../../docs/research/experimentos/10-servicio-de-control-con-3-go-4.md)
+  §5).
+  - **Correcciones:**
+    - la calibración mide el residuo a través de las correcciones vigentes;
+    - el motor procesa silencio sin entrada, para que "Aplicar" no quede esperando;
+    - la tubería hacia `pw-play` es de dos bloques (la latencia bajó de 1,03 s a 0,50 s);
+    - la alineación gruesa acepta 100 ms de separación;
+    - los streams llevan `node.dont-move`;
+    - el umbral de señal del lazo sigue al volumen general;
+    - la calibración informa la latencia medida, y el panel la muestra;
+    - **la salida combinada (`ReproductorCombinado`), por defecto** (d-7c8794-a41ec9).
+  - **Herramientas:** `campana.py` (fases A–E, P, V, R), `protocolo.py`, `monitores.py`,
+    el volcado `calibration_dump` y `servicio.sh redeploy`.
+
+**Archivos.** `host/src/aurasync/{control,rest,service,session,presets}.py`,
+`host/src/aurasync/dsp/ramps.py`, `motor.py`, `sonido.py`, `cli.py`, `host/pyproject.toml`,
+`host/tests/test_{control,rest,service,presets,ramps,motor_live}.py`, `test_cli.py`,
+`host/tests/test_session.py`, `host/docs/control-api.md`, `host/README.md`,
+`host/src/aurasync/{snapshot,sources,system,logbuffer,simulated}.py`, `host/src/aurasync/panel/`,
+`host/src/aurasync/medicion.py`, `host/tests/test_panel_ops.py`, `host/tests/test_medicion.py`,
+`host/tests_browser/`, `docs/decisions.md`, `docs/research/experimentos/06-…`,
+`probes/10-servicio-de-control/`, `docs/superpowers/specs/2026-09-29-…`,
+`docs/research/experimentos/10-…`, `docs/roadmap.md`, `CLAUDE.md`, este registro.
+
+**Por qué.** El usuario pidió seguir con el servicio de control y tener algo que se pueda
+probar hoy en este equipo, con las correcciones que se habían conversado.
+
+**Arquitectura.** ✅ Cumple con la spec y con d-7c8794-7b3093: el código nuevo está en
+inglés y `motor.py` mantiene su idioma. `control.py` y `dsp/ramps.py` no hacen E/S.
+**Tarjetas aplicadas:**
+- *a-check-must-be-seen-to-fail*: se vieron fallar, con el código roto a propósito, los
+  tests del suavizado, el del preset que corta aunque no cambie nada y el del escritor único;
+- *kill-switch-reaches-every-path*: `shutdown`, Ctrl-C y `SIGTERM` cierran la sesión;
+- *cleanup-belongs-to-the-supervisor*: el servicio cierra la sesión que falla, y la sesión
+  cierra todo con un `ExitStack`.
+
+**Qué salió mal en el camino.**
+- **Corrí `git checkout -- .` dentro de `host/` para deshacer una mutación de prueba, y
+  revirtió los cambios sin commitear de `motor.py`, `cli.py` y `sonido.py`.** Se volvieron a
+  aplicar con los mismos scripts de edición. Desde entonces, las mutaciones se deshacen con
+  un reemplazo de texto y no con git.
+- El primer test del escritor único no detectaba la mutación: mandaba las órdenes antes de
+  que la sesión diera su primer paso. Ahora espera a que la sesión esté corriendo y reparte
+  las órdenes entre muchos pasos.
+- El atributo `presets` (el almacén) le hacía sombra al método `presets()` del contrato:
+  `preset_store`.
+- La ruta por defecto de la instalación en `service.json` no respetaba `XDG_CONFIG_HOME`.
+  Lo encontró la prueba de humo.
+- **El primer detector de clics no veía nada:** promediaba la energía en ventanas de 5 ms y
+  diluía un salto de una muestra. Su autoprueba además ponía el salto de ganancia en un
+  cruce por cero del tono, donde no hay discontinuidad. Las dos cosas las delató la
+  autoprueba. Ahora usa el pico de la ventana, y la autoprueba pone el salto en una fase
+  cualquiera.
+- **`medicion.niveles` medía mal los niveles desde antes de esta sesión, y lo destapó la
+  calibración del panel simulado.** Los retardos daban exactos y las ganancias no; con una
+  mezcla sintética limpia daba igual, así que no era la simulación. Había dos errores
+  (experimentos/10 §3.1): hasta 11,4 dB de error según la realización del ruido, y el
+  parlante que llega primero se perdía. Su validación anterior era repetibilidad con la
+  misma semilla, no exactitud. **Las ganancias que escribió `calibrate` antes no son
+  confiables.**
+- El primer intento de corrección (normalizar sin filtrar los graves) seguía fallando, y
+  el segundo dejó de detectar un parlante mudo con la ventana de 80 ms. Un barrido de
+  ventana y de corte (accuracy + silencio a la vez) llevó a 300 Hz y 20 ms.
+- Un test de navegador de Firefox falló una vez de cada tres: el test tocaba un control
+  antes del primer dibujo, y el dibujo lo pisaba. Ahora la página marca `data-ready` y los
+  tests lo esperan.
+- Iniciar una sesión no dejaba ninguna línea en el log de `session`: lo encontró el test
+  que filtra logs por servicio.
+- **La primera campaña con parlantes no aplicó nada**: "Aplicar" dependía de que entrara
+  audio. Lo delató que lo aplicado seguía en 0,00 ms; desde entonces la campaña verifica que
+  aplicar cambie los retardos.
+- **`servicio.sh` dejaba un bash intermedio con la tubería abierta**, y un `| tail` esperaba
+  para siempre (dos veces). Ahora el lanzamiento hace `exec` con `setsid` y redirige todo.
+- **Mi `pkill` se mató a sí mismo** una vez: el patrón aparecía en su propia línea de comando.
+- **Un proceso lanzado con `&` desde bash nace con SIGINT ignorada:** `kill -INT` no cerraba
+  `run`. Lo delató `SigIgn` en `/proc`.
+- **La fase E (el lazo contra el contenido) no sirvió con la señal de prueba:** sus tonos
+  son periódicos y la correlación se vuelve ambigua. El lazo necesita música.
+- **El experimento SBC mono no redujo la congestión** y se revirtió (registro en
+  `datos/10/cambios-de-sistema.txt`).
+- **Preparar el paso 5 destapó un riesgo:** con un parlante apagado, la sesión seguía
+  "sonando", porque el `pw-play` huérfano no muere y su stream puede terminar en otra
+  salida. La corrección está arriba.
+
+**Qué quedó pendiente.**
+- **El protocolo con parlantes** (experimentos/10 §4): los scripts están listos y no había
+  parlantes conectados.
+- `fuente.sh` y la vigilancia del ruteo no se probaron con un sink `aurasync` real: crearlo
+  sin parlantes habría podido cambiar el sink por defecto del sistema (la trampa de
+  experimentos/09). Sí se comprobó que `pw-play --target` deja `target.object` en su nodo,
+  que es lo que `fuente.sh` y `ruteo.py` leen.
+- **Un candidato sin probar:** las propiedades de WirePlumber `node.dont-fallback`,
+  `node.dont-reconnect` y `node.dont-move` en los `pw-play` evitarían de raíz que un stream
+  termine en otro lado. No se tocaron, porque cambian el orden validado de oído y bloquearían
+  el `pactl move` que hoy repara el ruteo.
+- **El panel no se probó en un teléfono real**: solo con 390 px emulados (el servicio está
+  en 127.0.0.1).
+- **El lazo contra la música con un retraso inyectado (fase E)**: Spotify quedó en pausa.
+- **La curva de volumen AVRCP del Go 4**: "−6 dB" de PipeWire se midieron como 4,1 dB.
+- **El firmware de los Go 4 sigue sin leer.**
+- **La deriva de ~22 ppm entre parlantes** con salida combinada: el lazo tiene que seguirla.
+- El ajuste `player_latency_ms` no cambia la latencia medida; habría que quitarlo o
+  explicarlo en el panel.
+- Los avisos del estado (`warnings`) siguen en inglés dentro de un panel en español.
+- Los scripts del probe (pasos 1 a 7) siguen hablando REST; los pasos 8 a 10 son con el
+  panel.
+- **El JBL Charge 6 estaba conectado** como salida A2DP al terminar (lo vio el
+  observador); no es de la instalación. Si el sink por defecto es él, cuidado con lo que
+  suena ahí durante las pruebas.
+- Un `pw-play` que muere sin que mueran todos no cierra la sesión: se sigue con los que
+  quedan, como hacía `run`. La spec decía otra cosa (§7), y queda a la vista.
+- **Mover `ambience` casi siempre pasa por el corte:** cambia el retardo de Haas del
+  parlante (`ambiente × retardo_traseros_ms`), y más de 1 ms de cambio supera los 2 s de
+  rampa. Hay que oírlo para saber si molesta.
+- La rama `panel-demo` sigue sin integrar (spec §13).
+- `git fetch` falla en este equipo por la clave SSH: no se sabe si `origin` tiene algo más
+  nuevo.
+
+**Desvío del plan.** No se escribió un plan de implementación aparte: el usuario pidió
+implementar directamente, y la spec alcanzaba como plan.
+
+**No verificado.** Nada se escuchó. Que `session.py` suene igual que el `run` anterior es el
+riesgo mayor de la spec (§12), y solo se ve con parlantes.
+
+**Medido.**
+- El motor procesa a 63× el tiempo real en `PC-Ryzen5`: 1,35 ms por bloque de 85 ms, igual
+  con rampas y cortes.
+- `pw-dump` tarda 16 ms.
+- El ensayo en seco del paso 3 da 6 cortes donde se esperan, 0 donde no y 0 clics en los
+  tres parlantes; con el suavizado roto encuentra un clic de +15 dB.
+- La calibración simulada: retardos exactos (9,0, 4,5 y 0,0 ms) y ganancias de -4,7, -2,8
+  y 0 dB frente a -4,4, -2,5 y 0 esperados.
+- El estimador de nivel corregido: 0,24 dB de error máximo en 12 realizaciones; antes,
+  11,4 dB.
+- Los tests de navegador pasan 38 de 38 en dos corridas seguidas, en unos 100 s.
+- El observador del sistema tarda 103 ms por lectura.
+- Con parlantes (experimentos/10 §5):
+  - cierre de la calibración: 0,35 ms;
+  - retraso inyectado de +4 ms medido con 0,9 ms de error; ganancia de −6 dB, con 0,9 dB;
+  - latencia de escrito a oído: 1,03 s → 0,50 s;
+  - saltos de 42,67 ms: 4 de 13 y 5 de 6 con un `pw-play` por parlante, 0 de 8 con salida
+    combinada;
+  - deriva con salida combinada: ~1,35 ms/min;
+  - PipeWire informa 145,19 ms para los tres, todo el día;
+  - AVRCP −6 dB (cúbico) se oyó como 4,1 dB, y no movió el retardo (0,02 ms).
+- `scripts/check.sh` pasa con 330 tests; los de navegador, 38 de 38.
+
+**Parte 6 (noche): la guía de diseño en el panel, y la música primero.**
+- **Panel**, siguiendo las guías de diseño investigadas:
+  - medidores con escala, zonas de color, pico retenido 1,5 s con caída de 20 dB en 1,7 s,
+    y un indicador de saturación que queda encendido hasta que se toca;
+  - doble clic para volver a 0 en pan y volumen;
+  - "Silenciado" con el estilo de botón presionado;
+  - el gráfico de respuesta entre 20 Hz y 20 kHz, con sus marcas;
+  - el A/B con su valor p binomial;
+  - los pasos de la calibración numerados;
+  - objetivos táctiles de 44 px y foco visible.
+- **El usuario oyó la música apagada y sin bajos.** Las causas, medidas en experimentos/10
+  §7:
+  - la ecualización recortaba hasta 18 dB en los graves;
+  - WirePlumber había dejado la salida combinada en −20 dB.
+
+  Se cambió, con la decisión d-7c8794-e8f7e3:
+  - la ecualización solo realza y lee la medición con optimismo (el tipo de parlante con la
+    banda del fabricante);
+  - un limitador de pico;
+  - la salida al 100 %, comprobada, y en f32.
+- **El lazo, encendido por defecto** (d-7c8794-f94c13). Calibrar lo pausa y aplicar lo
+  reinicia.
+- **Planificado:** la sonda enmascarada para medir la latencia con la música sonando
+  (i-7c8794-e3e40d). La investigación está en research/03 §3.2 y la spec en
+  `superpowers/specs/2026-10-01-music-first-and-masked-probe-design.md`.
+- **Lo que salió mal:** la primera ecualización se diseñó apuntando a una respuesta plana sin
+  preguntar qué se quería oír. La "corrección" era justo lo que el usuario no quería.
+- **Pendiente:**
+  - la referencia medida, directo contra aurasync;
+  - el preset "música";
+  - la sonda;
+  - la sección de guías de diseño en research/10.
+- `scripts/check.sh` pasa con 352 tests; los de navegador, 50 de 50.
+
+**Parte 7: la salida directa sonaba mejor que el motor, la entrada analizada y el micrófono
+elegible.**
+- **Medido fuera de línea, etapa por etapa** (experimentos/10 §8,
+  `probes/11-calidad-de-la-cadena/cadena.py`): la interpolación lineal del retardo le quitaba
+  hasta 3,5 dB a 12,7 kHz, distinto a cada parlante. Ahora es un sinc de banda limitada
+  (`dsp/interpolation.py`), con 16 muestras de latencia fija igual para todos.
+- **La entrada:** se captura en f32, y la lectura guarda los bytes de un marco cortado (antes
+  podía cambiar L por R).
+- **Tarjeta Entrada** (`dsp/input_analysis.py`): tipo, correlación, lateral/central, balance,
+  ancho de banda, saturación y el formato de cada aplicación.
+- **Micrófono elegible** en la calibración (`microphone_set`): se guarda en `service.json` y
+  el lazo sigue al nuevo. Su nivel aparece en Niveles.
+- **Lo que salió mal:** la interpolación lineal estaba desde el 2026-09-29, y su docstring
+  hablaba de exactitud del retardo pero no de su respuesta en frecuencia. Ningún test miraba
+  los agudos.
+- **Pendiente:** comparar con micrófono la salida directa contra el motor, al mismo volumen.
+- `scripts/check.sh` pasa con 362 tests; los de navegador, 52 de 52.
+
+**Parte 8: métricas en vivo por stream** (i-7c8794-530882, d-7c8794-316465, spec §17).
+- `GET /v1/stream` (Server-Sent Events) manda:
+  - `state` cuando cambia algo y al menos cada segundo;
+  - los niveles a 20 Hz;
+  - el espectro y la correlación de la entrada a 10 Hz;
+  - los logs.
+- **Los niveles van sincronizados con lo que se oye** (`telemetry.py`): cada trozo de 1024
+  muestras se muestra a su hora de escritura más la latencia medida. El del micrófono no se
+  retrasa.
+- **Panel:**
+  - "En vivo" o "Consultando";
+  - medidores dibujados a la tasa de pantalla, con RMS integrado en 300 ms y pico retenido en
+    el navegador;
+  - la reducción del limitador por parlante;
+  - el espectro de la entrada en tercios y un medidor de correlación;
+  - los deslizadores mandan cada 80 ms (antes, 200).
+- **Lo que salió mal:** la primera corrida de los tests de navegador se cortó porque el equipo
+  se reinició. Al retomar no había procesos colgados.
+- **Pendiente:** comparar con parlantes el pico del medidor contra el del micrófono.
+- `scripts/check.sh` pasa con 372 tests; los de navegador, 56 de 56.
+
+**Parte 9: los cortes, el panel reorganizado y el paso 1 de la sonda** (i-7c8794-7d4aec,
+d-7c8794-560b54, experimentos/10 §9 y 11).
+- **Cortes** (los parlantes estaban apagados, así que se investigó sin sonido):
+  - el observador abría ~3 `bluetoothctl` por segundo, cada uno con un monitor de anuncios
+    LE (MEDIDO en el journal: 14 498 en 80 min). Ahora lee BlueZ por D-Bus;
+  - el chequeo de ruteo corre en un hilo, y la tubería guarda dos bloques de margen;
+  - **se probó pasar la medición del lazo a otro proceso y se revirtió:** frenaba más al motor
+    (hasta 15 ms contra 1 a 4 ms con el hilo). Además, sin guarda `__main__`, tiró abajo la
+    sesión. Quedó una protección para que una medición que no arranca no corte el audio;
+  - cada corte queda registrado con su causa probable (`cuts.py`) y se ve en Diagnóstico →
+    Cortes.
+- **Panel:**
+  - la pantalla Escuchar tiene la tarjeta Ahora: estado, efectos con su explicación,
+    «Calibrar y aplicar» e «Identificar parlantes»;
+  - Parlantes empieza por los dispositivos, agrupados, con batería y «Olvidar»;
+  - Diagnóstico tiene tres zonas;
+  - cada ajuste tiene su descripción y un (?) con el detalle.
+- **Sonda enmascarada, paso 1 (SIMULADO,** `probes/13-sonda-enmascarada/simular.py`): ver
+  experimentos/11.
+- **Lo que salió mal:**
+  - el `<body>` con `data-layout` hacía que cada clic mandara `layout: "pestanas"`;
+  - el log del servicio, dentro del repositorio, guardaba el token y su QR (nunca entró en
+    git; censurado, y el servicio ya no lo imprime a un archivo);
+  - un `pkill -f` con el patrón en su propia línea se mató a sí mismo otra vez. Usar `ps`
+    más `grep "[x]"`, o matar por PID;
+  - la primera simulación daba a Black y Blue la misma mezcla. Ahora las mezclas salen del
+    motor real.
+- **Pendiente:**
+  - con parlantes: 20 minutos de música mirando Cortes, y el escaneo LE a propósito;
+  - el A/B ciego de inaudibilidad de la sonda;
+  - el paso 2 de la sonda (construirla en el motor).
+
+**Cierre (2026-10-02).** La sesión cierra con los commits que pidió el usuario, uno por tema.
+- **Lo que se versiona:** el texto de `datos/10` y `datos/11` (json, jsonl, log y txt,
+  ~21 MB).
+- **Lo que queda solo en `PC-Ryzen5`:** las grabaciones `.wav` y las calibraciones `.npz` de
+  `datos/10` (~800 MB), excluidas por `.gitignore`. Nunca se versionó audio crudo en este
+  repositorio.
+- **No verificado:**
+  - nada de lo de las partes 6 a 9 se oyó con los parlantes: estaban apagados desde el
+    reinicio del equipo;
+  - que el escaneo LE cortara el A2DP;
+  - que la sonda no se oiga;
+  - el pico del medidor contra el del micrófono.
+- **Medido:** ver experimentos/10 §7-9 y experimentos/11.
+
+---
+
 ## 2026-09-29 · s-7c8794-48c25e — Actualizar el paquete de guías de 0.0.24 a 0.0.25
 
 **Qué.** El paquete de `.agents/` pasó de 0.0.24 a 0.0.25, copiado por el repositorio de

@@ -204,3 +204,18 @@ Pasos, de menor a mayor costo (el detalle está en cada documento):
 - Un dongle USB con LE Audio confirmado que funcione.
 - Cifras medidas de latencia o drift de estos parlantes.
 - Los QDID del Bluetooth SIG de los parlantes.
+
+- **El panel de control:** qué tiene, cómo se conecta y qué organización cuesta menos, medido: [10-panel-de-control.md](10-panel-de-control.md).
+- **La música primero (2026-10-01):** la ecualización solo realza y la salida va al 100 %
+  y en f32 (d-7c8794-e8f7e3). El retardo fraccionario lineal le quitaba hasta 3,5 dB a
+  12,7 kHz; ahora es de banda limitada (MEDIDO,
+  [experimentos/10](experimentos/10-servicio-de-control-con-3-go-4.md) §7-8).
+- **Los cortes (2026-10-01):** el observador del panel abría ~3 `bluetoothctl` por segundo,
+  cada uno con un monitor de anuncios LE (MEDIDO en el journal). Ahora lee por D-Bus. Que
+  eso cortara el A2DP está INFERIDO: se mide con parlantes
+  ([experimentos/10](experimentos/10-servicio-de-control-con-3-go-4.md) §9).
+- **Medir la sincronía con música (2026-10-02, SIMULADO):** correlacionar contra la música
+  confunde a los parlantes que tocan casi lo mismo (70 a 85 % de errores de más de 1 ms).
+  Una sonda a −20 dB bajo la música, en cambio, no erró en ninguna de 240 mediciones
+  ([experimentos/11](experimentos/11-sonda-enmascarada-en-simulacion.md); investigación
+  en [03](03-bluetooth-clasico-y-sync-por-software.md) §3.2).

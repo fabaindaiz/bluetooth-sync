@@ -9,8 +9,12 @@ las limitaciones de la app de JBL.
 (d-7c8794-9afee2). Lo que lo desbloqueó es que **E4 resultó imposible con el hardware
 actual** —el AX210 no puede transmitir ni escuchar un BIS— y que **A2DP con 2 o 3
 parlantes iguales alinea a pocos milisegundos**. La decisión sobre Auracast sigue
-abierta hasta que lleguen las SuperMini. **Lo próximo (2026-09-29):** el servicio de control
-(d-7c8794-74b639), con la spec escrita y pendiente de revisión.
+abierta hasta que lleguen las SuperMini. **Lo próximo (2026-10-02):** con los 3 Go 4 encendidos, escuchar
+20 minutos de música mirando Diagnóstico → Cortes, para confirmar o descartar las causas de
+los cortes (`docs/research/experimentos/10-…` §9, d-7c8794-560b54); después, construir la
+sonda enmascarada en el motor (i-7c8794-e3e40d, paso 2; el paso 1 dio luz verde en
+`experimentos/11-…`). El servicio de control y su panel ya están construidos y en uso
+(`aurasync service`).
 
 Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
 solo el BIS de Auracast que les corresponde) solo se responde con los parlantes en la
@@ -134,6 +138,7 @@ es lo único que avisa a la siguiente.
 | ¿Qué software del PC captura, separa y hace upmix del audio, y con qué latencia? | `docs/research/07-software-de-audio-en-el-pc.md` |
 | ¿Cómo se integra todo en una herramienta, con qué stack y en qué orden? | `docs/research/08-integracion-y-plan.md` |
 | ¿Qué produce el efecto envolvente, cómo potenciarlo y qué considerar al implementarlo? | `docs/research/09-efecto-ambiental-y-diseno-de-la-experiencia.md` |
+| ¿Qué tiene el panel, cómo se organiza y por qué así? | `docs/research/10-panel-de-control.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |
