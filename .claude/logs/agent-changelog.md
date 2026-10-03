@@ -58,6 +58,42 @@ archivos repartidos:
   testea en el Mac, la parte de PipeWire solo chequeada contra los headers), `18-costo-de-la-cadena`,
   `19-ocho-parlantes`; experimentos 12 a 16 con los criterios escritos antes de medir.
 
+**Segunda parte (después del push, a pedido del usuario: "continúa cerrando los pendientes").**
+- **El lazo de recalibración sumaba dos veces lo que medía** (la referencia se guarda después de
+  la línea de retardo, y el controlador la volvía a sumar): explica que las propuestas crecieran
+  en experimentos/09 §5. Lazo nuevo (`arrival_loop.py`): llegadas absolutas, aceptación por
+  parlante y la deriva de cada uno; en simulación < 0,5 ms durante una hora con 3 y 8 parlantes
+  a 22 y 50 ppm. Ya no corrige niveles (eso queda para la calibración).
+- **La sonda enmascarada en el motor** (`dsp/probe.py`, `probe_measure.py`; i-7c8794-e3e40d paso
+  2): simultánea e independiente por parlante, −20 dB bajo la música, apagada por defecto;
+  conectada al contrato (`probe`, `probe_margin_db`, en vivo), al estado
+  (`recalibration.probe`, `drift_ppm`) y a Ajustes → Sincronía. Ninguna de 646 mediciones aceptadas
+  erró más de 1 ms (SIMULADO).
+- **Calibración en dos grupos** que comparten tres parlantes desde 7 (`group_calibration.py`): 0
+  de 24 salas fuera de 1 dB con 8; el ancla única del exp. 16 no sobrevivió a cambiar la semilla.
+  La respuesta medida trae `coherence` y `response_error_db` por tercio, y el panel atenúa por el
+  error (γ² sola cae a ~1/N con N parlantes).
+- **Escala a 8:** el servicio arranca y suena con 8 (el tope del decorrelador avisa), roles por
+  ángulo (`5.0`, `hex`, `7.0`, `octagon`, `rings`) que reproducen los de hoy, la sala simulada con
+  8. El banco "por peor par por octava" y la asignación por mezcla **no sobrevivieron al motor
+  real** (empeoraban 20 de 32 casos): descartado el primero, la asignación queda como perilla.
+- **Panel:** "Deshacer" en vez de `confirm()`, nivel del micrófono antes de calibrar, la respuesta
+  con los tercios poco confiables atenuados, y 8 parlantes usables (tarjetas plegables, acciones
+  por grupo).
+- **Servicio:** el QR de la terminal es el enlace de emparejamiento de la PWA cuando hay HTTPS (ya
+  no da el token maestro); el log dice qué cliente mandó cada orden.
+- **No se hizo, a propósito:** `bumble` y `lc3py` como extras. El `pyproject.toml` declara que
+  fallar en otras plataformas es intencional (d-7c8794-c23c20); se revisa en la fase de
+  dispositivos.
+- **Tests estabilizados:** el de tiempo real del motor (décimo más rápido, piso 5×) y el de la
+  descripción de la entrada (espera lo que verifica).
+- **Pendiente con parlantes, además de lo de arriba:** el paso 3 de la sonda (+5 ms inyectados,
+  encontrados dos veces) y el paso 4 (A/B ciego de inaudibilidad); confirmar que el lazo nuevo
+  ya no hace crecer las propuestas. **Un límite a decidir:** a 50 ppm durante una hora, los
+  retardos se separan ~300 ms, más que los 250 ms de la línea del motor.
+- `scripts/check.sh`: ok con 802 tests; navegador en Chromium verde (Firefox no arranca en este
+  Mac).
+
 **Archivos.** `host/src/aurasync/`: `chain.py`, `chain_stages.py`, `quality.py`, `bt_volume.py`,
 `radio.py`, `tls.py`, `clients.py`, `pairing.py`, `access.py`, `lan.py`, `remote.py`, `mdns.py`,
 `contract_types.py`, `dsp/{crossover,virtual_bass,diffuse,loudness}.py` (nuevos); `motor.py`,

@@ -1194,15 +1194,50 @@ d-7c8794-f94c13.
 - aplicar lo reinicia desde los valores aplicados.
 
 **Lo que falta:** que el lazo converja con música, que sigue pendiente desde experimentos/09
-§5. Depende de la sonda.
+§5. Depende de la sonda. **2026-10-02:** una causa de que no convergiera está encontrada y
+corregida en simulación. El lazo sumaba lo que medía, porque la referencia va después de la
+línea de retardo; ahora lo maneja `arrival_loop.py` (experimentos/11 §"Paso 2"). Falta verlo
+con parlantes.
 
 ### Sonda enmascarada bajo la música para el lazo de sincronía · i-7c8794-e3e40d
-**Estado: A medias (2026-10-02). El paso 1 está hecho y da luz verde**
-([experimentos/11](research/experimentos/11-sonda-enmascarada-en-simulacion.md), SIMULADO):
+**Estado: A medias (2026-10-02). Los pasos 1 y 2 están hechos en simulación; faltan el 3 y el 4,
+con parlantes**
+([experimentos/11](research/experimentos/11-sonda-enmascarada-en-simulacion.md), SIMULADO).
+
+**Paso 1:**
 - a −20 dB con 4 s, ninguna de 240 mediciones erra por más de 1 ms;
 - contra la música, en cambio, erran el 70 a 85 %, porque confunde a Black con Blue.
 
-Sigue el paso 2. Antes decía: Planificado (2026-10-01). La calibración pasa a ser ante todo de **latencia y
+**Paso 2 (2026-10-02), construido en el producto y apagado por defecto** (experimentos/11
+§"Paso 2"):
+- **qué se construyó:**
+  - `dsp/probe.py`: simultánea e independiente por parlante, no por turnos (exp. 16 §4.2);
+  - `probe_measure.py`, el estimador por parlante;
+  - `arrival_loop.py`, el lazo por parlante que sigue la deriva de cada uno;
+  - en `session.py`, la perilla `set_probe`;
+- **el estimador sobre el motor real:** p95 de 0,004–0,011 ms a −20 dB, con 3 y 8 parlantes;
+  ninguna medición aceptada erró más de 1 ms;
+- **el lazo:** en una hora de 22 y 50 ppm, con 3 y 8 parlantes, el desalineamiento queda en
+  p95 0,25–0,40 ms;
+- **el hallazgo:** el lazo anterior **sumaba lo que medía**. La referencia va después de la
+  línea de retardo, así que la medición no incluye las correcciones. Es la firma del exp. 09 §5;
+- **mismo cambio, del exp. 16:**
+  - la calibración de más de 6 parlantes en dos grupos, que comparten tres parlantes;
+  - `coherence` y `response_error_db` por tercio en cada calibración.
+- **Mutaciones** (cada una pone en rojo un test, y se deshizo con reemplazo de texto):
+  - la sonda 3 dB más baja (sin el factor 2);
+  - la sonda sin sumarse;
+  - sin la repetición entre mitades;
+  - corregir con una sola medición;
+  - sin seguir la deriva;
+  - la zona muerta por parlante;
+  - los grupos sin referirse a lo compartido;
+  - promediar los tramos mudos;
+  - el error previsto sin el factor de independencia;
+  - siempre un grupo;
+  - la medición tomada como residuo, que es el error viejo.
+
+Siguen los pasos 3 (+5 ms inyectado, dos semillas) y 4 (A/B ciego de inaudibilidad). Antes decía: Planificado (2026-10-01). La calibración pasa a ser ante todo de **latencia y
 sincronía**, no de espectro. Tiene que poder correr mientras suena la música, sin que se
 note, y prenderse y apagarse sin reiniciar. Investigación: `research/03` §3.2. Diseño: spec
 §4.
@@ -1211,7 +1246,8 @@ note, y prenderse y apagarse sin reiniciar. Investigación: `research/03` §3.2.
 1. **Simulación primero.** Música grabada sobre la sala simulada, con márgenes de −15, −20,
    −25 y −30 dB y ventanas de 2, 4 y 8 s. Se mide el error contra los retardos conocidos,
    con contenido correlacionado, que es el caso que hoy falla.
-2. Construir `dsp/probe.py`:
+2. Construir `dsp/probe.py` (**hecho, 2026-10-02**, con dos cambios: va 21 ms detrás de la
+   música en vez de un bloque adelante, y todos los parlantes a la vez en vez de por turnos):
    - ruido por parlante entre 300 Hz y 8 kHz, moldeado por tercio de octava bajo la música;
    - un bloque de anticipación;
    - apagado en silencio;
@@ -1392,19 +1428,24 @@ stream necesita otro mecanismo).
 
 ### Hasta 8 parlantes: límites y capacidades del diseño · i-7c8794-1f35a1
 **Estado: A medias (2026-10-02): el análisis en simulación está hecho**
-([experimentos/16](research/experimentos/16-ocho-parlantes-en-simulacion.md)). Encontró y se
-corrigió un error de la calibración que también afectaba a 3 parlantes (la pista del estimador
-de nivel). Lo que falta, por prioridad: calibrar en dos grupos con un ancla desde 7 parlantes;
-que el tope del decorrelador avise en vez de impedir arrancar (hoy el servicio no arranca con 7);
-asignar los filtros por la mezcla de cada rol y elegir el banco por el peor par por octava; la
-sonda simultánea en vez de por turnos (por turnos no converge desde 6 parlantes); seguir la
-deriva de cada parlante en el lazo; roles por ángulo para 5 a 8; y el panel por grupos. Meta del usuario (d-7c8794-3b7793): llegar a 8
+([experimentos/16](research/experimentos/16-ocho-parlantes-en-simulacion.md)), y el motor ya
+escala a 8 (§9 ahí). Encontró y se corrigió un error de la calibración que también afectaba a 3
+parlantes (la pista del estimador de nivel). **Hecho el 2026-10-02 (§9):** el tope del
+decorrelador avisa en vez de impedir arrancar (el servicio arranca con 7 y 8, también en
+`--simular`); roles por ángulo con los layouts `5.0`, `hex`, `7.0`, `octagon` y `rings`; la sala
+simulada con 8 parlantes distintos; la asignación de filtros por mezcla, como perilla
+(`decorrelate.assignment: mix`) y no por defecto. **Descartado** (§9): elegir el banco por el peor
+par por octava, porque su ventaja era un artefacto del retardo cero. Lo que falta, por prioridad:
+calibrar en dos grupos con un ancla desde 7 parlantes; la sonda simultánea en vez de por turnos
+(por turnos no converge desde 6 parlantes); seguir la deriva de cada parlante en el lazo; que el
+estado y el mapa del panel muestren el aviso y los layouts nuevos; el panel por grupos; y oír en
+el A/B ciego si `assignment: mix` cambia algo. Meta del usuario (d-7c8794-3b7793): llegar a 8
 parlantes para probar los límites. Hardware de hoy: 3 Go 4 y 1 Charge 6.
 
-**Lo que ya se sabe que no escala:** el decorrelador acepta como mucho 6 parlantes
-(`MAXIMO_FIJOS`); los roles cubren 4 (`quad`, `lcrs`); un adaptador A2DP sostiene 2–3 enlaces;
-la calibración con un micrófono pierde exactitud con más fuentes simultáneas (a medir); el lazo
-por turnos tarda más en volver a cada parlante.
+**Lo que ya se sabe que no escala:** debajo de 2 kHz ningún banco de filtros fijos separa a dos
+parlantes (con cualquier N; sobre 500 Hz el peor par pasa de 0,46 con 3 a ~0,50 con 8); un
+adaptador A2DP sostiene 2–3 enlaces; la ganancia de la calibración con un micrófono pierde
+exactitud desde 7 fuentes simultáneas; el lazo por turnos tarda más en volver a cada parlante.
 
 **Con qué choca:** con el transporte. Para 8 hacen falta 3–4 adaptadores, 8 Picos, o Auracast
 con un BIG de 8 BIS (research/13 §2.3).
