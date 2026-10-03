@@ -79,6 +79,9 @@ class ChainAlgorithm(TypedDict):
     implemented: bool
     available: bool
     unavailable_reason: str | None
+    notice: str | None
+    """What to know about an available algorithm here (`chain.notice`): the decorrelator past
+    6 speakers says how far apart its filters are. Additive, 2026-10-02."""
     params: list[ChainParam]
 
 

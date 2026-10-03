@@ -3,6 +3,7 @@
 // `window.aurasync`, which this module sets when cadena.js loads — before DOMContentLoaded, when
 // app.js starts — so app.js (a classic script, no imports) finds it there.
 import type { AccessEvent, Api } from "./transport.ts";
+import type { Undo } from "./undo.ts";
 
 export type Mode = "local" | "remote";
 
@@ -18,6 +19,8 @@ export interface Runtime {
   busy(): boolean;
   /** The PWA's status line (`sw … upd …`), for Diagnóstico and the tests. */
   pwaStatus(): string;
+  /** The "Deshacer" notice (undo.ts), instead of confirm(). Null until the page is parsed. */
+  undo: Undo | null;
 }
 
 declare global {
@@ -41,6 +44,7 @@ export const runtime: Runtime = {
   device: null,
   busy: () => false,
   pwaStatus: () => "",
+  undo: null,
 };
 
 export function install(mode: Mode): Runtime {

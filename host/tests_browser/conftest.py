@@ -6,15 +6,39 @@ import re
 from collections.abc import Iterator
 
 import pytest
-from playwright.sync_api import Browser, Page, Playwright, expect, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Page, Playwright, expect, sync_playwright
 
 from tests_browser.test_panel import BROWSERS, TOKEN, Running
+
+DIALOGS: list[str] = []
+"""Every alert/confirm/prompt any page opened. The panel uses none (research/11 §4.3: undo
+instead of confirm()); each test checks that this stays empty."""
 
 
 @pytest.fixture(scope="session")
 def playwright() -> Iterator[Playwright]:
-    with sync_playwright() as p:
-        yield p
+    # Every context of every browser (the PWA's own Chromium too) reports its dialogs here, and
+    # dismisses them so a stray one cannot hang a test.
+    original = Browser.new_context
+
+    def new_context(self: Browser, *args, **kwargs) -> BrowserContext:
+        context = original(self, *args, **kwargs)
+        context.on("dialog", lambda d: (DIALOGS.append(f"{d.type}: {d.message}"), d.dismiss()))
+        return context
+
+    Browser.new_context = new_context
+    try:
+        with sync_playwright() as p:
+            yield p
+    finally:
+        Browser.new_context = original
+
+
+@pytest.fixture(autouse=True)
+def no_dialogs() -> Iterator[None]:
+    DIALOGS.clear()
+    yield
+    assert DIALOGS == [], f"the panel opened a dialog: {DIALOGS}"
 
 
 @pytest.fixture(scope="session", params=BROWSERS)

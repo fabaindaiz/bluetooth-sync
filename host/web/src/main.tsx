@@ -13,11 +13,18 @@ import { activeDevice, load } from "./devices.ts";
 import { bootRemote } from "./remote.ts";
 import { announce, install, pageMode, provide } from "./runtime.ts";
 import { createApi } from "./transport.ts";
+import { createUndo } from "./undo.ts";
 
 connect();
 const runtime = install(pageMode());
 if (runtime.mode === "local") provide(createApi({ base: "", credential: { kind: "cookie" }, onEvent: announce }));
 else void bootRemote();
+// The "Deshacer" notice (#undo in index.html): a module runs after the page is parsed.
+runtime.undo = createUndo(document.getElementById("undo"), async (message) => {
+  const { op, ...args } = message;
+  const api = runtime.api ?? (await runtime.ready);
+  return api.raw({ op, ...args });
+});
 
 async function mountAdmin(): Promise<void> {
   const root = document.getElementById("pair-admin-root");

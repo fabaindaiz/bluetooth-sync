@@ -87,13 +87,14 @@ Panel
 │   ├── marca · SIMULADO · En vivo / Consultando · cambios sin guardar → Guardar · Conectar teléfono
 │   ├── Barra de reproducción: Iniciar/Detener · Volumen · Fuente · chip de cortes (→ Cortes) · latencia
 │   └── pestañas (en el teléfono, abajo)
-├── Avisos
+├── Avisos (arriba) · «Deshacer» y el toast (abajo, 10 s; §7.1)
 ├── Escuchar (la principal)
 │   ├── Ahora: estado · fuente · entrada · cortes · sincronía
 │   │   ├── efectos con su explicación: Ambiente · Separar parlantes · Ecualización · Mantener sincronía
 │   │   └── atajos: Calibrar y aplicar (un paso) · Identificar parlantes (un tono en cada uno)
 │   ├── Presets: cargar · borrar · guardar el actual
-│   ├── Parlantes (compacto): ambiente · volumen · silenciar · tono
+│   ├── Parlantes (compacto): ambiente · volumen · silenciar · tono; con 4 o más, tarjetas plegadas y
+│   │   acciones por grupo: Todos / Adelante / Atrás · Silenciar · Activar · Identificar (§7.4)
 │   ├── Niveles (20 Hz, sincronizados con lo que suena)
 │   ├── A/B ciego: sonoridad de A y de B y su diferencia (aviso sobre 0,5 LU) · «Igualar la sonoridad»
 │   └── Entrada: espectro en vivo · correlación L/R · tipo · ancho de banda · formato
@@ -112,10 +113,13 @@ Panel
 │   ├── Dispositivos Bluetooth: Buscar cerca · agrupados en conectados, emparejados sin conectar y
 │   │   encontrados · batería · señal · Conectar / Desconectar / Agregar / Olvidar
 │   ├── Parlantes en detalle: tipo · rol · pan · ambiente · volumen · retardo · tono · silenciar · quitar
-│   └── Sala: cuadrafonía / L C R S · plano con roles
+│   │   (en el teléfono, con 4 o más, una tarjeta plegada por parlante)
+│   └── Sala: una distribución por cada una del servicio · plano con roles y los parlantes sin rol
 ├── Calibrar
-│   ├── Calibración y ecualización: micrófono · segundos · amplitud · pasos 1-4 · resultados
-│   └── Respuesta en frecuencia (20 Hz-20 kHz, medida y ecualización)
+│   ├── Calibración y ecualización: micrófono y su nivel (ventana objetivo) · segundos · amplitud ·
+│   │   pasos 1-4 · resultados
+│   └── Respuesta en frecuencia (20 Hz-20 kHz, medida y ecualización; tenue donde la coherencia es baja;
+│       la leyenda esconde o muestra cada parlante)
 ├── Diagnóstico (tres zonas)
 │   ├── izquierda: Salud (incluye el margen de la salida) y Cortes (línea de tiempo, tabla, causa probable;
 │   │   un carril de radio por parlante con descartes/min y bitpool, y «Activar registro de radio»)
@@ -276,8 +280,103 @@ teléfono, el mismo modelo en los dos, y nunca cuesta más de un toque cambiar d
     `scripts/check.sh` lo comprueba **sin Node** con `host/scripts/web_stamp.py`.
     `npm run check` es `tsc` estricto; `npm test`, vitest con la lógica pura.
   - Las clases de Tailwind de `host/web/src` entran al mismo `tailwind.css` (`@source`).
-- **Tests:** 65 de navegador en Chromium (Firefox no arranca en el Mac), entre ellos uno que recorre
+- **Tests:** 81 de navegador en Chromium (2026-10-02, con `test_panel_usability.py`; antes 65) (Firefox no arranca en el Mac), entre ellos uno que recorre
   las 14 tarjetas en las cuatro organizaciones, uno del ir y volver de "inicio", y los de Cadena
   (`tests_browser/test_panel_chain.py`: se dibuja entera desde `chain`; algoritmo, perilla y ↺
   llegan al servicio; una etapa agregada en Python aparece sola; la franja de calidad y sus
   avisos; el A/B con la sonoridad; la radio en Cortes; el teléfono).
+
+## 7. Los pendientes de usabilidad (2026-10-02)
+
+Del informe de usabilidad (research/11 §4; recomendaciones 5, 10 y 11) y de experimentos/16 §7. Mac,
+Chromium headless, servicio simulado. Cada cambio tiene su test de navegador
+(`tests_browser/test_panel_usability.py`) y se lo vio fallar con una mutación del cambio.
+
+### 7.1 Deshacer en vez de `confirm()`
+
+"Never use a warning when you mean undo" (Raskin, VERIFICADO en research/11 §4.3). El panel ya no
+abre ningún diálogo: `tests_browser/conftest.py` registra los diálogos de todos los contextos y cada
+test falla si apareció uno. Hay dos clases de acción (`host/web/src/undo.ts`):
+
+| Acción | Se hace | «Deshacer» (10 s) |
+|---|---|---|
+| Cargar un preset · quitar un parlante · aplicar una calibración (los dos botones) | al instante | vuelve a escribir el estado artístico de antes: los campos de cada parlante (`pan`, `ambience`, `gain_db`, `delay_ms`, `muted`, `kind`), los globales (`rear_delay_ms`, `extract_ambience`, `decorrelate`, `eq_active`) y las elecciones de la cadena salvo el volumen; un parlante quitado se vuelve a agregar primero. Si el lazo corre, se apaga y se enciende alrededor de los retardos (como `calibration_apply`) |
+| Olvidar un dispositivo · borrar un preset | se muestra hecho; la orden sale al vencer el aviso (o al irse de la página) | la cancela |
+| Quitar la ecualización | se apaga al instante (se oye); las curvas se borran al vencer el aviso y la ecualización vuelve a quedar como estaba (encendida y plana) | la vuelve a encender, con sus curvas |
+
+**Lo que no vuelve (INFERIDO, por el contrato):** un parlante vuelto a agregar queda al final de la
+lista y pierde su curva de ecualización; `set` no escribe `eq_db`. Para deshacer la ecualización al
+instante haría falta que el contrato la escriba (un campo `eq_db` en `set`, o una orden
+`eq_restore`). Un preset borrado tampoco se puede volver a escribir desde el panel: por eso espera.
+
+### 7.2 El nivel del micrófono antes de calibrar
+
+Como Dirac Live (research/11 §4.2): en el paso 1, una pista de −80 a 0 dBFS con la **ventana
+objetivo marcada**, el número y el estado en palabras y con una forma: «en la ventana», «demasiado
+bajo», «demasiado alto», «saturado», «sin música: no se puede comprobar», «sin lectura». Fuera de la
+ventana, «Calibrar» (y «Calibrar y aplicar» en Escuchar) **avisa y pide confirmar** («Calibrar
+igual» / «Cancelar») en vez de arrancar.
+
+- **De dónde sale:** el mismo nivel que Niveles muestra como «Micrófono» (`meters.mic`, por el
+  stream o en el estado). Lo mide el lazo: con el lazo apagado no hay lectura, y el panel lo dice.
+- **La ventana es ORIENTATIVA (INFERIDO, sin medir con el fifine):** RMS de −55 a −10 dBFS y pico
+  bajo −1 dBFS. «Demasiado bajo» solo se dice si algo suena (la entrada pasa de −45 dBFS): en
+  silencio, el micrófono oye su piso (−60 dBFS en la sala simulada) y eso no es un error. La
+  ventana se ajusta cuando haya calibraciones reales con su nivel anotado.
+- **Lo que no mide:** el nivel de la música de ahora, no el del ruido de calibración (amplitud 0,1).
+  Sirve para saber si el micrófono oye los parlantes y si satura, no para fijar la amplitud.
+
+### 7.3 Coherencia en la respuesta en frecuencia
+
+La calibración trae `results[].coherence` (γ² por tercio, alineada con `response_hz`; la agregó el
+2026-10-02 otro paquete, `dsp/response.py`). Cada tercio se dibuja como un tramo propio, y uno con
+**γ² < 0,5 va tenue** (clase `low-coherence`, opacidad 0,25), como el *blanking* de Smaart. El
+umbral es **orientativo**: γ² = 0,5 es la mitad de la energía del micrófono explicada por lo que se
+mandó. Sin el campo, la curva es una sola línea, como antes. Con 8 curvas no se lee ninguna
+(experimentos/16 §7): cada parlante de la leyenda es un botón que esconde o muestra la suya.
+
+### 7.4 Ocho parlantes. MEDIDO (render real, servicio SIMULADO)
+
+Desde **4 parlantes** (con 3 todo se ve como antes):
+
+- **Escuchar → Parlantes:** una tarjeta plegada por parlante (nombre corto y estado, Tono y
+  Silenciar a la vista; ambiente y volumen al abrirla con ▸), y **acciones por grupo**: Todos /
+  Adelante / Atrás · Silenciar · Activar · Identificar (un tono en cada uno, de a uno). Adelante y
+  atrás salen del ángulo del rol (`role_places`, menos de 90° es adelante; los laterales van atrás),
+  o de su lugar fijo, o sin rol del ambiente (0,35 o más es atrás): **INFERIDO** mientras el
+  servicio no traiga la posición de cada parlante.
+- **Parlantes en detalle**, en el teléfono: una tarjeta plegada por parlante en vez de la tabla de 9
+  columnas. En el PC, la tabla.
+- **Cadena**, en el teléfono: el bloque de cada parlante plegado; tocando el nombre se abre, y dice
+  «cambiado» si alguna perilla propia de la cadena no está en su valor por defecto. En el PC, una
+  columna por parlante (con 8, cada una ≥ 90 px).
+- **Sala:** los botones de distribución salen de las del servicio (`roles`; con más de tres, en una
+  grilla); cada rol va donde lo pone su ángulo (`role_places`, campo nuevo del estado en
+  `snapshot.py`), y los parlantes sin rol se dibujan donde los ponen su pan y su ambiente (antes
+  eran una línea de texto al pie).
+- **Niveles** (11 barras) y **Cortes** (8 carriles de radio con el nombre) no cambiaron: entran.
+- Dos colores más (`--s7`, `--s8`) para las curvas; el nombre va siempre al lado.
+
+**Arreglos que salieron de medir con 8:** la ruta del archivo de cambios de la radio (una palabra
+larga) ensanchaba la página del teléfono 63 px; y la fila de seis pestañas de abajo dejaba
+«Ajustes» 18 px afuera (pasa con cualquier N).
+
+Con `medir.py --ocho` (`pestanas`, datos en `experimentos/datos/10/panel-ocho-parlantes.json`):
+
+| | teléfono 3 · 8 | PC 3 · 8 |
+|---|---|---|
+| total, siete escenarios | 31,4 · **41,5** | 13,7 · **15,9** |
+| total, seis | 26,1 · 36,3 | 10,0 · 12,2 |
+| alto de Escuchar (px) | 1934 · 2286 | 1076 · 1436 |
+| alto de Parlantes (px) | 1913 · 2694 | 1289 · 1979 |
+| alto de Cadena (px) | 4988 · 4998 | 2674 · 2664 |
+| alto de Diagnóstico (px) | 3032 · 3072 | 1761 · 1781 |
+
+Con 3 parlantes los totales no cambiaron (31,4 y 13,7, el tope del test de regresión). Con 8, lo que
+más sube en el teléfono es el A/B y la entrada (debajo de 8 tarjetas y 11 medidores: 4,2 → 5,6) y
+«Montar la sala» (5,8 → 8,3, 8 tarjetas de dispositivos). Parte del costo es el aviso «la
+calibración se midió con la decorrelación encendida», que aparece porque con 7 u 8 la decorrelación
+se apaga para que la sesión arranque (experimentos/16 §2). Nada se desborda en ninguna vista, en
+390×844 ni en 1366×900 (test `test_eight_speakers_fit_every_screen`). **Sin probar en un teléfono
+real.**
+

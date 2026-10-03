@@ -156,10 +156,23 @@ function Knobs({ stage, algorithm, params, actions }: { stage: ChainStage; algor
   );
 }
 
-/** Columns = speakers on a PC; one block per speaker on a phone (the CSS turns it). */
+/** From this many speakers each speaker's block starts folded on a phone (experimentos/16 §7). */
+export const FOLD_FROM = 4;
+
+/** Columns = speakers on a PC; one block per speaker on a phone (the CSS turns it). With
+ * FOLD_FROM speakers or more, each block on a phone shows its name and whether something
+ * differs from the default, and opens with a tap; on a PC the columns are always open. */
 function SpeakerTable({ stage, params, actions }: { stage: ChainStage; params: ChainParam[]; actions: StageActions }) {
   const speakers = Object.keys(stage.value.speakers);
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   if (!speakers.length) return <p class="muted small mt-2">Sin parlantes en la instalación.</p>;
+  const many = speakers.length >= FOLD_FROM;
+  const toggle = (name: string): void => {
+    const next = new Set(open);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setOpen(next);
+  };
   return (
     <div
       class="spk-grid"
@@ -181,11 +194,31 @@ function SpeakerTable({ stage, params, actions }: { stage: ChainStage; params: C
           </div>
         ))}
       </div>
-      {speakers.map((name) => (
-        <div class="spk-col" key={name} data-speaker-col={name}>
-          <div class="spk-head" title={name}>
-            {short(name)}
-          </div>
+      {speakers.map((name) => {
+        const folded = many && !open.has(name);
+        // Only the chain's own knobs: pan or ambience live in the installation, each speaker its own.
+        const changed = params.some(
+          (p) => p.store === "chain" && !sameValue(stage.value.speakers[name]?.[p.id], p.default),
+        );
+        return (
+        <div class="spk-col" key={name} data-speaker-col={name} data-folded={folded ? "" : undefined}>
+          {many ? (
+            <button
+              type="button"
+              class="spk-head spk-toggle"
+              title={name}
+              aria-expanded={!folded}
+              onClick={() => toggle(name)}
+            >
+              <span class="spk-toggle-mark" aria-hidden="true">{folded ? "▸" : "▾"}</span>
+              <span class="truncate">{short(name)}</span>
+              {changed && <span class="spk-changed">cambiado</span>}
+            </button>
+          ) : (
+            <div class="spk-head" title={name}>
+              {short(name)}
+            </div>
+          )}
           {params.map((p) => (
             <div class="spk-cell" key={p.id}>
               <span class="spk-cell-label">{p.title}</span>
@@ -201,7 +234,8 @@ function SpeakerTable({ stage, params, actions }: { stage: ChainStage; params: C
             </div>
           ))}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

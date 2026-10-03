@@ -20,6 +20,8 @@
   /* Los controles nativos (deslizadores, listas, barras de desplazamiento) siguen al tema. */
   color-scheme: light dark;
   --s1: #2a78d6; --s2: #d06d1b; --s3: #1f9e6e; --s4: #8a5cd1; --s5: #c43f8e; --s6: #6b7a11;
+  /* Con 8 parlantes (experimentos/16 §7): dos más; el nombre va siempre al lado del color. */
+  --s7: #0e7490; --s8: #8b5e34;
 }
 
 @layer components {
@@ -158,6 +160,8 @@
   .slot.lost { @apply border-rose-500 bg-rose-50 dark:bg-rose-950; }
   .slot-channel { @apply text-sm font-bold; }
   .slot-name { @apply break-words text-zinc-600 dark:text-zinc-300; }
+  /* Un parlante sin rol (5 a 8, experimentos/16 §7): donde lo ponen su pan y su ambiente. */
+  .slot.custom { @apply w-[24%] border-solid border-zinc-400 px-0.5 py-0.5 text-[10px]; }
 
   /* Lo que cambia cada cuadro no invalida el layout del resto de la página. */
   .meters { @apply flex flex-col gap-2; contain: layout paint; }
@@ -204,6 +208,41 @@
   /* ↺ visible cuando el valor no es el neutro: el doble toque en un deslizador táctil mueve el
      valor antes de restablecerlo. 44 px en el teléfono. */
   .reset-btn { @apply inline-grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-zinc-300 bg-white text-base text-zinc-700 hover:bg-zinc-50 sm:h-8 sm:w-8 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700; }
+
+  /* Los avisos de abajo: «Deshacer» (undo.ts) y el toast, apilados sobre la barra del teléfono. */
+  .notices { @apply pointer-events-none fixed bottom-20 left-1/2 z-50 flex w-[min(560px,calc(100%-32px))] -translate-x-1/2 flex-col items-center gap-2 sm:bottom-6; }
+  .toast { @apply pointer-events-auto max-w-full rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900; }
+  .undo { @apply pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-xl bg-zinc-900 py-1 pr-1 pl-4 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900; }
+  .undo-text { @apply min-w-0 flex-1 py-1.5; }
+  .undo-btn { @apply min-h-11 shrink-0 rounded-lg px-3 font-semibold text-sky-300 hover:bg-white/10 sm:min-h-9 dark:text-sky-700 dark:hover:bg-black/5; }
+  .undo-btn:focus-visible { @apply outline-2 outline-offset-2 outline-sky-400; }
+  .undo-time { @apply absolute inset-x-0 bottom-0 h-0.5; }
+  .undo-bar { @apply block h-full origin-left bg-sky-400 dark:bg-sky-600; }
+
+  /* El nivel del micrófono antes de calibrar: una pista de -80 a 0 dBFS con la ventana objetivo
+     (-55 a -10, app.js MIC_WINDOW) marcada; el estado va en texto y con una forma. */
+  .mic-check { @apply mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 text-xs sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]; }
+  .mic-label { @apply font-semibold text-zinc-600 dark:text-zinc-300; }
+  .mic-track { overflow-x: clip; @apply relative h-3 rounded bg-zinc-200 dark:bg-zinc-800; }
+  .mic-window { @apply absolute inset-y-0 left-[31.25%] w-[56.25%] rounded bg-emerald-300/70 dark:bg-emerald-800/70; }
+  .mic-pos { @apply pointer-events-none absolute inset-0; will-change: transform; }
+  .mic-marker { @apply absolute -inset-y-1 left-0 w-1 -translate-x-1/2 rounded bg-zinc-900 dark:bg-zinc-100; }
+  .mic-value { @apply text-right whitespace-nowrap; }
+  .mic-state { @apply col-span-3 inline-flex items-center gap-1 sm:col-span-1; }
+  .mic-shape { @apply inline-block h-3 w-3 shrink-0 rounded-full border-2 border-zinc-400; }
+  [data-state="ok"] .mic-shape { @apply border-0 bg-emerald-500; }
+  [data-state="low"] .mic-shape, [data-state="high"] .mic-shape { @apply rounded-none border-0 bg-amber-500; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  [data-state="clip"] .mic-shape { @apply rounded-none border-0 bg-rose-600; }
+  [data-state="quiet"] .mic-shape { @apply border-dashed; }
+  .mic-gate { @apply mt-3 flex flex-col gap-2 rounded-lg border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm dark:bg-amber-950/40; }
+
+  /* Con 4 parlantes o más: una tarjeta por parlante plegada (el nombre, el estado y lo que se toca
+     sin abrirla) y acciones por grupo (experimentos/16 §7). */
+  .quick-group { @apply mb-3 flex flex-wrap items-center gap-2; }
+  .fold-btn { @apply inline-grid h-11 w-11 shrink-0 place-items-center rounded-xl text-base text-zinc-600 hover:bg-zinc-100 sm:h-8 sm:w-8 dark:text-zinc-300 dark:hover:bg-zinc-800; }
+  .fold-btn:focus-visible { @apply outline-2 outline-offset-2 outline-sky-600; }
+  .fold-btn::before { content: "▾"; }
+  [data-folded] > .fold-head .fold-btn::before, tr[data-folded] .fold-btn::before { content: "▸"; }
 
   /* Avisos donde se mira (Escuchar → Ahora y la cabecera): ícono y texto, no solo color. */
   .alerts { @apply m-0 mb-3 flex list-none flex-col gap-1 p-0; }
@@ -287,6 +326,13 @@
   .spk-label { @apply text-xs text-zinc-600 dark:text-zinc-300; }
   .spk-cell { @apply flex min-w-0 flex-col gap-0.5; }
   .spk-cell-label { @apply text-xs text-zinc-500 sm:hidden dark:text-zinc-400; }
+  /* Con 4 parlantes o más, en el teléfono, cada bloque va plegado y se abre tocando su nombre
+     (cadena.js, StageCard: FOLD_FROM). En el PC las columnas siempre están abiertas. */
+  .spk-toggle { @apply flex min-h-11 w-full min-w-0 cursor-pointer items-center gap-2 text-left sm:min-h-0 sm:cursor-default; }
+  .spk-toggle:focus-visible { @apply outline-2 outline-offset-2 outline-sky-600; }
+  .spk-toggle-mark { @apply text-base text-zinc-500 sm:hidden; }
+  .spk-changed { @apply ml-auto rounded border border-sky-400 px-1 text-[11px] font-normal text-sky-700 sm:hidden dark:text-sky-300; }
+  .spk-col[data-folded] > .spk-cell { @apply hidden sm:flex; }
   .stage-metrics { @apply m-0 mt-3 rounded-lg bg-zinc-50 p-2 text-xs dark:bg-zinc-950; contain: layout paint; }
   .metrics-title { @apply text-xs font-semibold; }
   .metric-list { @apply m-0 mt-1 grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2; }
@@ -321,7 +367,8 @@
   .radio-track .cut-dot { @apply absolute top-1 -translate-x-1/2; }
   .radio-rate, .radio-pool { @apply text-right whitespace-nowrap; }
 
-  .nav-tab { @apply flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-xs text-zinc-500 hover:bg-zinc-100 sm:flex-none sm:flex-row sm:gap-2 sm:px-3 sm:text-sm dark:hover:bg-zinc-800; }
+  /* Seis pestañas en 390 px: sin min-w-0 «Ajustes» quedaba 18 px afuera de la pantalla. */
+  .nav-tab { @apply flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-[11px] text-zinc-500 hover:bg-zinc-100 sm:flex-none sm:flex-row sm:gap-2 sm:px-3 sm:text-sm dark:hover:bg-zinc-800; }
   .nav-tab[aria-current="page"] { @apply bg-sky-50 font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300; }
   .nav-icon { @apply text-base leading-none; }
 }
@@ -343,3 +390,40 @@ body.stale #views, body.stale #player { opacity: 0.45; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; transition-delay: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+/* La respuesta en frecuencia: un tercio con coherencia baja (γ² < 0,5) se dibuja tenue, como el
+   *blanking* de Smaart: ahí la medición no es confiable (research/11 §4.1). */
+svg .low-coherence { opacity: 0.25; stroke-width: 1.25; }
+/* Parlantes en detalle con 4 parlantes o más, en el teléfono: una tarjeta por parlante, plegada
+   (nombre, estado y acciones a la vista; lo demás al abrirla). Desde sm, la tabla de siempre. */
+.speakers-table .fold-btn { display: none; }
+@media (max-width: 639px) {
+  .speakers-table[data-many] thead { display: none; }
+  .speakers-table[data-many], .speakers-table[data-many] tbody { display: block; }
+  .speakers-table[data-many] tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--color-zinc-200); }
+  .speakers-table[data-many] td { display: block; min-width: 0; border: 0; padding: 0; }
+  .speakers-table[data-many] td[data-label]::before { content: attr(data-label); display: block; font-size: 0.75rem; color: var(--color-zinc-500); }
+  .speakers-table[data-many] .cell-name { grid-column: 1; }
+  .speakers-table[data-many] .cell-status { grid-column: 2; grid-row: 1; align-self: center; }
+  .speakers-table[data-many] td:not(.cell-name):not(.cell-status) { grid-column: 1 / -1; }
+  .speakers-table[data-many] .fold-btn { display: inline-grid; }
+  .speakers-table[data-many] .cell-name { display: flex; align-items: center; gap: 0.25rem; }
+  .speakers-table[data-many] tr[data-folded] td:not(.cell-name):not(.cell-status):not(.cell-actions) { display: none; }
+}
+@media (max-width: 639px) and (prefers-color-scheme: dark) {
+  .speakers-table[data-many] tr { border-bottom-color: var(--color-zinc-800); }
+}
+/* La leyenda de la respuesta: cada parlante es un botón que esconde o muestra su curva. */
+.legend-btn { min-height: 1.5rem; cursor: pointer; border-radius: 0.375rem; padding: 0 0.25rem; }
+.legend-btn[aria-pressed="false"] { opacity: 0.45; text-decoration: line-through; }
+/* Más de tres distribuciones: una grilla de botones que se acomoda al ancho, cada uno con su borde. */
+.segmented.layout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 0.25rem; border: 0; overflow: visible; }
+.segmented.layout-grid > .seg { border: 1px solid var(--color-zinc-300); border-radius: 0.75rem; }
+/* Con más de seis roles, recuadros más chicos para que no se pisen. */
+.room[data-many] .slot { width: 22%; padding: 0.125rem; font-size: 10px; }
+.room[data-many] .slot-channel { font-size: 0.75rem; }
+/* Fuera de las capas: la utilidad `grid` del cuerpo le ganaría a un `hidden` de componentes. */
+[data-quick][data-folded] > .fold-body { display: none; }
+.fold-title.fold-stack { flex-direction: column; align-items: flex-start; gap: 0; }
+/* La ruta del archivo de cambios (una palabra larga) ensanchaba la página en el teléfono. */
+
+#radio-note, #radio-log-note { overflow-wrap: anywhere; }

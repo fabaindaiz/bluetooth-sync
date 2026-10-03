@@ -1,0 +1,120 @@
+{
+  "teléfono": {
+    "pestanas": {
+      "escenarios": {
+        "Escuchar música": {
+          "peso": 20,
+          "toques": 0,
+          "pantallas": 0.52,
+          "costo": 0.52
+        },
+        "Ajustar el ambiente": {
+          "peso": 6,
+          "toques": 0,
+          "pantallas": 1.47,
+          "costo": 1.47
+        },
+        "Calibrar y ecualizar": {
+          "peso": 2,
+          "toques": 1,
+          "pantallas": 0.0,
+          "costo": 1.0
+        },
+        "Comparar A/B": {
+          "peso": 1,
+          "toques": 0,
+          "pantallas": 5.56,
+          "costo": 5.56
+        },
+        "Resolver un problema": {
+          "peso": 1,
+          "toques": 1,
+          "pantallas": 4.38,
+          "costo": 5.38
+        },
+        "Montar la sala": {
+          "peso": 0.5,
+          "toques": 2,
+          "pantallas": 6.28,
+          "costo": 8.28
+        },
+        "Afinar la cadena": {
+          "peso": 1,
+          "toques": 2,
+          "pantallas": 3.25,
+          "costo": 5.25
+        }
+      },
+      "total": 41.5,
+      "total_seis": 36.3,
+      "cabecera_px": 183,
+      "vistas_px": {
+        "escuchar": 2286,
+        "cadena": 4998,
+        "parlantes": 2694,
+        "calibrar": 644,
+        "diagnostico": 3072,
+        "ajustes": 1246
+      }
+    }
+  },
+  "PC": {
+    "pestanas": {
+      "escenarios": {
+        "Escuchar música": {
+          "peso": 20,
+          "toques": 0,
+          "pantallas": 0.0,
+          "costo": 0.0
+        },
+        "Ajustar el ambiente": {
+          "peso": 6,
+          "toques": 0,
+          "pantallas": 0.52,
+          "costo": 0.52
+        },
+        "Calibrar y ecualizar": {
+          "peso": 2,
+          "toques": 1,
+          "pantallas": 0.0,
+          "costo": 1.0
+        },
+        "Comparar A/B": {
+          "peso": 1,
+          "toques": 0,
+          "pantallas": 2.44,
+          "costo": 2.44
+        },
+        "Resolver un problema": {
+          "peso": 1,
+          "toques": 1,
+          "pantallas": 1.47,
+          "costo": 2.47
+        },
+        "Montar la sala": {
+          "peso": 0.5,
+          "toques": 2,
+          "pantallas": 2.43,
+          "costo": 4.43
+        },
+        "Afinar la cadena": {
+          "peso": 1,
+          "toques": 2,
+          "pantallas": 1.61,
+          "costo": 3.61
+        }
+      },
+      "total": 15.9,
+      "total_seis": 12.2,
+      "cabecera_px": 153,
+      "vistas_px": {
+        "escuchar": 1436,
+        "cadena": 2664,
+        "parlantes": 1979,
+        "calibrar": 396,
+        "diagnostico": 1781,
+        "ajustes": 540
+      }
+    }
+  }
+}

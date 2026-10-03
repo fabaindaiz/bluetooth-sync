@@ -51,6 +51,7 @@ export interface ChainAlgorithm {
   implemented: boolean;
   available: boolean;
   unavailable_reason: string | null;
+  notice: string | null;
   params: ChainParam[];
 }
 
@@ -255,7 +256,7 @@ export interface StreamEvents {
 /** `set` with a speaker: its `changes` (control.SPEAKER_FIELDS). */
 export type SpeakerChanges = { pan?: number; ambience?: number; gain_db?: number; delay_ms?: number; muted?: boolean; kind?: "generic" | "go4" | "charge6"; };
 /** `set` without a speaker: its `changes` (control.GLOBAL_FIELDS). */
-export type GlobalChanges = { rear_delay_ms?: number; volume_db?: number; extract_ambience?: boolean; decorrelate?: boolean; layout?: "quad" | "lcrs"; block_size?: 1024 | 2048 | 4096 | 8192; player_latency_ms?: number; sink_description?: string; recalibrate_every_s?: number; recalibrate_measure_s?: number; output_mode?: "combinado" | "separado"; eq_active?: boolean; recalibrate?: boolean; };
+export type GlobalChanges = { rear_delay_ms?: number; volume_db?: number; extract_ambience?: boolean; decorrelate?: boolean; layout?: "quad" | "lcrs" | "5.0" | "hex" | "7.0" | "octagon" | "rings"; block_size?: 1024 | 2048 | 4096 | 8192; player_latency_ms?: number; sink_description?: string; recalibrate_every_s?: number; recalibrate_measure_s?: number; output_mode?: "combinado" | "separado"; eq_active?: boolean; recalibrate?: boolean; probe?: boolean; probe_margin_db?: number; };
 
 /** The operations this application sends to `POST /v1/command`, and their arguments (control.OPS). */
 export interface OpArgs {

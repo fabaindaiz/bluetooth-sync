@@ -34,15 +34,31 @@ from aurasync.simulated import (
 TOKEN = "prueba-de-navegador-0123456789-abcdefghijk"
 BROWSERS = ("chromium", "firefox")
 NAMES = ("JBL Go 4 Red", "JBL Go 4 Black", "JBL Go 4 Blue")
+SINKS = ("bluez_output.90_F2_60_75_4A_83.1", "bluez_output.90_F2_60_DA_66_6D.1", "bluez_output.90_F2_60_E3_07_39.1")
+THREE = ((NAMES[0], -0.7, 0.15), (NAMES[1], 0.7, 0.15), (NAMES[2], 0.0, 0.55))
+EIGHT = (
+    *THREE,
+    ("JBL Go 4 Green", -0.7, 0.55),
+    ("JBL Go 4 White", 0.7, 0.55),
+    ("JBL Go 4 Pink", 0.0, 0.1),
+    ("JBL Charge 6", -1.0, 0.3),
+    ("JBL Go 4 Gray", 1.0, 0.4),
+)
+"""Eight speakers (experimentos/16): the three of always, the four quad roles filled, and three
+without a role. In front (role F…, or ambience under 0.35): Red, Black, Pink, Charge 6."""
 
 
 class Running:
-    def __init__(self, tmp: Path) -> None:
+    def __init__(self, tmp: Path, speakers: tuple[tuple[str, float, float], ...] = THREE) -> None:
         inst = Instalacion(
             parlantes=[
-                Parlante(NAMES[0], "bluez_output.90_F2_60_75_4A_83.1", pan=-0.7, ambiente=0.15),
-                Parlante(NAMES[1], "bluez_output.90_F2_60_DA_66_6D.1", pan=0.7, ambiente=0.15),
-                Parlante(NAMES[2], "bluez_output.90_F2_60_E3_07_39.1", pan=0.0, ambiente=0.55),
+                Parlante(
+                    name,
+                    SINKS[i] if i < len(SINKS) else f"bluez_output.90_F2_60_00_00_{i:02X}.1",
+                    pan=pan,
+                    ambiente=amb,
+                )
+                for i, (name, pan, amb) in enumerate(speakers)
             ]
         )
         inst.guardar(tmp / "instalacion.json")
@@ -283,6 +299,23 @@ def test_a_restart_setting_is_marked_pending(page: Page, svc: Running):
     expect(page.locator('[data-restart="block_size"]')).to_have_text("al reiniciar", timeout=10000)
 
 
+def test_the_masked_probe_switches_from_ajustes(page: Page, svc: Running):
+    """The probe (dsp/probe.py) is off by default; Ajustes → Sincronía switches it live and the
+    playing session carries it (state.recalibration.probe)."""
+    start(page)
+    go(page, "Ajustes")
+    box = page.locator('[data-card=config] [data-global="probe"]')
+    expect(box).not_to_be_checked()
+    box.check()
+    for _ in range(50):
+        if svc.state()["global"]["probe"]:
+            break
+        page.wait_for_timeout(100)
+    state = svc.state()
+    assert state["global"]["probe"] is True
+    assert state["recalibration"]["probe"]["active"] is True
+
+
 # -- calibration ----------------------------------------------------------------------
 
 
@@ -497,6 +530,17 @@ def test_devices_are_grouped_and_a_stranger_can_be_forgotten(page: Page, svc: Ru
     go(page, "Parlantes")
     devices = page.locator("#devices")
     expect(devices).to_contain_text("Conectados")
-    page.once("dialog", lambda d: d.accept())
     row = devices.locator("tr", has_text="JBL Flip 7")
     expect(row).to_be_visible()
+    row.get_by_role("button", name="Emparejar y conectar").click()
+    # Forgetting cannot be undone by the service: the panel shows it done and sends it when the
+    # "Deshacer" notice ends (no confirm(), research/11 §4.3).
+    page.evaluate("window.aurasync.undo.setDuration(1500)")
+    row.get_by_role("button", name="Olvidar").click()
+    expect(row).to_have_count(0)
+    expect(page.locator("#undo")).to_contain_text("olvidado")
+    flip = lambda: next(d for d in svc.state()["devices"] if d["name"] == "JBL Flip 7")  # noqa: E731
+    assert flip()["paired"]
+    expect(page.locator("#undo")).to_be_hidden(timeout=5000)
+    page.wait_for_timeout(500)
+    assert not flip()["paired"]

@@ -15,6 +15,14 @@ const ROLE_POSITIONS = {
 const ROLE_NAMES = {
   FL: "frontal izquierdo", FR: "frontal derecho", FC: "centro",
   RL: "trasero izquierdo", RR: "trasero derecho", RC: "trasero (surround)",
+  SL: "lateral izquierdo", SR: "lateral derecho", WL: "ancho izquierdo", WR: "ancho derecho",
+  OF: "exterior, al frente", OL: "exterior, a la izquierda", OR: "exterior, a la derecha", OB: "exterior, atrás",
+};
+const roleName = (r) => ROLE_NAMES[r] || r;
+// Las distribuciones que el servicio ofrece (`roles`), con su nombre; una desconocida va con su clave.
+const LAYOUT_NAMES = {
+  quad: ["Cuadrafonía", "FL FR RL RR"], lcrs: ["Películas", "L C R S"], "5.0": ["5.0", "L C R SL SR"],
+  hex: ["Hexágono", "6"], "7.0": ["7.0", "L C R SL SR RL RR"], octagon: ["Octógono", "8"], rings: ["Dos anillos", "4 + 4"],
 };
 const SERVICE_STATUS = {
   running: ["", "corriendo"], starting: ["", "iniciando"], stopping: ["", "deteniendo"],
@@ -30,7 +38,10 @@ const SILENCE = -120;
 const LOG_CAPACITY = 2000;
 const STATE_EVERY_MS = 500;
 const LOGS_EVERY_MS = 1000;
-const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
+const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"];
+// Desde cuántos parlantes las tarjetas por parlante van plegadas y aparecen las acciones por grupo
+// (experimentos/16 §7): con 3 se ven enteras, como siempre.
+const FOLD_FROM = 4;
 
 let latest = null;
 let online = false;
@@ -565,9 +576,7 @@ function renderControls(s) {
   run.classList.toggle("btn-primary", !busy);
   run.disabled = status === "starting";
   run.title = status === "error" ? `La última sesión falló: ${s.session.reason}` : "";
-  for (const button of document.querySelectorAll("[data-room-layout]")) {
-    button.setAttribute("aria-pressed", String(button.dataset.roomLayout === s.global.layout));
-  }
+  renderRoomLayouts(s);
   const source = s.source || { kind: "system", name: null, busy: false };
   syncValue($("source-kind"), source.kind);
   $("source-kind").disabled = !s.source || source.busy;
@@ -601,15 +610,56 @@ function syncSourceFields() {
 let roomLayout = null;
 const slots = new Map();
 
+function renderRoomLayouts(s) {
+  const box = $("room-layouts");
+  const layouts = Object.keys(s.roles || {});
+  const key = layouts.join("|");
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    // Con más de tres, en una grilla que se acomoda al ancho (en el teléfono no entran en una fila).
+    box.classList.toggle("layout-grid", layouts.length > 3);
+    box.replaceChildren(...layouts.map((id) => {
+      const [label, roles] = LAYOUT_NAMES[id] || [id, ""];
+      return el("button", { type: "button", "data-room-layout": id, class: "seg" }, label, " ", el("small", { class: "muted", text: roles }));
+    }));
+  }
+  for (const button of box.querySelectorAll("[data-room-layout]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.roomLayout === s.global.layout));
+  }
+}
+
+// Dónde va cada parlante en el plano (en % del recuadro). Un rol con ángulo (`role_places`, desde
+// que las distribuciones salen de ángulos) va en un círculo: el frente arriba, el anillo exterior
+// más afuera. Sin ángulo, el lugar fijo de los roles de siempre; y si no, el de su mezcla.
+const clampPlace = ([x, y]) => [Math.max(13, Math.min(87, x)), Math.max(12, Math.min(90, y))];
+
+function mixPlace(pan, ambience) {
+  // La misma escala que los roles de siempre: FL (pan −0,7, ambiente 0,15) cae en 22 %, 26 %.
+  return clampPlace([50 + pan * 40, 26 + ((ambience - 0.15) / 0.4) * 54]);
+}
+
+function rolePlace(s, role) {
+  const p = s.role_places && s.role_places[s.global.layout] && s.role_places[s.global.layout][role];
+  if (p && p.angle_deg != null) {
+    const r = p.lift ? 42 : 32;
+    const t = (p.angle_deg * Math.PI) / 180;
+    return clampPlace([50 + r * Math.sin(t), 52 - r * Math.cos(t)]);
+  }
+  if (ROLE_POSITIONS[role]) return ROLE_POSITIONS[role];
+  return p ? mixPlace(p.pan, p.ambience) : [50, 50];
+}
+
 function renderRoom(s) {
   const room = $("room");
   if (roomLayout !== s.global.layout) {
     for (const slot of slots.values()) slot.box.remove();
     slots.clear();
-    for (const role of s.roles[s.global.layout]) {
-      const [x, y] = ROLE_POSITIONS[role];
+    const roles = s.roles[s.global.layout] || [];
+    room.toggleAttribute("data-many", roles.length > 6);
+    for (const role of roles) {
+      const [x, y] = rolePlace(s, role);
       const name = el("div", { class: "slot-name" });
-      const box = el("div", { class: "slot", title: ROLE_NAMES[role] }, el("div", { class: "slot-channel", text: role }), name);
+      const box = el("div", { class: "slot", title: roleName(role) }, el("div", { class: "slot-channel", text: role }), name);
       box.style.left = `${x}%`;
       box.style.top = `${y}%`;
       room.append(box);
@@ -623,10 +673,26 @@ function renderRoom(s) {
     slot.box.classList.toggle("filled", Boolean(speaker));
     slot.box.classList.toggle("lost", Boolean(speaker && s.session.status === "playing" && !speaker.playing));
   }
-  const custom = s.speakers.filter((sp) => sp.role == null).map((sp) => sp.name);
+  // Los parlantes sin rol (con 5 a 8 siempre hay): un recuadro donde los ponen su pan y su ambiente,
+  // con la misma escala que los roles (FL en pan −0,7 y ambiente 0,15 cae en su lugar; RL, con 0,55).
+  // Antes quedaban como texto al pie (experimentos/16 §7).
+  const custom = s.speakers.filter((sp) => sp.role == null);
+  const key = JSON.stringify(custom.map((sp) => [sp.name, sp.pan, sp.ambience]));
+  if (room.dataset.custom !== key) {
+    room.dataset.custom = key;
+    for (const old of room.querySelectorAll(".slot.custom")) old.remove();
+    for (const sp of custom) {
+      const box = el("div", { class: "slot custom", title: `${sp.name}: sin rol (pan ${nf(sp.pan, 2)}, ambiente ${nf(sp.ambience, 2)})`, "data-custom": sp.name },
+        el("div", { class: "slot-name", text: sp.name.replace("JBL ", "") }));
+      const [x, y] = mixPlace(sp.pan, sp.ambience);
+      box.style.left = `${x}%`;
+      box.style.top = `${y}%`;
+      room.append(box);
+    }
+  }
   let note = room.querySelector(".room-custom");
   if (!note) { note = el("div", { class: "room-custom" }); room.append(note); }
-  note.textContent = custom.length ? `personalizados: ${custom.join(", ")}` : "";
+  note.textContent = custom.length ? `sin rol: ${custom.length}` : "";
   const scan = $("scan");
   scan.disabled = s.scanning;
   scan.textContent = s.scanning ? "Buscando…" : "Buscar parlantes";
@@ -686,25 +752,45 @@ function speakerRow(speaker) {
   const tone = el("button", { type: "button", class: "ghost small-btn", text: "Tono" });
   tone.addEventListener("click", () => send("tone", { speaker: name, seconds: 2 }));
   const remove = el("button", { type: "button", class: "ghost small-btn danger", text: "Quitar" });
-  remove.addEventListener("click", () => {
-    if (confirm(`¿Quitar ${name} de la instalación? (se guarda con «Guardar instalación»)`)) send("speaker_remove", { speaker: name });
-  });
+  // Sin confirm(): se quita al instante y «Deshacer» lo vuelve a agregar con lo que tenía.
+  remove.addEventListener("click", () => withUndo(`${name}: quitado de la instalación (se guarda con «Guardar instalación»)`,
+    () => send("speaker_remove", { speaker: name })));
+  // En el teléfono, con 4 parlantes o más, la fila es una tarjeta plegada (CSS: .speakers-table[data-many]).
+  const fold = el("button", { type: "button", class: "fold-btn", "aria-label": `Ajustes de ${name}`, "aria-expanded": "false" });
   const row = {
-    tr: el("tr"), name: el("div", { class: "speaker-name" }), sub: el("div", { class: "speaker-sub" }),
-    status: el("span", { class: "status" }), role, kind, pan, ambience, gain, delay, delayNow, mute, tone, remove,
+    tr: el("tr", { "data-speaker": name }), name: el("div", { class: "speaker-name" }), sub: el("div", { class: "speaker-sub" }),
+    status: el("span", { class: "status" }), role, kind, pan, ambience, gain, delay, delayNow, mute, tone, remove, fold,
   };
+  fold.addEventListener("click", () => setFolded(row.tr, fold, !row.tr.hasAttribute("data-folded"), name));
   row.tr.append(
-    el("td", { class: "cell-name" }, row.name, row.sub),
+    el("td", { class: "cell-name" }, fold, el("div", { class: "min-w-0" }, row.name, row.sub)),
     el("td", { class: "cell-status" }, row.status),
-    el("td", { class: "cell-kind" }, kind),
-    el("td", { class: "cell-role" }, role),
-    el("td", { class: "cell-pan" }, pan.cell),
-    el("td", { class: "cell-ambience" }, ambience.cell),
-    el("td", { class: "cell-volume" }, gain.cell),
-    el("td", { class: "num cell-delay" }, delay, delayNow),
+    el("td", { class: "cell-kind", "data-label": "Tipo" }, kind),
+    el("td", { class: "cell-role", "data-label": "Rol" }, role),
+    el("td", { class: "cell-pan", "data-label": "Pan" }, pan.cell),
+    el("td", { class: "cell-ambience", "data-label": "Ambiente" }, ambience.cell),
+    el("td", { class: "cell-volume", "data-label": "Volumen" }, gain.cell),
+    el("td", { class: "num cell-delay", "data-label": "Retardo (ms)" }, delay, delayNow),
     el("td", { class: "cell-actions" }, el("div", { class: "hstack" }, tone, mute, remove)),
   );
   return row;
+}
+
+// Plegar o desplegar la tarjeta de un parlante. Lo que la persona abrió queda abierto mientras
+// la página viva (por nombre), aunque la tarjeta se vuelva a dibujar.
+const unfolded = new Set();
+function setFolded(node, button, folded, key) {
+  node.toggleAttribute("data-folded", folded);
+  button.setAttribute("aria-expanded", String(!folded));
+  if (key) { if (folded) unfolded.delete(key); else unfolded.add(key); }
+}
+
+function syncFold(node, button, many, key) {
+  const folded = many && !unfolded.has(key);
+  if (node.hasAttribute("data-folded") !== folded) {
+    node.toggleAttribute("data-folded", folded);
+    button.setAttribute("aria-expanded", String(!folded));
+  }
 }
 
 function setStatus(node, table, state, extra = "") {
@@ -717,6 +803,8 @@ function setStatus(node, table, state, extra = "") {
 function renderSpeakers(s) {
   const body = $("speakers");
   const seen = new Set();
+  const many = s.speakers.length >= FOLD_FROM;
+  body.closest("table").toggleAttribute("data-many", many);
   const playing = s.session.status === "playing";
   const loop = s.recalibration.active;
   for (const sp of s.speakers) {
@@ -727,6 +815,7 @@ function renderSpeakers(s) {
       speakerRows.set(sp.name, row);
       body.append(row.tr);
     }
+    syncFold(row.tr, row.fold, many, `detail:${sp.name}`);
     row.name.textContent = sp.name;
     row.sub.textContent = [sp.address, sp.codec, sp.modalias, sp.rssi_dbm != null ? `${sp.rssi_dbm} dBm` : null]
       .filter(Boolean).join(" · ");
@@ -734,7 +823,7 @@ function renderSpeakers(s) {
     const roles = s.roles[s.global.layout];
     if (row.role.dataset.layout !== s.global.layout) {
       row.role.replaceChildren(el("option", { value: "", text: "personalizado", disabled: "" }),
-        ...roles.map((r) => el("option", { value: r, text: `${r} · ${ROLE_NAMES[r]}` })));
+        ...roles.map((r) => el("option", { value: r, text: `${r} · ${roleName(r)}` })));
       row.role.dataset.layout = s.global.layout;
       row.role.dataset.synced = "\u0000";
     }
@@ -788,12 +877,17 @@ function quickRow(speaker) {
   mute.addEventListener("click", () => { const sp = current(); if (sp) { markPending(mute); send("set", { speaker: name, changes: { muted: !sp.muted } }); } });
   const tone = el("button", { type: "button", class: "btn btn-ghost small-btn q-tone", text: "Tono" });
   tone.addEventListener("click", () => send("tone", { speaker: name, seconds: 2 }));
+  // Con 4 parlantes o más va plegada: a la vista el nombre, el estado, Tono y Silenciar; los
+  // deslizadores al abrirla (▸). Con 3, entera como siempre y sin el botón.
+  const fold = el("button", { type: "button", class: "fold-btn", "aria-label": `Ambiente y volumen de ${name}`, "aria-expanded": "true", hidden: "" });
   const box = el("div", { class: "rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-800", "data-quick": name },
-    el("div", { class: "flex items-center justify-between gap-2" },
-      el("div", { class: "flex min-w-0 items-baseline gap-2" }, title, status), el("div", { class: "hstack" }, tone, mute)),
+    el("div", { class: "fold-head flex items-center justify-between gap-2" },
+      el("div", { class: "flex min-w-0 items-center gap-2" }, fold, el("div", { class: "fold-title flex min-w-0 items-baseline gap-2" }, title, status)),
+      el("div", { class: "hstack" }, tone, mute)),
     // El número va en la línea del título, para que el deslizador tenga el ancho y el ↺ su lugar.
-    el("div", { class: "grid grid-cols-2 gap-3" }, quickField("Ambiente", ambience), quickField("Volumen", gain)));
-  return { box, title, status, ambience, gain, mute, tone };
+    el("div", { class: "fold-body grid grid-cols-2 gap-3" }, quickField("Ambiente", ambience), quickField("Volumen", gain)));
+  fold.addEventListener("click", () => setFolded(box, fold, !box.hasAttribute("data-folded"), `quick:${name}`));
+  return { box, title, status, ambience, gain, mute, tone, fold };
 }
 
 function quickField(title, cell) {
@@ -807,11 +901,18 @@ function renderQuick(s) {
   const list = $("quick");
   const seen = new Set();
   const playing = s.session.status === "playing";
+  const many = s.speakers.length >= FOLD_FROM;
+  renderGroup(s, many);
   for (const sp of s.speakers) {
     seen.add(sp.name);
     let row = quickRows.get(sp.name);
     if (!row) { row = quickRow(sp); quickRows.set(sp.name, row); list.append(row.box); }
-    row.title.textContent = `${sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
+    row.fold.hidden = !many;
+    syncFold(row.box, row.fold, many, `quick:${sp.name}`);
+    // Plegada, el nombre corto y el estado debajo: en el teléfono no entran en una línea con Tono y Silenciar.
+    row.box.querySelector(".fold-title").classList.toggle("fold-stack", many);
+    row.title.textContent = `${many ? sp.name.replace("JBL ", "") : sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
+    row.title.title = sp.name;
     setStatus(row.status, SPEAKER_STATUS, speakerState(s, sp), sp.muted ? " · mudo" : "");
     syncValue(row.ambience.input, sp.ambience);
     setText(row.ambience.out, nf(row.ambience.input.value, 2));
@@ -825,6 +926,78 @@ function renderQuick(s) {
   }
   for (const [name, row] of quickRows) if (!seen.has(name)) { row.box.remove(); quickRows.delete(name); }
   if (!s.speakers.length && !list.querySelector(".chart-empty")) list.append(el("p", { class: "chart-empty", text: "La instalación no tiene parlantes: agregalos en Sala." }));
+}
+
+// -- acciones por grupo (experimentos/16 §7): silenciar, activar o identificar a todos, a los de
+// adelante o a los de atrás. Adelante y atrás salen del rol (F… / R…); sin rol, del ambiente: los
+// roles traseros llevan 0,55 y los delanteros 0,15 o menos (control.ROLES), así que el corte va a
+// 0,35. Es una regla INFERIDA mientras el servicio no traiga la posición de cada parlante.
+const GROUPS = [["all", "Todos"], ["front", "Adelante"], ["rear", "Atrás"]];
+let groupChoice = "all";
+let groupBusy = false;
+
+function sideOf(s, sp) {
+  const p = sp.role && s.role_places && (s.role_places[s.global.layout] || {})[sp.role];
+  // Con ángulo: adelante lo que está a menos de 90° del frente; los laterales (90°) van atrás.
+  if (p && p.angle_deg != null) return Math.abs(p.angle_deg) < 90 ? "front" : "rear";
+  if (sp.role && ROLE_POSITIONS[sp.role]) return sp.role.startsWith("R") ? "rear" : "front";
+  return sp.ambience >= 0.35 ? "rear" : "front";
+}
+
+function groupMembers(s, group = groupChoice) {
+  return s.speakers.filter((sp) => group === "all" || sideOf(s, sp) === group);
+}
+
+function renderGroup(s, many) {
+  const box = $("quick-group");
+  box.hidden = !many;
+  if (!many) return;
+  if (!box.childElementCount) {
+    const seg = el("div", { class: "segmented", role: "group", "aria-label": "Grupo" });
+    for (const [key, label] of GROUPS) {
+      const b = el("button", { type: "button", class: "seg", "data-group": key, text: label });
+      b.addEventListener("click", () => { groupChoice = key; if (latest) renderGroup(latest, true); });
+      seg.append(b);
+    }
+    const act = (text, action, cls = "btn small-btn") => {
+      const b = el("button", { type: "button", class: cls, "data-group-action": action, text });
+      b.addEventListener("click", () => groupAction(action));
+      return b;
+    };
+    box.append(seg, act("Silenciar", "mute"), act("Activar", "unmute"), act("Identificar", "identify", "btn btn-ghost small-btn"),
+      el("span", { class: "muted small", "data-group-note": "" }));
+  }
+  const members = groupMembers(s);
+  for (const b of box.querySelectorAll("[data-group]")) b.setAttribute("aria-pressed", String(b.dataset.group === groupChoice));
+  const playing = s.session.status === "playing";
+  for (const b of box.querySelectorAll("[data-group-action]")) {
+    b.disabled = groupBusy || !members.length || (b.dataset.groupAction === "identify" && !playing);
+  }
+  setText(box.querySelector("[data-group-note]"), `${members.length} de ${s.speakers.length}`);
+}
+
+async function groupAction(action) {
+  if (!latest) return;
+  const members = groupMembers(latest);
+  groupBusy = true;
+  renderGroup(latest, true);
+  try {
+    if (action === "identify") {
+      for (const sp of members) {
+        $("now-action").textContent = `Suena: ${sp.name}`;
+        toast(`Suena: ${sp.name}`);
+        await send("tone", { speaker: sp.name, seconds: 1.2 });
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      $("now-action").textContent = "";
+    } else {
+      const muted = action === "mute";
+      for (const sp of members) if (sp.muted !== muted) await send("set", { speaker: sp.name, changes: { muted } });
+    }
+  } finally {
+    groupBusy = false;
+    if (latest) renderGroup(latest, true);
+  }
 }
 
 const DEVICE_GROUPS = [
@@ -853,8 +1026,14 @@ function deviceRow(d, playing) {
     button(d.paired ? "Conectar" : "Emparejar y conectar", "small-btn", () => send("connect", { address: d.address }));
   }
   if (d.paired && !d.busy && !d.in_installation) {
+    // Olvidar no se puede deshacer (habría que emparejarlo de nuevo): se muestra hecho y se manda
+    // cuando vence el aviso; «Deshacer» lo cancela.
     button("Olvidar", "ghost small-btn danger", () => {
-      if (confirm(`¿Olvidar ${d.name || d.address}? Para volver a usarlo habrá que emparejarlo de nuevo.`)) send("forget", { address: d.address });
+      hiddenDevices.add(d.address);
+      if (latest) renderDevices(latest);
+      const back = () => { hiddenDevices.delete(d.address); if (latest) renderDevices(latest); };
+      deferUndo(`${d.name || d.address}: olvidado (para volver a usarlo habrá que emparejarlo)`,
+        async () => { await send("forget", { address: d.address }); back(); }, back);
     }, "Borra el emparejamiento");
   }
   const state = d.connected ? (d.in_installation ? "conectado · en la instalación" : "conectado") : d.paired ? "sin conectar" : "visto";
@@ -868,15 +1047,19 @@ function deviceRow(d, playing) {
     el("td", {}, actions));
 }
 
+// Lo que se está olvidando (el aviso «Deshacer» sigue abierto): ya no se muestra.
+const hiddenDevices = new Set();
+
 function renderDevices(s) {
-  $("devices-count").textContent = `(${s.devices.length})`;
+  const devices = s.devices.filter((d) => !hiddenDevices.has(d.address));
+  $("devices-count").textContent = `(${devices.length})`;
   $("scan").disabled = Boolean(s.scanning);
   $("scan").textContent = s.scanning ? "Buscando…" : "Buscar cerca";
   const playing = s.session.status === "playing";
   const group = (d) => (d.connected ? "connected" : d.paired ? "paired" : "seen");
   const rows = [];
   for (const [key, title] of DEVICE_GROUPS) {
-    const members = s.devices.filter((d) => group(d) === key);
+    const members = devices.filter((d) => group(d) === key);
     if (!members.length) continue;
     rows.push(el("tr", { class: "group-row" }, el("th", { colspan: "5", scope: "colgroup", text: `${title} (${members.length})` })));
     rows.push(...members.map((d) => deviceRow(d, playing)));
@@ -1192,6 +1375,7 @@ function animateMeters(now) {
       }
     }
     if (withText) setText($("meters-sync"), frame.synced ? "sincronizado con lo que suena" : "sin latencia medida: adelantado respecto de lo que suena");
+    if (withText && !$("mic-check").closest("[data-view]")?.hidden) paintMicCheck();
   }
   drawInputLive(now);
   requestAnimationFrame(animateMeters);
@@ -1375,7 +1559,7 @@ async function calibrateAndApply() {
     if (!s || s.calibration.state !== "done") { status.textContent = "La calibración no terminó bien: mirá la pestaña Calibrar."; return; }
     const good = s.calibration.results.filter((r) => !r.silent && !r.doubtful);
     if (!good.length) { status.textContent = "Ningún parlante se midió con confianza: no se aplicó nada."; return; }
-    const applied = await send("calibration_apply");
+    const applied = await withUndo(appliedMessage, () => send("calibration_apply"));
     const skipped = applied && applied.ok ? applied.result.skipped || [] : [];
     status.textContent = applied && applied.ok
       ? `Alineación aplicada${skipped.length ? `; quedaron como estaban: ${skipped.join(", ")}` : ""}.`
@@ -1615,9 +1799,103 @@ function setupConfig() {
   }
 }
 
+// -- el nivel del micrófono antes de calibrar (research/11 §4.2: como Dirac Live) ----------
+// Una pista de −80 a 0 dBFS con la ventana objetivo marcada, el número y el estado en palabras (y
+// con una forma). Fuera de la ventana, «Calibrar» avisa y pide confirmar en vez de arrancar. El
+// nivel es el que ya muestra Niveles («Micrófono»): lo mide el lazo, así que sin lazo no hay lectura.
+// La ventana es ORIENTATIVA (INFERIDO, sin medir con el fifine): RMS de −55 a −10 dBFS y pico bajo
+// −1 dBFS. Que el micrófono esté bajo solo se puede decir si algo suena (entrada sobre −45 dBFS):
+// en silencio, −60 es el piso de ruido y no un error.
+const MIC_SCALE_DB = -80;
+const MIC_WINDOW = { low: -55, high: -10, clip: -1 };
+const MIC_PLAYING_DB = -45;
+const MIC_STATES = {
+  none: "sin lectura", quiet: "sin música: no se puede comprobar", low: "demasiado bajo",
+  ok: "en la ventana", high: "demasiado alto", clip: "saturado",
+};
+const MIC_ADVICE = {
+  low: "Acercalo a los parlantes, subí su ganancia o el volumen: con tan poca señal la medición puede salir dudosa.",
+  high: "Alejalo o bajá su ganancia: cerca de saturar, la medición se deforma.",
+  clip: "Satura: alejalo o bajá su ganancia; una medición saturada no sirve.",
+  quiet: "Poné música o la señal de prueba (Fuente) para ver si el micrófono oye los parlantes.",
+};
+const MIC_BLOCKING = new Set(["low", "high", "clip"]);
+
+function micReading(s) {
+  if (!s || s.session.status !== "playing") return { state: "none", why: "Iniciá la sesión para ver el nivel del micrófono." };
+  const fresh = live.meters && performance.now() - live.metersAt < 500;
+  const frame = (fresh ? live.meters.meters : s.meters) || {};
+  const level = (name) => {
+    const m = frame[name];
+    if (!m) return null;
+    const row = fresh ? meterRows.get(name) : null;
+    return row && row.at ? { rms: row.rms, peak: Math.max(row.held, m.peak_db) } : { rms: m.rms_db, peak: m.peak_db };
+  };
+  const mic = level("mic");
+  if (!mic) {
+    return { state: "none", why: s.recalibration.active
+      ? "Esperando la primera lectura del micrófono…"
+      : "El nivel lo mide el lazo: encendé «Mantener sincronía» para verlo antes de calibrar." };
+  }
+  const input = Math.max(...["in L", "in R"].map((n) => (level(n) || { rms: SILENCE }).rms));
+  const playing = input > MIC_PLAYING_DB;
+  let state = "ok";
+  if (mic.peak >= MIC_WINDOW.clip) state = "clip";
+  else if (mic.rms > MIC_WINDOW.high) state = "high";
+  else if (mic.rms < MIC_WINDOW.low) state = playing ? "low" : "quiet";
+  return { state, rms: mic.rms, peak: mic.peak, playing };
+}
+
+function paintMicCheck() {
+  const r = micReading(latest);
+  const box = $("mic-check");
+  if (box.dataset.state !== r.state) box.dataset.state = r.state;
+  const pos = $("mic-pos");
+  const has = r.rms != null && r.rms > SILENCE;
+  if (pos.hidden === has) pos.hidden = !has;
+  if (has) {
+    const pct = Math.max(0, Math.min(100, ((r.rms - MIC_SCALE_DB) / -MIC_SCALE_DB) * 100));
+    const transform = `translateX(${pct.toFixed(1)}%)`;
+    if (pos.style.transform !== transform) pos.style.transform = transform;
+  }
+  const value = has ? `${nf(r.rms, 0)} dBFS` : "—";
+  setText($("mic-value"), value);
+  setText($("mic-state-text"), MIC_STATES[r.state]);
+  const track = $("mic-track");
+  const text = has ? `${value}, ${MIC_STATES[r.state]} (ventana ${MIC_WINDOW.low} a ${MIC_WINDOW.high} dBFS)` : MIC_STATES[r.state];
+  if (track.getAttribute("aria-valuetext") !== text) {
+    track.setAttribute("aria-valuetext", text);
+    track.setAttribute("aria-valuenow", String(has ? Math.max(MIC_SCALE_DB, Math.round(r.rms)) : MIC_SCALE_DB));
+  }
+  const note = r.why || MIC_ADVICE[r.state] || "";
+  setText($("mic-note"), note);
+  if ($("mic-note").hidden === Boolean(note)) $("mic-note").hidden = !note;
+}
+
+// Antes de calibrar: con el micrófono fuera de la ventana, avisa y pide confirmar (sin confirm()).
+function gateCalibration(box, go) {
+  const r = micReading(latest);
+  if (!MIC_BLOCKING.has(r.state)) {
+    box.hidden = true;
+    box.replaceChildren();
+    return go();
+  }
+  const goBtn = el("button", { type: "button", class: "btn", "data-gate": "go", text: "Calibrar igual" });
+  const cancel = el("button", { type: "button", class: "btn btn-ghost", "data-gate": "cancel", text: "Cancelar" });
+  box.replaceChildren(
+    el("p", { class: "m-0", "data-gate-text": "" }, el("b", { text: `El micrófono está ${MIC_STATES[r.state]}` }),
+      ` (${nf(r.rms, 0)} dBFS; la ventana es de ${MIC_WINDOW.low} a ${MIC_WINDOW.high} dBFS). ${MIC_ADVICE[r.state]}`),
+    el("div", { class: "row" }, goBtn, cancel));
+  box.hidden = false;
+  goBtn.addEventListener("click", () => { box.hidden = true; box.replaceChildren(); go(); });
+  cancel.addEventListener("click", () => { box.hidden = true; box.replaceChildren(); });
+  return null;
+}
+
 // -- calibración --------------------------------------------------------------------
 
 function renderCalibration(s) {
+  paintMicCheck();
   const cal = s.calibration;
   renderResponse(cal, s.speakers);
   const playing = s.session.status === "playing";
@@ -1628,7 +1906,7 @@ function renderCalibration(s) {
   $("cal-run").title = playing ? "" : "Iniciá la sesión para calibrar";
   $("cal-apply").disabled = !(cal && cal.state === "done" && !cal.stale && playing);
   $("eq-apply").disabled = !(cal && cal.state === "done" && !cal.stale && playing);
-  $("eq-reset").disabled = !s.speakers.some((sp) => sp.eq_db);
+  $("eq-reset").disabled = eqClearing || !s.speakers.some((sp) => sp.eq_db);
   $("cal-progress").hidden = !(cal && cal.state === "running");
   $("cal-bar").style.width = `${Math.round((cal ? cal.progress : 0) * 100)}%`;
   $("cal-save").disabled = !(cal && cal.state === "done") || s.service.simulated;
@@ -1658,6 +1936,43 @@ function renderCalibration(s) {
 
 const hz = (f) => (f >= 1000 ? `${nf(f / 1000, f >= 10000 ? 0 : 1)} kHz` : `${Math.round(f)} Hz`);
 
+// Qué tercios de la respuesta medida se dibujan tenues (clase `low-coherence`), como el *blanking*
+// de Smaart: ahí la medición es poco confiable (research/11 §4.1). El criterio es el **error
+// estimado de cada tercio** (`results[].response_error_db`, 1σ en dB, null donde no se pudo
+// calcular): tenue si pasa de 1 dB o falta. La γ² sola no sirve de umbral: con N parlantes
+// sonando a la vez cae a ~1/N aunque la curva esté bien medida (experimentos/11, paso 2). Si la
+// calibración no trae el error, se usa la γ² (`results[].coherence`) con 0,5 como respaldo.
+const MAX_ERROR_DB = 1;
+const LOW_COHERENCE = 0.5;
+// Los parlantes que la leyenda escondió (con 8 curvas no se lee ninguna: se eligen 1 o 2).
+const respHidden = new Set();
+
+function isLowCoherence(result, k) {
+  if (Array.isArray(result.response_error_db)) {
+    const e = result.response_error_db[k];
+    return e == null || e > MAX_ERROR_DB;
+  }
+  const g = Array.isArray(result.coherence) ? result.coherence[k] : null;
+  return g != null && g < LOW_COHERENCE;
+}
+
+// Un tramo por tercio: del punto medio con el anterior al punto medio con el siguiente, así cada
+// tercio se puede atenuar solo.
+function bandPolylines(values, xs, y, result, color, name) {
+  const pts = values.map((v, k) => (v == null ? null : [xs[k], y(v)]));
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const out = [];
+  pts.forEach((p, k) => {
+    if (!p) return;
+    const left = k > 0 && pts[k - 1] ? mid(pts[k - 1], p) : p;
+    const right = k + 1 < pts.length && pts[k + 1] ? mid(p, pts[k + 1]) : p;
+    const low = isLowCoherence(result, k);
+    out.push(svg("polyline", { class: `line measured band${low ? " low-coherence" : ""}`, "data-band": String(k),
+      "data-speaker": name, points: [left, p, right].map((q) => `${q[0]},${q[1]}`).join(" "), style: `stroke: var(${color})` }));
+  });
+  return out;
+}
+
 // La respuesta de cada parlante: escala logarítmica en frecuencia, de −40 a +15 dB.
 function renderResponse(cal, speakers) {
   const box = $("resp-chart");
@@ -1665,7 +1980,7 @@ function renderResponse(cal, speakers) {
   $("resp-box").hidden = !(results.length && cal.response_hz);
   $("resp-empty").hidden = !$("resp-box").hidden;
   if ($("resp-box").hidden) return;
-  const key = JSON.stringify([results.map((r) => r.response_db), speakers.map((sp) => sp.eq_db)]);
+  const key = JSON.stringify([results.map((r) => [r.response_db, r.coherence, r.response_error_db]), speakers.map((sp) => sp.eq_db), [...respHidden]]);
   if (box.dataset.key === key && box.clientWidth === Number(box.dataset.w)) return;
   box.dataset.key = key;
   box.dataset.w = String(box.clientWidth);
@@ -1692,41 +2007,132 @@ function renderResponse(cal, speakers) {
     chart.append(t);
   }
   const names = speakers.map((sp) => sp.name);
+  const xs = fs.map((f) => x(f));
+  let anyCoherence = false;
   results.forEach((r) => {
+    if (respHidden.has(r.speaker)) return;
     const i = Math.max(0, names.indexOf(r.speaker));
+    const color = SERIES[i % SERIES.length];
+    if (Array.isArray(r.coherence) || Array.isArray(r.response_error_db)) {
+      anyCoherence = true;
+      chart.append(...bandPolylines(r.response_db, xs, y, r, color, r.speaker));
+      return;
+    }
     const pts = r.response_db.map((v, k) => (v == null ? null : `${x(fs[k])},${y(v)}`)).filter(Boolean).join(" ");
-    chart.append(svg("polyline", { class: "line measured", points: pts, style: `stroke: var(${SERIES[i % SERIES.length]})` }));
+    chart.append(svg("polyline", { class: "line measured", "data-speaker": r.speaker, points: pts, style: `stroke: var(${color})` }));
   });
   // La ecualización vigente de cada parlante, punteada.
   speakers.forEach((sp, i) => {
-    if (!sp.eq_db) return;
+    if (!sp.eq_db || respHidden.has(sp.name)) return;
     const pts = sp.eq_db.map((v, k) => `${x(fs[k])},${y(v)}`).join(" ");
     chart.append(svg("polyline", { class: "line eq-line", points: pts, style: `stroke: var(${SERIES[i % SERIES.length]})` }));
   });
   box.append(chart);
+  // Cada parlante de la leyenda es un botón: esconde o muestra su curva (con 8 se eligen 1 o 2).
   $("resp-legend").replaceChildren(...results.map((r) => {
     const i = Math.max(0, names.indexOf(r.speaker));
-    return el("span", { class: "legend-item" }, el("span", { class: "legend-swatch", style: `background: var(${SERIES[i % SERIES.length]})` }), r.speaker);
-  }), el("span", { class: "legend-item muted", text: "línea llena: medida · punteada: ecualización · gris: 0 dB" }));
+    const shown = !respHidden.has(r.speaker);
+    const b = el("button", { type: "button", class: "legend-item legend-btn", "aria-pressed": String(shown),
+      title: shown ? `Esconder la curva de ${r.speaker}` : `Mostrar la curva de ${r.speaker}` },
+    el("span", { class: "legend-swatch", style: `background: var(${SERIES[i % SERIES.length]})` }), r.speaker);
+    b.addEventListener("click", () => {
+      if (respHidden.has(r.speaker)) respHidden.delete(r.speaker);
+      else respHidden.add(r.speaker);
+      if (latest) renderResponse(latest.calibration, latest.speakers);
+    });
+    return b;
+  }), el("span", { class: "legend-item muted", text: `línea llena: medida · punteada: ecualización · gris: 0 dB${anyCoherence ? ` · tenue: coherencia baja (γ² < ${nf(LOW_COHERENCE, 1)}), poco confiable` : ""}` }));
+}
+
+// -- deshacer en vez de confirm() (research/11 §4.3; host/web/src/undo.ts) -----------------
+// Cargar un preset, quitar un parlante y aplicar una calibración se hacen al instante, y el aviso
+// «Deshacer» (10 s) vuelve a poner el estado de antes. Olvidar un dispositivo, borrar un preset y
+// quitar la ecualización no tienen vuelta en el contrato: se muestran hechos y se mandan al vencer
+// el aviso (o al irse de la página).
+
+function undoer() { return (window.aurasync && window.aurasync.undo) || null; }
+
+// El estado artístico de ahora: el del servicio (no `latest`, que puede venir un cuadro atrás) y
+// las elecciones de la cadena.
+async function captureNow() {
+  const u = undoer();
+  if (!u || !api) return null;
+  const [state, chain] = await Promise.all([api.state(), api.raw({ op: "chain" })]);
+  if (!state || !state.ok) return null;
+  return u.capture(state.result, chain && chain.ok ? chain.result : null);
+}
+
+function offerRestore(message, before) {
+  const u = undoer();
+  if (!u || !before) return;
+  u.offer({ message, undo: async () => {
+    const now = await captureNow();
+    return now ? u.restore(before, now) : ["sin conexión"];
+  } });
+}
+
+async function withUndo(message, action) {
+  const before = await captureNow();
+  const reply = await action();
+  if (reply && reply.ok) offerRestore(typeof message === "function" ? message(reply) : message, before);
+  return reply;
+}
+
+function deferUndo(message, commit, revert) {
+  const u = undoer();
+  if (!u) { commit(); return; }
+  u.offer({ message, commit, undo: async () => { await revert(); return []; } });
+}
+
+function appliedMessage(reply) {
+  const skipped = reply.result.skipped || [];
+  return `Alineación aplicada${skipped.length ? `; quedaron como estaban: ${skipped.join(", ")}` : ""}`;
+}
+
+// Quitar la ecualización: se apaga al instante (se oye), y las curvas se borran al vencer el aviso.
+let eqClearing = false;
+async function clearEq() {
+  const before = await captureNow();
+  const on = Boolean(latest && latest.global.eq_active);
+  if (on) await send("set", { changes: { eq_active: false } });
+  eqClearing = true;
+  $("eq-reset").disabled = true;
+  const putBack = async () => { if (before) { const now = await captureNow(); if (now) await undoer().restore(before, now); } };
+  deferUndo("Ecualización quitada", async () => {
+    await send("eq_reset");
+    if (on) await putBack();
+    eqClearing = false;
+  }, async () => { if (on) await putBack(); eqClearing = false; });
 }
 
 // -- presets y A/B -------------------------------------------------------------------
 
+// Los presets que se están borrando (el aviso «Deshacer» sigue abierto): ya no se muestran.
+const hiddenPresets = new Set();
+
 function renderPresets(s) {
   const list = $("presets");
-  const key = `${s.presets.join("|")}#${s.preset}#${s.ab && s.ab.active}`;
+  const presets = s.presets.filter((n) => !hiddenPresets.has(n));
+  const key = `${presets.join("|")}#${s.preset}#${s.ab && s.ab.active}`;
   if (list.dataset.key !== key) {
     list.dataset.key = key;
-    list.replaceChildren(...s.presets.map((name) => {
+    list.replaceChildren(...presets.map((name) => {
       const load = el("button", { type: "button", class: "small-btn", text: "Cargar" });
-      load.addEventListener("click", () => send("preset_load", { name }));
+      // Cargar pisa los ajustes de cada parlante: «Deshacer» los vuelve a poner (research/11 §4.3).
+      load.addEventListener("click", () => withUndo(`Preset «${name}» cargado`, () => send("preset_load", { name })));
       load.disabled = Boolean(s.ab && s.ab.active);
       const del = el("button", { type: "button", class: "ghost small-btn danger", text: "Borrar" });
-      del.addEventListener("click", () => { if (confirm(`¿Borrar el preset ${name}?`)) send("preset_delete", { name }); });
+      del.addEventListener("click", () => {
+        // Un preset borrado no se puede volver a escribir desde el panel: se borra al vencer el aviso.
+        hiddenPresets.add(name);
+        if (latest) renderPresets(latest);
+        const back = () => { hiddenPresets.delete(name); if (latest) renderPresets(latest); };
+        deferUndo(`Preset «${name}» borrado`, async () => { await send("preset_delete", { name }); back(); }, back);
+      });
       return el("li", { class: name === s.preset ? "current" : "" },
         el("span", { class: "preset-name", text: name + (name === s.preset ? " · actual" : "") }), load, del);
     }));
-    if (s.presets.length === 0) list.append(el("li", { class: "muted small", text: "Sin presets guardados." }));
+    if (presets.length === 0) list.append(el("li", { class: "muted small", text: "Sin presets guardados." }));
     for (const id of ["ab-a", "ab-b"]) {
       const select = $(id);
       const value = select.value;
@@ -1908,11 +2314,11 @@ function setup() {
   });
   // `data-room-layout`, no `data-layout`: el <body> lleva `data-layout` con la organización
   // del panel, y el selector lo atrapaba; cada clic mandaba `layout: "pestanas"` (2026-10-01).
-  for (const button of document.querySelectorAll("[data-room-layout]")) {
-    button.addEventListener("click", () => {
-      if (latest && latest.global.layout !== button.dataset.roomLayout) send("set", { changes: { layout: button.dataset.roomLayout } });
-    });
-  }
+  // Los botones los dibuja renderRoomLayouts: un solo oyente en el grupo.
+  $("room-layouts").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-room-layout]");
+    if (button && latest && latest.global.layout !== button.dataset.roomLayout) send("set", { changes: { layout: button.dataset.roomLayout } });
+  });
   const kind = editable($("source-kind"));
   const app = editable($("source-app"));
   const file = editable($("source-file"));
@@ -1936,14 +2342,14 @@ function setup() {
   $("cal-run").addEventListener("click", () => {
     const cal = latest && latest.calibration;
     if (cal && ["running", "measuring"].includes(cal.state)) send("calibrate_cancel");
-    else send("calibrate", { seconds: Number($("cal-seconds").value), amplitude: Number($("cal-amplitude").value) });
+    else gateCalibration($("cal-gate"), () => send("calibrate", { seconds: Number($("cal-seconds").value), amplitude: Number($("cal-amplitude").value) }));
   });
-  $("cal-apply").addEventListener("click", () => send("calibration_apply"));
+  $("cal-apply").addEventListener("click", () => withUndo(appliedMessage, () => send("calibration_apply")));
   $("eq-apply").addEventListener("click", async () => {
     const reply = await send("eq_apply");
     if (reply && reply.ok) toast(reply.result.skipped.length ? `Ecualizado; sin cambios: ${reply.result.skipped.join(", ")}` : "Ecualizado. Calibrá otra vez para ver cuánto se aplanó.");
   });
-  $("eq-reset").addEventListener("click", () => send("eq_reset"));
+  $("eq-reset").addEventListener("click", clearEq);
   $("cal-save").addEventListener("click", async () => {
     const reply = await send("measurement_save", { note: $("cal-note-input").value.trim() });
     if (reply && reply.ok) toast(`Medición guardada en ${reply.result.path}`);
@@ -1978,7 +2384,7 @@ function setup() {
   });
   setupConfig();
   setupLogs();
-  $("now-calibrate").addEventListener("click", calibrateAndApply);
+  $("now-calibrate").addEventListener("click", () => gateCalibration($("now-gate"), calibrateAndApply));
   $("chip-quality").addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
   $("now-identify").addEventListener("click", identifySpeakers);
   $("chip-alert").addEventListener("click", () => {

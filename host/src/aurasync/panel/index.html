@@ -54,7 +54,15 @@
     Sin conexión con aurasync. Reintentando…
   </div>
   <div id="warnings" class="flex flex-col gap-0.5 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm dark:border-amber-800 dark:bg-amber-950/50" role="status" hidden></div>
-  <div id="toast" class="fixed bottom-20 left-1/2 z-50 max-w-[min(560px,calc(100%-32px))] -translate-x-1/2 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900" role="status" aria-live="polite" hidden></div>
+  <!-- Los avisos de abajo: el de «Deshacer» (host/web/src/undo.ts, en vez de confirm()) y el de siempre. -->
+  <div class="notices">
+    <div id="undo" class="undo" role="status" aria-live="polite" hidden>
+      <span data-undo-text class="undo-text"></span>
+      <button type="button" data-undo-button class="undo-btn">Deshacer</button>
+      <span class="undo-time" aria-hidden="true"><span data-undo-bar class="undo-bar"></span></span>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </div>
 
   <!-- La pantalla de conexión de la PWA (Preact): equipos recordados, agregar, emparejar. Vacía en el panel local. -->
   <div id="connect-root"></div>
@@ -93,6 +101,7 @@
         <label class="toggle"><input type="checkbox" data-global="eq_active"><span><b>Ecualización</b><small>realza lo que le falta a cada parlante</small></span></label>
         <label class="toggle"><input type="checkbox" data-global="recalibrate"><span><b>Mantener sincronía</b><small>corrige la deriva mientras suena</small></span></label>
       </div>
+      <div id="now-gate" class="mic-gate" role="alert" hidden></div>
       <div class="row mt-3">
         <button type="button" id="now-calibrate" class="btn" title="Calibra 10 s a volumen bajo y aplica la alineación si la medición es confiable">Calibrar y aplicar</button>
         <button type="button" id="now-identify" class="btn btn-ghost" title="Un tono corto en cada parlante, de a uno, con su nombre en pantalla">Identificar parlantes</button>
@@ -102,6 +111,8 @@
 
     <section data-card="quick" class="card" aria-labelledby="h-quick">
       <div class="card-head"><h2 id="h-quick" class="card-title">Parlantes</h2><span class="muted small">ambiente, volumen y silencio</span></div>
+      <!-- Con 4 parlantes o más: acciones por grupo (experimentos/16 §7). La dibuja app.js. -->
+      <div id="quick-group" class="quick-group" role="group" aria-label="Acciones por grupo" hidden></div>
       <div id="quick" class="flex flex-col gap-3"></div>
     </section>
 
@@ -150,10 +161,8 @@
       <div class="card-head">
         <h2 id="h-room" class="card-title">Sala</h2>
       </div>
-      <div class="segmented mb-3 w-full" role="group" aria-label="Distribución">
-        <button type="button" data-room-layout="quad" class="seg">Cuadrafonía <small class="muted">FL FR RL RR</small></button>
-        <button type="button" data-room-layout="lcrs" class="seg">Películas <small class="muted">L C R S</small></button>
-      </div>
+      <!-- Una por distribución del servicio (`roles`): app.js las dibuja. -->
+      <div id="room-layouts" class="segmented mb-3 w-full" role="group" aria-label="Distribución"></div>
       <div id="room" class="room" aria-label="Plano de la sala"><div class="room-front">frente</div></div>
     </section>
 
@@ -192,6 +201,18 @@
         <button type="button" id="eq-apply" class="btn" title="Realza lo que le falta a cada parlante dentro de su banda; nunca recorta">Ecualizar</button>
         <button type="button" id="eq-reset" class="btn btn-ghost">Quitar ecualización</button>
       </div>
+      <!-- Paso 1: el nivel del micrófono antes de medir, como Dirac Live (research/11 §4.2). -->
+      <div id="mic-check" class="mic-check" data-state="none">
+        <span class="mic-label">Micrófono</span>
+        <span id="mic-track" class="mic-track" role="meter" aria-label="Nivel del micrófono" aria-valuemin="-80" aria-valuemax="0" aria-valuenow="-80" aria-valuetext="sin lectura">
+          <span class="mic-window" aria-hidden="true"></span>
+          <span id="mic-pos" class="mic-pos" hidden><span class="mic-marker"></span></span>
+        </span>
+        <span id="mic-value" class="mic-value num">—</span>
+        <span class="mic-state"><span class="mic-shape" aria-hidden="true"></span><span id="mic-state-text">sin lectura</span></span>
+      </div>
+      <p id="mic-note" class="muted small mt-1" hidden></p>
+      <div id="cal-gate" class="mic-gate" role="alert" hidden></div>
       <ol class="muted small mt-2 flex flex-wrap gap-x-4 gap-y-1">
         <li>1. Calibrar</li><li>2. Aplicar alineación</li><li>3. Ecualizar</li><li>4. Calibrar otra vez para verificar</li>
       </ol>
@@ -210,7 +231,7 @@
     </section>
 
     <section data-card="response" class="card" aria-labelledby="h-resp">
-      <div class="card-head"><h2 id="h-resp" class="card-title">Respuesta en frecuencia</h2><span class="muted small">en el micrófono · ±2 dB · bajo 100 Hz orientativa · punteada: ecualización</span></div>
+      <div class="card-head"><h2 id="h-resp" class="card-title">Respuesta en frecuencia</h2><span class="muted small">en el micrófono · ±2 dB · bajo 100 Hz orientativa · punteada: ecualización · tenue: poco confiable</span></div>
       <div id="resp-box" hidden>
         <div id="resp-chart" class="chart resp-chart"></div>
         <div id="resp-legend" class="legend"></div>
@@ -341,6 +362,21 @@
           </div>
           <label class="check"><input type="checkbox" data-global="recalibrate"> Mantener la sincronía</label>
           <p class="setting-desc">Corrige mientras suena la deriva de los relojes de los parlantes. Va encendida; apagarla es avanzado.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Sonda enmascarada <small class="muted">en vivo · experimental</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Sonda enmascarada" aria-describedby="help-sonda">?</button>
+              <span id="help-sonda" role="tooltip" class="help-pop">Un ruido distinto en cada parlante, moldeado para quedar por debajo de la música, que el lazo usa para medir en vez de la música misma. Con la música los parlantes llevan cosas parecidas y la medición se confunde; con la sonda no (en simulación ninguna de 646 mediciones erró por más de 1 ms). Va apagada hasta probar a ciegas que no se oye.</span>
+            </span>
+          </div>
+          <label class="check"><input type="checkbox" data-global="probe"> Medir con la sonda</label>
+          <div class="flex items-center gap-2 mt-2">
+            <span class="setting-desc">Bajo la música (dB)</span>
+            <input type="number" data-global="probe_margin_db" data-number="1" min="-40" max="-10" step="1" class="num-input" aria-label="Cuántos dB bajo la música va la sonda">
+          </div>
+          <p class="setting-desc">Más bajo se oye menos, pero mide peor. −20 dB es lo que se probó en simulación.</p>
         </div>
         <div class="setting">
           <div class="setting-head">
