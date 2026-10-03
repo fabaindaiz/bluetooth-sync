@@ -71,7 +71,7 @@ import numpy as np
 from aurasync import chain as cadena
 from aurasync import chain_stages
 from aurasync.chain import ChainValues
-from aurasync.dsp import ambience, decorrelate, eq, interpolation, limiter, profiles
+from aurasync.dsp import ambience, decorrelate, decorrelation_bank, eq, interpolation, limiter, profiles
 from aurasync.dsp.ramps import DecibelRamp, FadeGate, Smoothed
 from aurasync.dsp.retardo import LineaDeRetardo
 
@@ -149,6 +149,10 @@ class Motor:
         """Si la salida pasa por el decorrelador. Solo cambia a través del corte."""
         self.silenciados: set[str] = set()
         """Los parlantes en silencio. Es un estado del oyente: no va a la instalación."""
+        self.sonda = None
+        """La sonda enmascarada (`dsp/probe.py`, un `MaskedProbe`) que pone la sesión cuando el
+        lazo la pide. Se suma a la entrada del limitador de cada parlante. Con None, o apagada
+        y quieta, el motor no la llama: la salida es bit a bit la de siempre."""
         self.ecualizar = ecualizar
         self.ecualizacion_activa = c.algorithm("eq") != "off"
         """Si se aplica la ecualización de cada parlante. Solo cambia a través del corte."""
@@ -158,17 +162,23 @@ class Motor:
         """La mezcla del extractor cuando está prendido (`ambience.mix`)."""
 
         n = len(instalacion.parlantes)
-        if decorrelar and n > decorrelate.MAXIMO_FIJOS:
-            msg = (
-                f"{n} parlantes: con filtros fijos solo se consiguen "
-                f"{decorrelate.MAXIMO_FIJOS} señales bien decorrelacionadas"
-            )
-            raise ValueError(msg)
+        # Con más de `decorrelate.MAXIMO_FIJOS` parlantes el banco se arma igual y las métricas
+        # avisan cuánto se separan (`notice`). Hasta el 2026-10-02 era un `ValueError` que no
+        # dejaba arrancar al servicio con 7 u 8 (experimentos/16 §2 y §9: sobre 500 Hz el peor par
+        # pasa de 0,46 con 3 a ~0,50 con 8; debajo de 2 kHz no separa ningún banco fijo).
         self._semilla_fija = semilla
-        self._bancos: dict[tuple[int, int, int], list[np.ndarray]] = {}
-        filtros = self._banco() if decorrelar else [None] * n
-        self._filtros = dict(zip((p.nombre for p in instalacion.parlantes), filtros, strict=True))
         self._extractor = ambience.Extractor(self._parametros_ambiente()) if extraer_ambiente else None
+        self._orden_pendiente: list[int] | None = None
+        """Una asignación de filtros nueva que espera al próximo corte (`actualizar_desde_control`)."""
+        self._aviso: str | None = None
+        if decorrelar:
+            banco = self._banco()
+            self._banco_actual, self._orden, self._aviso = banco, self._asignacion(banco), self._aviso_de(banco)
+            filtros = self._filtros_en_orden(banco, self._orden)
+        else:
+            self._banco_actual, self._orden = None, list(range(n))
+            filtros = dict.fromkeys((p.nombre for p in instalacion.parlantes), None)
+        self._filtros = filtros
         # La extracción de ambiente tiene latencia propia: hay que retrasar el camino
         # directo lo mismo, o el ambiente llegaría corrido respecto de él y el efecto de
         # precedencia haría lo contrario de lo que se busca.
@@ -194,20 +204,56 @@ class Motor:
             energia_minima=c.param("ambience", "min_energy"),
         )
 
-    def _banco(self) -> list[np.ndarray]:
-        """El banco de filtros del decorrelador para la cadena actual, con caché: el A/B entre
-        dos presets con otra semilla no lo recalcula cada vez."""
+    def _parametros_banco(self) -> tuple[int, int, float, float]:
+        """(largo, semilla, retardo medio, variación) del banco para la cadena actual."""
         c = self._cadena
         semilla = c.param("decorrelate", "seed") if self._semilla_fija is None else self._semilla_fija
-        clave = (len(self.instalacion.parlantes), c.param("decorrelate", "length"), semilla)
         medio, variacion = c.param("decorrelate", "mean_ms"), c.param("decorrelate", "spread_ms")
         largo = decorrelate.largo_necesario(c.param("decorrelate", "length"), medio, variacion, self.sr)
-        clave = (clave[0], largo, clave[2], medio, variacion)
-        if clave not in self._bancos:
-            self._bancos[clave] = decorrelate.banco_decorrelador(
-                clave[0], largo=largo, semilla=clave[2], retardo_medio_ms=medio, variacion_ms=variacion
-            )
-        return self._bancos[clave]
+        return largo, semilla, medio, variacion
+
+    def _banco(self) -> decorrelation_bank.Bank:
+        """El banco de filtros del decorrelador para la cadena actual, con caché (en
+        `decorrelation_bank.bank`): el A/B entre dos presets con otra semilla no lo recalcula
+        cada vez, y la descripción de la cadena pide el mismo."""
+        return decorrelation_bank.bank(len(self.instalacion.parlantes), *self._parametros_banco(), self.sr)
+
+    def _aviso_de(self, banco: decorrelation_bank.Bank) -> str | None:
+        """El aviso con más parlantes que `decorrelate.MAXIMO_FIJOS`. Se calcula al armar el banco
+        y no en las métricas: el banco de 3 con que se compara puede tardar en calcularse."""
+        return decorrelation_bank.notice_for(len(banco.filters), *self._parametros_banco(), self.sr)
+
+    def _mezclas(self) -> list[tuple[float, float]]:
+        """(pan, ambiente que de verdad suena) de cada parlante, para asignar los filtros."""
+        mezcla = self._objetivo_mezcla(self._cadena.algorithm("ambience") != "off") if self._extractor else 0.0
+        return [(p.pan, p.ambiente * mezcla) for p in self.instalacion.parlantes]
+
+    def _modo_asignacion(self) -> str:
+        """`order` (el filtro k al parlante k, lo de siempre) o `mix` (por la mezcla de cada uno)."""
+        return self._cadena.param("decorrelate", "assignment")
+
+    def _asignacion(self, banco: decorrelation_bank.Bank) -> list[int]:
+        """Qué filtro del banco va a cada parlante: en orden, o los más distintos a los parlantes
+        con mezclas más parecidas (experimentos/16 §2.4 y §9)."""
+        if self._modo_asignacion() == "order":
+            return list(range(len(banco.filters)))
+        return decorrelation_bank.assign(banco, self._mezclas())
+
+    def _filtros_en_orden(self, banco: decorrelation_bank.Bank, orden: list[int]) -> dict[str, np.ndarray]:
+        return {p.nombre: banco.filters[k] for p, k in zip(self.instalacion.parlantes, orden, strict=True)}
+
+    def _cambiar_banco(self, banco: decorrelation_bank.Bank, orden: list[int], aviso: str | None) -> None:
+        self._banco_actual, self._orden, self._orden_pendiente, self._aviso = banco, orden, None, aviso
+        self._cambiar_filtros(self._filtros_en_orden(banco, orden))
+
+    def _revisar_asignacion(self) -> None:
+        """Si la mejor asignación para las mezclas de ahora es otra, queda pendiente del próximo
+        corte: cambiar el filtro de un parlante mientras suena es un salto en la señal, y mover
+        un pan no debería producir un corte que nadie pidió."""
+        if self._banco_actual is None or self._modo_asignacion() == "order":
+            return
+        orden = self._asignacion(self._banco_actual)
+        self._orden_pendiente = None if orden == self._orden else orden
 
     def _nuevo_limitador(self) -> limiter.PeakLimiter | limiter.TruePeakLimiter:
         return chain_stages.new_limiter(self._cadena, self.sr)
@@ -248,11 +294,18 @@ class Motor:
         if {("ambience", p) for p in ("lam", "threshold", "sigma", "min_energy")} & cambios and self._extractor:
             parametros = self._parametros_ambiente()
             al_corte.append(lambda: setattr(self._extractor, "p", parametros))
-        claves_banco = {("decorrelate", k) for k in ("length", "seed", "mean_ms", "spread_ms")}
+        claves_banco = {("decorrelate", k) for k in ("length", "seed", "mean_ms", "spread_ms", "assignment")}
         if self.decorrelar and claves_banco & cambios:
-            # El banco se calcula ahora y no en el fondo del corte, que corre dentro de `procesar`.
-            filtros = dict(zip((p.nombre for p in self.instalacion.parlantes), self._banco(), strict=True))
-            al_corte.append(lambda: self._cambiar_filtros(filtros))
+            # El banco (y a qué parlante va cada filtro) se calcula ahora y no en el fondo del
+            # corte, que corre dentro de `procesar`.
+            banco = self._banco()
+            orden, aviso = self._asignacion(banco), self._aviso_de(banco)
+            # Lo pendiente era del banco de antes: lo reemplaza esta asignación.
+            self._orden_pendiente = None
+            al_corte.append(lambda: self._cambiar_banco(banco, orden, aviso))
+        elif self.decorrelar and ("ambience", None) in cambios:
+            # Prender o apagar el extractor cambia las mezclas: la asignación espera al corte.
+            self._revisar_asignacion()
         decorrelar = self.decorrelar and nuevo.algorithm("decorrelate") != "off"
         if decorrelar != self.decorrelacion_activa:
             al_corte.append(lambda: setattr(self, "decorrelacion_activa", decorrelar))
@@ -380,6 +433,7 @@ class Motor:
             {
                 "length": len(next(iter(self._filtros.values()))) if self.decorrelar else None,
                 "mean_ms": self._cadena.param("decorrelate", "mean_ms"),
+                **self._metricas_separacion(),
             }
         )
         m["diffuse"].update(self._difusion.metrics())
@@ -403,6 +457,32 @@ class Motor:
             }
         )
         return m
+
+    def _metricas_separacion(self) -> dict:
+        """Cómo se separan los filtros (experimentos/16 §2 y §9): `worst_above_500` (el peor par
+        del banco sobre 500 Hz, con hasta ±1 ms de desfase), `worst_feeds` (lo mismo para lo que
+        suena, con las mezclas de cada parlante: el modelo de `decorrelation_bank.assign`),
+        `assignment` (qué filtro del banco tiene cada parlante), `assignment_mode` (`order` o
+        `mix`), `reassign_pending` (una asignación mejor espera al próximo corte) y `notice`, el
+        aviso con más parlantes que `decorrelate.MAXIMO_FIJOS` (None si no hay nada que avisar)."""
+        banco = self._banco_actual
+        if banco is None:
+            return {
+                "worst_above_500": None,
+                "worst_feeds": None,
+                "assignment": {},
+                "assignment_mode": None,
+                "reassign_pending": False,
+                "notice": None,
+            }
+        return {
+            "worst_above_500": banco.worst_above_500,
+            "worst_feeds": decorrelation_bank.worst_feeds(banco, self._mezclas(), self._orden),
+            "assignment": {p.nombre: k for p, k in zip(self.instalacion.parlantes, self._orden, strict=True)},
+            "assignment_mode": self._modo_asignacion(),
+            "reassign_pending": self._orden_pendiente is not None,
+            "notice": self._aviso,
+        }
 
     def uso_limitador_pct(self) -> dict[str, float]:
         """El porcentaje de los últimos 5 s en que el limitador de cada parlante bajó la ganancia."""
@@ -530,6 +610,16 @@ class Motor:
         """
         if accion is not None:
             self._al_saltar.append(accion)
+        if self._orden_pendiente is not None:
+            # Una asignación de filtros que esperaba un corte viaja en este. Si en el mismo corte
+            # se cambia el banco (un preset, `aplicar_cadena`), `_cambiar_banco` ya la descartó:
+            # la del banco nuevo se calculó con él.
+            def asignar_pendiente() -> None:
+                orden = self._orden_pendiente
+                if orden is not None:
+                    self._cambiar_banco(self._banco_actual, orden, self._aviso)
+
+            self._al_saltar.append(asignar_pendiente)
         self._corte.request()
 
     def _saltar(self) -> None:
@@ -602,6 +692,8 @@ class Motor:
             abs(objetivo - self._lineas[nombre].actual_ms) / self.velocidad_retardo_ms_s > MAXIMO_RAMPA_S
             for nombre, objetivo in self.retardos_efectivos_ms().items()
         )
+        # Un pan o un ambiente nuevos pueden pedir otra asignación de filtros: espera a un corte.
+        self._revisar_asignacion()
         if lento:
             self.cortar()
         else:
@@ -656,6 +748,9 @@ class Motor:
             round(self._cadena.param("decorrelate", "mean_ms") * self.sr / 1000) if self.decorrelacion_activa else 0
         )
         graves = self._graves.feed(izq_d, der_d, atraso)
+        sonda = self.sonda if self.sonda is not None and self.sonda.active else None
+        if sonda is not None:
+            sonda.begin(n)
 
         salida = {}
         for p in self.instalacion.parlantes:
@@ -686,6 +781,10 @@ class Motor:
             x = x * self._rampa_de_ganancia(p.nombre, p.ganancia_db, n) * salida_global * activo.block(n)
             # La ecualización solo realza: un pasaje fuerte puede pasar de escala completa, y
             # el limitador baja la ganancia en vez de recortar (`dsp/limiter.py`).
+            if sonda is not None:
+                # Después del retardo y de la ganancia: sigue el nivel de lo que suena, y su
+                # referencia es exactamente lo que se sumó (`session.py`, `probe_measure.py`).
+                x = sonda.add(p.nombre, x, envolvente)
             if p.nombre not in self._limitadores:
                 self._limitadores[p.nombre] = self._nuevo_limitador()
             lim = self._limitadores[p.nombre]

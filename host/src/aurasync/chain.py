@@ -35,7 +35,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from aurasync.dsp import ambience, decorrelate, eq, interpolation, limiter, profiles
+from aurasync.dsp import ambience, decorrelate, decorrelation_bank, eq, interpolation, limiter, profiles
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -107,8 +107,11 @@ class Algorithm:
     """When set, the algorithm's latency is this param's value in ms (it is a knob), not
     `latency_ms` (which is then the latency at the param's default)."""
     requires: str = ""
-    """`bass_speaker`: unavailable without a speaker of a bass-capable kind.
-    `few_speakers`: unavailable with more speakers than fixed filters can decorrelate."""
+    """`bass_speaker`: unavailable without a speaker of a bass-capable kind."""
+    caution: str = ""
+    """`many_speakers`: available, with a `notice`, beyond the speakers fixed filters fully
+    decorrelate (`decorrelate.MAXIMO_FIJOS`; experiment 16 §2). Until 2026-10-02 it was a
+    requirement (`few_speakers`) and the algorithm was unavailable there."""
 
 
 @dataclass(frozen=True)
@@ -349,11 +352,24 @@ _DECORRELATE_STAGE = Stage(
                     1,
                     apply="cut",
                 ),
+                Param(
+                    "assignment",
+                    "Qué filtro a qué parlante",
+                    "order: el filtro k al parlante k, como siempre. mix: los más distintos a los parlantes con mezclas más parecidas.",
+                    "mix baja la correlación que predice el modelo, pero en simulación lo que suena no la "
+                    "siguió: sobre 500 Hz salió peor en 20 de 32 casos (docs/research/experimentos/16 §9). "
+                    "Queda para comparar de oído en el A/B ciego. Mover un pan o un ambiente no corta el sonido: la asignación nueva espera "
+                    "al próximo corte.",
+                    "choice",
+                    "order",
+                    choices=decorrelation_bank.ASSIGNMENTS,
+                    apply="cut",
+                ),
             ),
             cost="~0,2 ms por parlante",
             latency_ms=decorrelate.RETARDO_MEDIO_MS,
             latency_param="mean_ms",
-            requires="few_speakers",
+            caution="many_speakers",
         ),
         Algorithm(
             "off",
@@ -931,9 +947,24 @@ def unavailable_reason(algorithm: Algorithm, context: ChainContext | None) -> st
     if algorithm.requires == "bass_speaker" and not context.bass_speakers:
         kinds = [p.label for p in profiles.PROFILES.values() if bass_capable(p.key)]
         return f"hace falta un parlante apto para graves ({', '.join(kinds)}); di qué tipo es cada parlante"
-    if algorithm.requires == "few_speakers" and len(context.speakers) > decorrelate.MAXIMO_FIJOS:
-        return f"con filtros fijos solo se decorrelacionan hasta {decorrelate.MAXIMO_FIJOS} parlantes"
     return None
+
+
+def notice(algorithm: Algorithm, context: ChainContext | None, values: ChainValues | None = None) -> str | None:
+    """What the listener should know about an available algorithm in this installation, or None.
+
+    `many_speakers`: with more than `decorrelate.MAXIMO_FIJOS` speakers the bank is built anyway
+    and this says how far apart its filters are (the worst pair above 500 Hz of the bank the
+    engine uses, `decorrelation_bank.bank`, cached for both)."""
+    if context is None or algorithm.caution != "many_speakers" or len(context.speakers) <= decorrelate.MAXIMO_FIJOS:
+        return None
+    values = values or ChainValues()
+    stage_id = "decorrelate"
+    mean, spread = values.param(stage_id, "mean_ms"), values.param(stage_id, "spread_ms")
+    length = decorrelate.largo_necesario(values.param(stage_id, "length"), mean, spread, SR)
+    return decorrelation_bank.notice_for(
+        len(context.speakers), length, values.param(stage_id, "seed"), mean, spread, SR
+    )
 
 
 def choices_of(param: Param, context: ChainContext | None) -> tuple[str, ...]:
@@ -1341,6 +1372,7 @@ def describe(
                         "implemented": a.implemented,
                         "available": unavailable_reason(a, context) is None,
                         "unavailable_reason": unavailable_reason(a, context),
+                        "notice": notice(a, context, values),
                         "params": [param_dict(p, context) for p in a.params],
                     }
                     for a in s.algorithms

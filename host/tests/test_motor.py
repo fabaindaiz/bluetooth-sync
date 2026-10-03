@@ -142,12 +142,16 @@ def test_reiniciar_borra_el_estado():
 
 
 def test_avisa_si_hay_mas_parlantes_que_filtros_decorrelados():
-    """El límite del paper: con filtros fijos salen 5 o 6 señales, no más."""
+    """El límite del paper (5 o 6 señales con filtros fijos) ya no impide arrancar: con más, el
+    banco se arma igual y las métricas lo avisan (experimentos/16 §9). Hasta el 2026-10-02 era
+    un `ValueError`, y el servicio no arrancaba con 7 u 8 parlantes."""
     muchos = Instalacion(parlantes=[Parlante(f"p{i}", f"s{i}") for i in range(9)])
-    with pytest.raises(ValueError, match="decorrelacionadas"):
-        motor.Motor(muchos, SR)
-    # Sin decorrelar sí se puede, porque entonces no hay filtros que repartir.
-    motor.Motor(muchos, SR, decorrelar=False)
+    m = motor.Motor(muchos, SR)
+    aviso = m.metricas_cadena()["decorrelate"]["notice"]
+    assert aviso.startswith("con 9 parlantes la separación es menor")
+    assert motor.Motor(_instalacion(), SR).metricas_cadena()["decorrelate"]["notice"] is None
+    # Sin decorrelar no hay filtros que repartir, ni nada que avisar.
+    assert motor.Motor(muchos, SR, decorrelar=False).metricas_cadena()["decorrelate"]["notice"] is None
 
 
 def test_rechaza_una_instalacion_vacia():

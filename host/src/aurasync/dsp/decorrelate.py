@@ -163,7 +163,10 @@ def banco_decorrelador(
 
     Con `n` por encima de `MAXIMO_FIJOS` el resultado deja de estar bien decorrelacionado;
     para más canales hace falta decorrelación dinámica (fase nueva en cada trama), que el
-    paper describe pero también advierte que puede cansar al oyente.
+    paper describe pero también advierte que puede cansar al oyente. Medido en simulación
+    (experimentos/16 §9): sobre 500 Hz el peor par pasa de 0,46 con 3 a ~0,50 con 8, y debajo
+    de 2 kHz no separa ni con 2 filtros. Por eso el motor arma el banco igual con más de
+    `MAXIMO_FIJOS` y avisa (`decorrelation_bank.notice`).
     """
     if n < 1:
         msg = f"se pidieron {n} filtros"

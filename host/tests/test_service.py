@@ -45,6 +45,13 @@ class FakeSession:
     def close(self):
         self.closed += 1
 
+    def set_probe(self, active, margin_db=None):
+        self.probe_calls = [*getattr(self, "probe_calls", []), (active, margin_db)]
+
+    def probe_state(self):
+        calls = getattr(self, "probe_calls", [])
+        return {"active": bool(calls and calls[-1][0]), "margin_db": -20.0, "reference": "music"}
+
 
 @pytest.fixture(autouse=True)
 def _reset_fake():
@@ -294,3 +301,26 @@ def test_a_lost_speaker_is_reported_and_the_rest_keep_playing(running):
     assert state["session"]["status"] == "playing"
     assert state["speakers"][0]["playing"]
     assert any("Go 4 Blue" in w for w in state["warnings"])
+
+
+def test_the_masked_probe_is_off_by_default_and_switches_live(running):
+    """The probe (dsp/probe.py) is off until the blind A/B says it is inaudible
+    (i-7c8794-e3e40d); switching it, or its margin, reaches the playing session at once."""
+    assert _ok(running, op="state")["global"]["probe"] is False
+    _ok(running, op="start")
+    session = FakeSession.instances[0]
+    assert session.options.probe is False
+    _ok(running, op="set", changes={"probe": True, "probe_margin_db": -25.0})
+    assert session.probe_calls[-1] == (True, -25.0)
+    state = _ok(running, op="state")
+    assert state["global"]["probe"] is True
+    assert state["global"]["probe_margin_db"] == -25.0
+    assert state["recalibration"]["probe"]["active"] is True
+    assert _err(running, op="set", changes={"probe_margin_db": -5.0}) == "out_of_range"
+
+
+def test_a_session_starts_with_the_chosen_probe(running):
+    _ok(running, op="set", changes={"probe": True, "probe_margin_db": -30.0})
+    _ok(running, op="start")
+    options = FakeSession.instances[0].options
+    assert (options.probe, options.probe_margin_db) == (True, -30.0)

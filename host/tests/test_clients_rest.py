@@ -461,3 +461,46 @@ def test_the_pairing_svg_is_the_pwa_link_and_needs_https(served, svc_with_fake):
     assert response.status == 200
     assert reply == rest_module.qr_svg(f"{rest_module.PWA_URL}#d=192.0.2.7:8443&fp=ABCD").encode()
     assert reply != rest_module.qr_svg(f"http://192.0.2.7:8731/?t={TOKEN}").encode()
+
+
+@pytest.mark.parametrize("tls", [True, False])
+def test_the_terminal_qr_is_the_pairing_link_when_there_is_https(tmp_path, monkeypatch, tls):
+    """The QR the terminal prints at start-up gave the phone the master token, admin forever.
+    With HTTPS it is the PWA's pairing link (the phone pairs and is approved); without HTTPS
+    there is no PWA, so it stays the local panel's link with the token, said to be private."""
+    import socket
+
+    Instalacion(parlantes=[Parlante("A", "s0")]).guardar(tmp_path / "i.json")
+    svc = Service(tmp_path / "i.json", tmp_path / "p.json", session_factory=FakeSession, log=lambda _: None)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        https_port = probe.getsockname()[1]
+    config = service_module.ServiceConfig(bind="127.0.0.1", port=0, token=TOKEN, tls=tls, https_port=https_port)
+    monkeypatch.setattr(
+        service_module, "lan_urls", lambda _host, port: [f"http://127.0.0.1:{port}", f"http://192.0.2.7:{port}"]
+    )
+    shown = []
+    monkeypatch.setattr(rest_module, "qr_terminal", lambda url: shown.append(url) or "QR")
+    threading.Thread(target=lambda: (time.sleep(0.5), svc.handle({"v": 1, "op": "shutdown"})), daemon=True).start()
+    lines = []
+    try:
+        assert service_module.serve(svc, config, announce=lines.append, show_token=True, directory=tmp_path / "c") == 0
+    finally:
+        svc.close()
+    assert len(shown) == 1
+    if tls:
+        assert shown[0].startswith(rest_module.PWA_URL + "#d=192.0.2.7:")
+        assert TOKEN not in shown[0]
+    else:
+        assert TOKEN in shown[0]
+        assert any("keep it private" in line for line in lines)
+
+
+def test_the_log_says_which_client_sent_each_order(served, svc_with_fake):
+    """With several phones paired, a line like `set: ok volume_db=-30` did not say who did it."""
+    phone = client(served, "control")
+    assert served.call("PATCH", "/v1/global", {"volume_db": -30}, token=phone)[0].status == 200
+    assert served.call("PATCH", "/v1/global", {"volume_db": -31}, token=TOKEN)[0].status == 200
+    lines = [r["message"] for r in svc_with_fake.logs.since(0, 500)["records"]]
+    assert any("set: ok" in line and "control phone" in line for line in lines), lines
+    assert any("set: ok" in line and "master" in line for line in lines), lines

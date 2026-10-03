@@ -41,9 +41,13 @@ if TYPE_CHECKING:
 
     from aurasync.config import Instalacion
 
-ROOM_DELAYS_MS = (3.0, 7.5, 12.0, 5.0, 9.0, 1.5)
-"""How late each speaker reaches the microphone, in installation order."""
-ROOM_GAINS = (1.0, 0.8, 0.6, 0.9, 0.7, 1.0)
+ROOM_DELAYS_MS = (3.0, 7.5, 12.0, 5.0, 9.0, 1.5, 10.5, 6.0)
+"""How late each speaker reaches the microphone, in installation order. Eight distinct values,
+so an installation of up to 8 (the goal of d-7c8794-3b7793) has no two speakers alike; a ninth
+repeats the first."""
+ROOM_GAINS = (1.0, 0.8, 0.6, 0.9, 0.7, 0.95, 0.75, 0.85)
+"""Each speaker's level at the microphone, distinct for up to 8 (the sixth was 1.0, like the
+first, until 2026-10-02)."""
 ROOM_NOISE = 0.001
 ROOM_COLOUR_DB = np.interp(
     np.log10(response.THIRDS),

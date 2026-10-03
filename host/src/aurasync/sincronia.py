@@ -55,6 +55,17 @@ el micrófono mide **no** es el desfase de los parlantes, es *lo que queda* desp
 correcciones que ya están aplicadas. Entonces la corrección nueva se **suma** a la vigente,
 no la reemplaza. Tratarla como un reemplazo haría que el lazo deshiciera su propio trabajo
 en cada vuelta.
+
+**Corregido el 2026-10-02: eso vale solo si la referencia es anterior a la línea de
+retardo, y la del lazo no lo es.** `VentanaDeEmision` guarda lo que se le mandó al
+reproductor, ya retrasado, así que el micrófono mide la latencia propia de cada parlante y la
+corrección aplicada **no** aparece en la medición (SIMULADO: con el motor real, retardos
+aplicados de 0/0/0, 0/5/0 y 4/0/2 ms dieron las mismas correcciones, 9,00/4,50/0,00 ms).
+`Controlador.proponer` la sumaba otra vez en cada vuelta aceptada y las propuestas crecían,
+que es lo que vio `docs/research/experimentos/09-…` §5. La sesión usa ahora
+`arrival_loop.ArrivalLoop`, que trata la medición como absoluta, la acepta por parlante y
+sigue la deriva de cada uno. `Controlador` queda para una medición que sí sea un residuo (un
+estímulo que sale por los retardos aplicados, como el de `session.Calibration`).
 """
 
 from __future__ import annotations

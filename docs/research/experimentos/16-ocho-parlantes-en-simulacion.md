@@ -26,6 +26,10 @@ usuario para probar los límites del diseño (d-7c8794-3b7793).
   ~2 kHz**: con 8 filtros, algún par queda casi coherente (0,90 a 0,99) en alguna octava. Ni filtros
   más largos ni más candidatos lo arreglan. Lo que más pesa en lo que suena es **a qué parlante va
   cada filtro** (§2.4).
+- **Corregido el mismo día al llevarlo al producto (§9):** con ±1 ms de desfase, el peor par de
+  estos filtros es coherente (0,87–1,0) en cada octava de 250 Hz a 2 kHz **ya con 2 filtros**.
+  El límite por octava es del diseño del filtro, no de N, y las dos propuestas que salían de ahí
+  (elegir el banco por octava, asignar por mezcla) no mejoraron lo que suena por el motor real.
 
 **Marcas:** SIMULADO, para todo lo que sale de los probes (retardos y ganancias conocidos, sin
 parlantes ni micrófono; el motor y los estimadores sí son los reales). VERIFICADO, REPORTADO o
@@ -137,6 +141,10 @@ se traslada**, y este experimento lo encuentra donde corresponde (INFERIDO de §
 - En la correlación de banda ancha eso se diluye; **por octava, no**.
 
 ### 2.2 Qué pasa con 7 y 8: bancos y métricas
+
+> **Corrección (2026-10-02, §9):** las columnas "por octava" de esta sección son a retardo cero.
+> Con ±1 ms de desfase, el peor par de todos los bancos (también el de 2 y 3 filtros) queda en
+> 0,87–1,0 en esas octavas, y la ventaja del "minimax por octava" desaparece.
 
 **Cómo se calculó:** correlación a retardo cero de ruido rosa (el mismo ruido, totalmente
 correlacionado, a la entrada de todos los filtros), con la ponderación de
@@ -648,15 +656,15 @@ cambió nada.
 2. **Con más de 6 parlantes, calibrar en dos grupos de 10 s con un parlante ancla** (§3.3): con 8,
    0 de 12 salas pasan 1 dB, contra 2 de 12 con los 8 juntos en 20 s. Solo hace falta por la
    ganancia; el retardo escala solo.
-3. **Que 7 u 8 parlantes no tumben el servicio.** `MAXIMO_FIJOS` pasa de error a aviso: con 7–8
+3. **[Hecho, §9]** **Que 7 u 8 parlantes no tumben el servicio.** `MAXIMO_FIJOS` pasa de error a aviso: con 7–8
    el banco se arma igual y el panel avisa "decorrelación parcial con N parlantes". §2.2 muestra
    que el banco de hoy forzado a 8 sigue debajo de 0,6 de banda ancha; lo que se degrada es la
    coherencia por octava.
-4. **Asignar los filtros por la mezcla, no por el orden.** Elegir qué filtro va a cada parlante
+4. **[No sobrevivió, §9: queda como perilla, apagada]** **Asignar los filtros por la mezcla, no por el orden.** Elegir qué filtro va a cada parlante
    minimizando el peor par de las salidas con ruido rosa a través de las mezclas de los roles (pan,
    ambiente). Es barato, se calcula al cambiar la instalación y no cambia ningún filtro. §2.4 mostró
    que la asignación mueve el peor par de 0,34 a 0,69.
-5. **Elegir el banco por el peor par por octava** (250 Hz–2 kHz), además del de banda ancha. Con 8
+5. **[Descartado, §9: era un artefacto del retardo cero]** **Elegir el banco por el peor par por octava** (250 Hz–2 kHz), además del de banda ancha. Con 8
    baja la coherencia por octava de 0,90–0,997 a ~0,8, sin perder planitud. **No alargar los
    filtros** (no ayuda y colorea). Si algún día se alargan, pasar la convolución a FFT.
 6. **La sonda enmascarada con sondas simultáneas, no por turnos,** a −20 dB y ventanas de 4 s.
@@ -666,7 +674,7 @@ cambió nada.
    mediciones (prototipo en `lazo.track(feedforward=True)`). Baja el desalineamiento de ~1,2 a
    ~0,5–0,9 ms con 8 y lo mantiene a 50 ppm. Y **aceptar mediciones por parlante**: hoy un solo
    parlante inestable descarta la medición de todos.
-8. **Roles por ángulo** (`5.0`, `hex`, `7.0`, `octágono`, `dos anillos`, §5), con la fórmula que
+8. **[Hecho en el contrato, §9; falta el mapa del panel]** **Roles por ángulo** (`5.0`, `hex`, `7.0`, `octágono`, `dos anillos`, §5), con la fórmula que
    reproduce los de hoy, y el mapa del panel que dibuje las posiciones del layout. Después, DBAP con
    `x`, `y`.
 9. **Panel:** acciones por grupo, una tarjeta por parlante plegable en el teléfono, medidores en
@@ -688,3 +696,102 @@ cambió nada.
 - **Si la coherencia por octava se oye**, y si la asignación de filtros cambia lo que se oye, solo
   lo dice una escucha (el A/B ciego que ya existe).
 - La música es sintética, como en experimentos/11.
+
+## 9. Aplicado al producto (2026-10-02). SIMULADO
+
+Lo que se llevó a `host/` de las propuestas 3, 4, 5 y 8, y lo que cambió al hacerlo. **Equipo:** el
+Mac (`Fabians-MacBook-Neo`, arm64), Python 3.12.13 y numpy 2.5.3 del entorno de hatch, carga 6–12.
+**Datos:** `probes/19-ocho-parlantes/aplicado.py` → [`datos/16/aplicado.json`](datos/16/aplicado.json).
+
+### 9.1 El límite por octava no es de N: es del filtro
+
+Antes de llevar la propuesta 5 al producto se le cambió un parámetro que no debería importar: un
+desfase chico entre las salidas. El motor ya lo agrega (el retardo de Haas, `ambiente ×
+retardo_traseros_ms`, distinto por parlante), y la posición del oyente agrega más.
+
+Peor par por octava con ruido rosa, semilla 0 (la 1 da lo mismo dentro de 0,05), a retardo cero / con
+hasta ±0,5 ms / con hasta ±1 ms:
+
+| Banco | 250 Hz | 500 Hz | 1 kHz | 2 kHz | ≥ 500 Hz |
+|---|---|---|---|---|---|
+| hoy, N = 2 | 0,37 / 0,82 / 0,93 | 0,89 / 0,93 / 0,96 | 0,52 / 0,98 / 0,98 | 0,11 / 0,72 / 0,87 | 0,32 / 0,36 / 0,36 |
+| hoy, N = 3 | 0,79 / 0,86 / 1,00 | 0,89 / 0,93 / 1,00 | 0,58 / 0,98 / 0,98 | 0,53 / 0,97 / 0,97 | 0,32 / 0,46 / 0,46 |
+| por octava, N = 3 | 0,49 / 0,97 / 1,00 | 0,50 / 0,89 / 0,99 | 0,08 / 0,74 / 0,97 | 0,37 / 0,88 / 0,92 | 0,05 / 0,28 / 0,45 |
+| hoy, N = 8 | 1,00 / 1,00 / 1,00 | 0,90 / 1,00 / 1,00 | 0,99 / 0,99 / 1,00 | 0,76 / 0,98 / 0,98 | 0,35 / 0,50 / 0,52 |
+| por octava, N = 8 | 0,83 / 1,00 / 1,00 | 0,78 / 1,00 / 1,00 | 0,79 / 0,99 / 1,00 | 0,78 / 0,99 / 0,99 | 0,24 / 0,49 / 0,52 |
+
+**Qué se lee:**
+
+- **Con un milisegundo de desfase, el peor par es coherente (0,87–1,0) en cada octava debajo de
+  2 kHz, con 2 filtros o con 8** (con medio milisegundo, 0,72–1,0). Es el mecanismo de §2.1 llevado al final: en una octava grave el retardo de grupo de cada
+  filtro casi no cambia, así que dos filtros son la misma señal corrida. A retardo cero eso aparece
+  como cualquier número entre 0 y 1 según cuánto se corrieron; con el desfase permitido, como lo que
+  es.
+- **El "minimax por octava" solo recentraba ese desfase.** A retardo cero baja el peor par de 0,90–1,0
+  a ~0,8; con ±1 ms queda igual que el banco de hoy (con 8, ya con ±0,5 ms). **Se descarta** (propuesta 5).
+- **El tope de 6, en la medida que sobrevive al desfase (≥ 500 Hz, ±1 ms), casi no existe:** el peor
+  par pasa de 0,36–0,47 con 2 filtros a 0,46 con 3 y a 0,47–0,52 con 8 (seis semillas: mediana 0,46
+  con 3, 0,50 con 8, máximo 0,55). Debajo del 0,6 del criterio con cualquier N.
+- **Debajo de 2 kHz, la decorrelación por filtros fijos de 256 coeficientes con fase suave no separa
+  a ningún par** (INFERIDO para lo que se oye: si eso importa, lo dice una escucha). Separar ahí
+  pediría retardos de grupo que varíen dentro de cada octava grave, que es lo que colorea (§2.2,
+  filtros de 1024), o decorrelación dinámica.
+
+### 9.2 Lo que suena por el motor real
+
+La comprobación que faltaba (propuestas 4 y 5): el motor real con los roles del anillo, cuatro
+entradas (las dos músicas sintéticas de `probes/13`, y dos ruidos rosas estéreo con correlación 0,5
+entre L y R, que salen casi iguales entre sí), semillas 0 y 1 del banco, N = 4, 6, 7 y 8. Se mide el
+peor par de lo que reciben los parlantes: sobre 500 Hz a retardo cero (la métrica de §2.3), sobre
+500 Hz con hasta ±8 ms (cubre los retardos de Haas del motor), y la peor octava de 250 Hz a 2 kHz a
+retardo cero. Cuenta de 32 casos (4 N × 2 semillas × 4 entradas), mejor o peor que el banco de hoy en
+orden por más de 0,01:
+
+| Variante | ≥ 500 Hz, retardo cero | ≥ 500 Hz, ±8 ms | peor octava, retardo cero |
+|---|---|---|---|
+| banco de hoy, **asignado por mezcla** (`decorrelation_bank.assign`) | mejor 4 · **peor 20** | mejor 16 · peor 14 | mejor 11 · peor 18 |
+| **banco por octava**, en orden | mejor 10 · **peor 20** | mejor 6 · peor 17 | mejor 17 · peor 14 |
+
+Ejemplos (≥ 500 Hz a retardo cero, música 0 / música 1): con N = 8 y semilla 0, hoy 0,65 / 0,45,
+asignado 0,69 / 0,52; con semilla 1, hoy 0,47 / 0,40, asignado 0,40 / 0,37. Con N = 7 y semilla 0,
+hoy 0,35 / 0,29, asignado **0,64 / 0,43**. Todo en `aplicado.json`.
+
+**Qué se lee:**
+
+- **La asignación por mezcla no mejora lo que suena.** Baja el número de su modelo (filtros × mezclas,
+  de 0,38–0,44 a 0,35–0,36 con 8), pero el modelo no ve lo que el motor hace después: el retardo de
+  Haas distinto por parlante, el ambiente extraído (que no es independiente de L y R) y la latencia
+  del extractor. §2.4 ya había visto que la mejor de 24 asignaciones con una música casi no se repetía
+  con la otra; con cuatro entradas y dos semillas, la elegida por el modelo sale peor más veces de las
+  que sale mejor.
+- **El banco por octava, por el motor real, empeora en dos de las tres medidas.** Confirma §9.1.
+
+### 9.3 Lo que se llevó al producto
+
+- **El tope ya no impide arrancar (propuesta 3).** `Motor` arma el banco con cualquier N; sus métricas
+  (`decorrelate`) y la descripción de la cadena (`notice` del algoritmo, aditivo) avisan con más de 6:
+  *"con 8 parlantes la separación es menor: el peor par sobre 500 Hz es 0,52 (con 3, 0,46); debajo de
+  2 kHz ningún banco de filtros fijos separa, con ningún número de parlantes"*. El número es el de
+  §9.1 (≥ 500 Hz, ±1 ms), no el por octava. `decorrelate.group_delay` ya no queda "no disponible" con
+  más de 6. El servicio, también con `--simular`, arranca con 7 y 8
+  (`tests/test_many_speakers.py`).
+- **El banco no cambia.** `dsp/decorrelation_bank.py` devuelve el banco de siempre
+  (`decorrelate.banco_decorrelador`), filtro por filtro: **con los valores por defecto el motor es bit
+  a bit el de antes con cualquier N** (el golden con 3; con 8, los filtros idénticos). Las 8 salidas
+  quedan planas a 0,17 dB por tercio (criterio ±0,5 dB).
+- **La asignación por mezcla queda como perilla, apagada** (`decorrelate.assignment`: `order` por
+  defecto, `mix`), para oírla en el A/B ciego. Con `mix`, un pan o un ambiente que cambian la mejor
+  asignación esperan al próximo corte en vez de cortar.
+- **Roles por ángulo (propuesta 8).** `control.role_from_angle`: pan = 0,7 · sen θ / sen 45°, ambiente
+  = 0,35 − 0,2 · cos θ / cos 45° acotado a **[0,1; 0,55]** (§5 proponía 0,6 de tope, que daba RC 0,6
+  en vez de 0,55). Reproduce exactamente `quad` y `lcrs`. Layouts nuevos: `5.0`, `hex`, `7.0`,
+  `octagon` y `rings` (el `quad` adentro y un rombo girado 45° afuera, con 0,25 más de ambiente).
+  `assign` acepta los roles nuevos (SL, SR, WL, WR, OF, OL, OR, OB). Ninguno se oyó (INFERIDO).
+  Documentado en `host/docs/control-api.md`.
+- **La sala simulada tiene 8 parlantes distintos** (`simulated.ROOM_DELAYS_MS` y `ROOM_GAINS`, ocho
+  valores sin repetir; el sexto valor de ganancia pasó de 1,0 a 0,95).
+
+**Lo que falta:** que `state` y el mapa del panel muestren el aviso y dibujen los layouts nuevos
+(`control.LAYOUT_ANGLES` tiene los ángulos); calibrar en dos grupos (propuesta 2); la sonda
+simultánea y el seguimiento de deriva (6 y 7); y oír si `assignment: mix`, o la coherencia debajo de
+2 kHz, se notan.

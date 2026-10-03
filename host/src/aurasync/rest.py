@@ -559,7 +559,7 @@ def make_server(
             if not access.allows(principal, needed):
                 self._reply(control.error(control.message_id(message), "forbidden", f"{op} needs the {needed} scope"))
                 return
-            self._reply(service.handle(message))
+            self._reply(service.handle(message, actor=principal.name if principal else None))
 
         def do_OPTIONS(self) -> None:
             """The CORS preflight of a panel on another origin (the PWA)."""

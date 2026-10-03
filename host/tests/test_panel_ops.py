@@ -411,8 +411,15 @@ def test_the_microphone_can_be_changed_live_and_the_loop_follows(svc):
 def test_the_input_is_described(svc):
     s = svc()
     ok(s, op="start")
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline and not ok(s, op="state")["input"]["analysis"]:
+    # Wait for what is checked, not for any analysis: under load the first one can come before
+    # the simulated music does (failed once in a full run with the machine busy, 2026-10-02).
+    deadline = time.monotonic() + 15
+
+    def described():
+        a = ok(s, op="state")["input"]["analysis"]
+        return a and a.get("kind") in {"estéreo", "mono"}
+
+    while time.monotonic() < deadline and not described():
         time.sleep(0.2)
     analysis = ok(s, op="state")["input"]["analysis"]
     assert analysis["kind"] in {"estéreo", "mono"}

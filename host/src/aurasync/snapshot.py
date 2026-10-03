@@ -145,10 +145,15 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "layout": layout,
             "eq_active": svc.settings.eq_active,
             "recalibrate": svc.settings.recalibrate,
+            "probe": svc.settings.probe,
+            "probe_margin_db": svc.settings.probe_margin_db,
         },
         "config": _config(svc),
         "speakers": speakers,
         "roles": {name: list(roles) for name, roles in control.ROLES.items()},
+        # Where each role sits, for the panel's room plan and its front/rear groups (5 to 8
+        # speakers, experimentos/16 §7): its mix and, when the layout gives one, its angle.
+        "role_places": _role_places(),
         "speaker_kinds": [{"key": k, "label": v.label} for k, v in profiles.PROFILES.items()],
         "preset": svc.preset,
         "presets": sorted(svc.preset_store.presets),
@@ -175,6 +180,8 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "last": getattr(session, "last_recalibration", None) if session is not None else None,
             "history": list(getattr(session, "recalibration_history", []) or []) if session is not None else [],
             "drift_ms_h": getattr(session, "drift_ms_h", None) if session is not None else None,
+            "drift_ppm": getattr(session, "drift_ppm", None) if session is not None else None,
+            "probe": session.probe_state() if session is not None and hasattr(session, "probe_state") else None,
             "microphone": svc.options.microphone,
         },
         "microphones": observer.get("microphones", []),
@@ -197,6 +204,23 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
         "logs_last": svc.logs.last_seq,
         "warnings": _warnings(svc, lost),
     }
+
+
+def _role_places() -> dict[str, dict[str, dict[str, Any]]]:
+    """Each layout's roles with their `pan` and `ambience` (`control.ROLES`), plus `angle_deg` (0 in
+    front, positive to the right) and `lift` (the outer ring's extra ambience) where the layout is
+    defined by angles (`control.LAYOUT_ANGLES`, when it exists)."""
+    angles = getattr(control, "LAYOUT_ANGLES", {})
+    places: dict[str, dict[str, dict[str, Any]]] = {}
+    for layout, roles in control.ROLES.items():
+        places[layout] = {}
+        for role, (pan, ambience) in roles.items():
+            place: dict[str, Any] = {"pan": pan, "ambience": ambience}
+            angle = angles.get(layout, {}).get(role)
+            if angle is not None:
+                place["angle_deg"], place["lift"] = angle
+            places[layout][role] = place
+    return places
 
 
 def _sync(session: Any) -> dict[str, Any]:

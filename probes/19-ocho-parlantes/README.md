@@ -12,6 +12,7 @@ hatch run python ../probes/19-ocho-parlantes/decorrelador.py       # 2. el tope 
 hatch run python ../probes/19-ocho-parlantes/decorrelador_bandas.py  # 2. por banda, y lo que reciben los parlantes
 hatch run python ../probes/19-ocho-parlantes/calibracion.py 4      # 3. calibrar N a la vez con un micrófono
 hatch run python ../probes/19-ocho-parlantes/lazo.py 8             # 4. la sonda con 8, y seguir una deriva
+hatch run python ../probes/19-ocho-parlantes/aplicado.py          # 9. qué sobrevive de las propuestas 4 y 5 (con desfase y por el motor real)
 ```
 
 Cada uno escribe su JSON en `docs/research/experimentos/datos/16/`, con el equipo, la versión de
@@ -25,6 +26,7 @@ Python y numpy y la carga del equipo al terminar.
 | `decorrelador_bandas.py` | un banco elegido por el peor par **por octava**, y la correlación de lo que el motor real le manda a cada parlante con los roles del anillo |
 | `calibracion.py` | `medicion.calibrar` con N ruidos rosas independientes en una sala simulada con retardos y ganancias conocidos; 10 y 20 s, dos semillas; y N = 8 en dos grupos con un parlante ancla |
 | `lazo.py` | la sonda enmascarada de `probes/13` con N = 3 y 8, por turnos y simultánea; y un seguimiento de deriva de una hora con las reglas del lazo |
+| `aplicado.py` | experimento 16 §9: el banco elegido por octava contra el de hoy, a retardo cero y con ±0,5 / ±1 ms de desfase; y lo que suena por el motor real (dos músicas, dos ruidos rosas) con el banco de hoy en orden, el de hoy asignado por mezcla (`decorrelation_bank.assign`) y el elegido por octava |
 
 Se borra cuando el experimento 16 quede anotado y sus propuestas pasen al roadmap
 (d-7c8794-3208b7).

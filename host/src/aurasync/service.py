@@ -229,6 +229,10 @@ class Settings:
     recalibrate: bool = True
     """The recalibration loop is part of the protocol: on by default whenever there is a
     microphone. Switching it off is an advanced option, and it takes effect live."""
+    probe: bool = False
+    """The masked probe the loop measures against (dsp/probe.py). Off until the blind A/B
+    says it cannot be heard (i-7c8794-e3e40d, step 4)."""
+    probe_margin_db: float = -20.0
     muted: set[str] = field(default_factory=set)
 
     @property
@@ -306,6 +310,8 @@ class ABTest:
 class _Pending:
     command: control.Command
     future: Future = field(default_factory=Future)
+    actor: str | None = None
+    """Who sent it (a client's name, or `master`), for the log. None from inside the program."""
 
 
 class Service:
@@ -404,8 +410,11 @@ class Service:
 
     # -- transport side (any thread) -------------------------------------------------
 
-    def handle(self, message: Any) -> dict:
-        """One decoded message in, one reply out. Safe to call from any thread."""
+    def handle(self, message: Any, actor: str | None = None) -> dict:
+        """One decoded message in, one reply out. Safe to call from any thread.
+
+        `actor` is who sent it (the transport knows: a client's name, or `master`); it only goes
+        to the log, so that with several phones paired each line says who did it."""
         cid = control.message_id(message)
         try:
             command = control.parse(message)
@@ -422,7 +431,7 @@ class Service:
             if self.access is None:
                 return control.error(cid, "unavailable", "this service has no client store")
             return self.access.handle(command)
-        pending = _Pending(command)
+        pending = _Pending(command, actor=actor)
         self._queue.put(pending)
         try:
             return pending.future.result(timeout=REPLY_TIMEOUT_S)
@@ -502,7 +511,11 @@ class Service:
         try:
             result = control.dispatch(command, self)
         except ContractError as exc:
-            self.log(f"{command.op}: rejected: {exc.code}: {exc.message}", level=logging.WARNING, part="panel")
+            self.log(
+                f"{command.op}: rejected: {exc.code}: {exc.message}{_by(pending.actor)}",
+                level=logging.WARNING,
+                part="panel",
+            )
             pending.future.set_result(control.error(command.id, exc.code, exc.message))
             return
         except Exception as exc:  # noqa: BLE001 - logged; the program keeps running
@@ -511,7 +524,7 @@ class Service:
             )
             pending.future.set_result(control.error(command.id, "internal", repr(exc)))
             return
-        self.log(f"{command.op}: ok {_brief(command.args)}", part="panel")
+        self.log(f"{command.op}: ok {_brief(command.args)}{_by(pending.actor)}", part="panel")
         self._note_order(command.op, time.monotonic() - started)
         self._publish()
         pending.future.set_result(control.ok(command.id, result))
@@ -658,6 +671,8 @@ class Service:
             output=s.output_mode,
             recalibrate=recalibrate,
             microphone=self.options.microphone if recalibrate else None,
+            probe=s.probe,
+            probe_margin_db=s.probe_margin_db,
         )
         try:
             motor = self.motor_factory(installation, options.rate, s)
@@ -775,6 +790,12 @@ class Service:
             motor.actualizar_desde_control()
         if "recalibrate" in changes and self.session is not None and changes["recalibrate"] != self.status.recalibrate:
             self.recalibrate(changes["recalibrate"])
+        if {"probe", "probe_margin_db"} & set(changes) and hasattr(self.session, "set_probe"):
+            margin = changes.get("probe_margin_db")
+            try:
+                self.session.set_probe(self.settings.probe, margin)
+            except SessionError as exc:
+                raise ContractError(exc.code, exc.message) from exc
 
     # -- the chain (spec 2026-10-02 §4) -------------------------------------------------
 
@@ -1637,6 +1658,11 @@ def _alias_of(aliases: dict[str, tuple[str, str]], stage: str, param: str) -> st
     return next(name for name, target in aliases.items() if target == (stage, param))
 
 
+def _by(actor: str | None) -> str:
+    """The log's "who": ` · by <name>`, or nothing for an order from inside the program."""
+    return f" · by {actor}" if actor else ""
+
+
 def _brief(args: dict) -> str:
     return json.dumps(args, ensure_ascii=False) if args else ""
 
@@ -1700,11 +1726,19 @@ def serve(
             announce(f"    {url}/?t={config.token}")
     lan = [u for u in urls if "127.0.0.1" not in u]
     if lan and show_token:
-        from aurasync.rest import qr_terminal  # noqa: PLC0415
+        from aurasync import rest  # noqa: PLC0415
 
-        qr = qr_terminal(f"{lan[0]}/?t={config.token}")
+        # With HTTPS the phone gets the PWA's pairing link (no token: it pairs and is approved).
+        # The token QR made any phone that scanned it admin forever (d-7c8794-37f9bc).
+        link = rest.pairing_link(urls, listeners.access.tls if listeners.access else None)
+        if link:
+            qr = rest.qr_terminal(link)
+            heading = "  phone, same network (the panel app; it pairs, no token in the QR):"
+        else:
+            qr = rest.qr_terminal(f"{lan[0]}/?t={config.token}")
+            heading = "  phone, same network (the link carries the token; keep it private):"
         if qr:
-            announce("  phone, same network:")
+            announce(heading)
             announce(qr)
     remote.announce_remote(listeners, urls, announce, show_token=show_token)
 

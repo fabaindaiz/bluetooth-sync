@@ -30,9 +30,10 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from aurasync import estimulos, medicion, sincronia, sonido
+from aurasync import arrival_loop, estimulos, group_calibration, medicion, probe_measure, sincronia, sonido
 from aurasync.cuts import LATE_MS, LOW_MS, CutLog
 from aurasync.dsp import eq, response
+from aurasync.dsp import probe as masked_probe
 from aurasync.dsp.input_analysis import InputAnalyzer
 from aurasync.dsp.retardo import LineaDeRetardo
 from aurasync.quality import QualityMeter
@@ -65,6 +66,15 @@ CAL_BEFORE_S = 0.7
 CAL_AFTER_S = 2.5
 """Silence around the stimulus: the microphone must hear the end of it after the ~0.5 s of
 `pw-play` buffer and A2DP latency (`calibrate` waits 0.7 s; here there is room to spare)."""
+CAL_GAP_S = CAL_AFTER_S
+"""Silence between the two groups of a calibration of more than six speakers
+(`group_calibration.py`): the first group's stimulus must be heard out before the second's."""
+PROBE_WINDOW_S = 4.0
+"""The window the loop measures against the masked probe: experimentos/11 (-20 dB, 4 s: none
+of 240 measurements off by more than 1 ms) and 16 §4.1 (the same with 8 simultaneous probes)."""
+PROBE_EVERY_S = 4.0
+"""With the probe, a measurement every window: every speaker is measured every 4 s, which
+keeps N x window x drift far under the dead band (experimentos/16 §4.2)."""
 
 
 OUTPUT_MARGIN_BLOCKS = 2
@@ -104,6 +114,10 @@ class SessionOptions:
     """`combinado`: un stream de N canales a un sink combine-stream, un solo reloj (por
     defecto desde el 2026-10-01, experimentos/10 §5). `separado`: un `pw-play` por parlante,
     como antes; queda para comparar."""
+    probe: bool = False
+    """The masked probe under the music (`dsp/probe.py`), for the loop to measure against.
+    Off by default until the blind A/B says it is inaudible (i-7c8794-e3e40d, step 4)."""
+    probe_margin_db: float = masked_probe.MARGIN_DB
 
 
 def missing_speakers(installation: Instalacion) -> list[str]:
@@ -162,8 +176,26 @@ class Calibration:
     ) -> None:
         self.state = "running"
         self.seconds, self.amplitude, self.rate = seconds, amplitude, rate
-        tracks = estimulos.calibracion(len(names), seconds, semilla=0)
-        self.references = {n: amplitude * t for n, t in zip(names, tracks, strict=True)}
+        # More than six speakers: two groups sharing the first, one after the other, each for
+        # the whole duration (`group_calibration.py`). Each speaker's reference spans the whole
+        # stimulus, silent outside its group's stretch. One group: the stimulus of always.
+        self.groups = group_calibration.groups(list(names))
+        self.segments: list[tuple[int, int]] = []
+        """(start, length) of each group's stimulus, in samples from the stimulus's start."""
+        per_group = []
+        for g, group in enumerate(self.groups):
+            tracks = estimulos.calibracion(len(group), seconds, semilla=g)
+            start = self.segments[-1][0] + self.segments[-1][1] + int(CAL_GAP_S * rate) if self.segments else 0
+            self.segments.append((start, len(tracks[0])))
+            per_group.append(dict(zip(group, tracks, strict=True)))
+        if len(self.groups) == 1:
+            self.references = {n: amplitude * t for n, t in per_group[0].items()}
+        else:
+            length = self.segments[-1][0] + self.segments[-1][1]
+            self.references = {n: np.zeros(length) for n in names}
+            for (start, size), tracks_of in zip(self.segments, per_group, strict=True):
+                for n, t in tracks_of.items():
+                    self.references[n][start : start + size] = amplitude * t
         self.applied = {n: (applied or {}).get(n, (0.0, 0.0)) for n in names}
         # Through the EQ in place too: the response it measures is what is left to correct,
         # and the same filter latency as the motor keeps the measured latency honest.
@@ -176,7 +208,7 @@ class Calibration:
             self._lines[n] = line
         self.before = int(CAL_BEFORE_S * rate)
         self.after = int(CAL_AFTER_S * rate)
-        self.total = self.before + len(tracks[0]) + self.after
+        self.total = self.before + len(next(iter(self.references.values()))) + self.after
         self.pos = 0
         self.results: list[dict] = []
         self.reliable: bool | None = None
@@ -214,7 +246,7 @@ class Calibration:
 
         def run() -> None:
             try:
-                result = medicion.calibrar(recording, self.references)
+                result = self._calibrate(recording)
                 if result is None:
                     self.state, self.error = (
                         "error",
@@ -256,17 +288,32 @@ class Calibration:
         self._thread = threading.Thread(target=run, name="aurasync-calibration", daemon=True)
         self._thread.start()
 
+    def _calibrate(self, recording: np.ndarray) -> medicion.Calibracion | None:
+        """One group: `medicion.calibrar` as always. Two: each group on its own stretch of the
+        recording (the same offset into it as the first group's), joined through the anchor."""
+        if len(self.groups) == 1:
+            return medicion.calibrar(recording, self.references)
+        results = []
+        for (start, size), group in zip(self.segments, self.groups, strict=True):
+            piece = recording[start : start + self.before + size + self.after]
+            results.append(medicion.calibrar(piece, {n: self.references[n][start : start + size] for n in group}))
+        return group_calibration.join(results, self.groups)
+
     def _response(self, recording: np.ndarray, name: str) -> dict:
-        """The speaker's frequency response at the microphone (see `dsp/response.py`)."""
+        """The speaker's frequency response at the microphone, and how far to trust each third
+        (see `dsp/response.py`): `coherence` is gamma^2, `response_error_db` the 1sigma random error of
+        the third's level. The panel fades the thirds whose error is large or None."""
         reference = self.references[name]
         lag = round(
             medicion.gcc_phat(recording, reference, self.rate, retardo_maximo_ms=2500.0).retardo_ms * self.rate / 1000
         )
-        bands = response.response_bands(recording, reference, lag, self.rate)
+        bands, coherence, error = response.response_with_coherence(recording, reference, lag, self.rate)
         low, high = response.usable_band(bands)
         return {
             "response_db": [None if not np.isfinite(b) else round(float(b), 1) for b in bands],
             "band_hz": [low, high],
+            "coherence": [None if not np.isfinite(c) else round(float(c), 3) for c in coherence],
+            "response_error_db": [None if not np.isfinite(e) else round(float(e), 2) for e in error],
         }
 
     def describe(self) -> dict:
@@ -281,6 +328,7 @@ class Calibration:
             "error": self.error,
             "measured_at": self.measured_at,
             "latency_ms": self.latency_ms,
+            "groups": [list(g) for g in self.groups],
         }
 
 
@@ -299,7 +347,7 @@ class AudioSession:
         self.motor = motor
         self.options = options
         self.log = log
-        self.loop: sincronia.Controlador | None = None
+        self.loop: arrival_loop.ArrivalLoop | None = None
         self.last_recalibration: dict[str, Any] | None = None
         self.recalibration_history: list[dict] = []
         """The delay the loop applied to each speaker, after each decision (for the chart)."""
@@ -345,6 +393,12 @@ class AudioSession:
         self._launched_at = 0.0
         self._next_routing_check = time.monotonic() + ROUTING_CHECK_S
         self._tones: dict[str, list[int]] = {}
+        self.probe_since: float | None = None
+        """When the probe last reached full level (monotonic): the loop measures against it once
+        a whole window of it has been heard."""
+        self._launch: dict[str, Any] = {}
+        if options.probe:
+            self.set_probe(True, options.probe_margin_db)
 
     # -- lifecycle ------------------------------------------------------------------
 
@@ -589,6 +643,60 @@ class AudioSession:
         existing = sonido.leer_nombres_de_nodo(sonido._pw_dump()) if wrong else set()  # noqa: SLF001
         return wrong, existing
 
+    # -- the masked probe (dsp/probe.py), switchable while playing --------------------
+
+    def set_probe(self, active: bool, margin_db: float | None = None) -> None:  # noqa: FBT001
+        """Switch the masked probe on or off (50 ms ramp), and/or change its margin, live.
+
+        With the probe on, the loop correlates the microphone against each speaker's probe;
+        off, against the music, as before. The probe is added by the engine (`motor.sonda`)."""
+        if margin_db is not None:
+            lo, hi = masked_probe.MARGIN_RANGE_DB
+            if not lo <= margin_db <= hi:
+                raise SessionError("out_of_range", f"probe_margin_db must be within {lo} and {hi}")
+        if not hasattr(self.motor, "sonda"):
+            raise SessionError("unavailable", "this engine cannot carry the probe")
+        probe = self.motor.sonda
+        if probe is None:
+            if not active:
+                return
+            names = [p.nombre for p in self.installation.parlantes]
+            margin = self.options.probe_margin_db if margin_db is None else margin_db
+            probe = masked_probe.MaskedProbe(names, self.options.rate, margin)
+            self.motor.sonda = probe
+        if margin_db is not None:
+            probe.margin_db = margin_db
+        was = probe.enabled
+        probe.enabled = active
+        if active != was:
+            self.probe_since = None
+            self.log("sonda", motivo=f"sonda {'encendida' if active else 'apagada'}, a {probe.margin_db:+.0f} dB")
+
+    def probe_state(self) -> dict[str, Any]:
+        """For the panel: whether the probe is on, its margin, and what the loop measures against."""
+        probe = getattr(self.motor, "sonda", None)
+        on = probe is not None and probe.enabled
+        return {
+            "active": on,
+            "margin_db": probe.margin_db if probe is not None else self.options.probe_margin_db,
+            "reference": "probe" if self._probe_ready(time.monotonic()) else "music",
+        }
+
+    def _probe_ready(self, now: float) -> bool:
+        """A whole measurement window (and the margin not yet heard) of the probe at full level."""
+        return (
+            self.probe_since is not None
+            and now - self.probe_since >= PROBE_WINDOW_S + sincronia.VentanaDeEmision.MARGEN_S
+        )
+
+    def _probe_blocks(self, blocks: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        """What the probe added to each speaker in this block (zeros while it is off)."""
+        probe = getattr(self.motor, "sonda", None)
+        n = len(next(iter(blocks.values()), []))
+        if probe is None or not probe.active or set(probe.last) != set(blocks):
+            return {name: np.zeros(n) for name in blocks}
+        return {name: probe.last[name] for name in blocks}
+
     # -- the recalibration loop, switchable while playing ----------------------------
 
     def enable_recalibration(self, microphone: str | None) -> None:
@@ -599,11 +707,17 @@ class AudioSession:
         o = self.options
         self.microphone = microphone
         self._emission = sincronia.VentanaDeEmision(list(self._sinks), o.rate, segundos=o.measure_s + 2.0)
-        self._measurer = sincronia.MedicionEnSegundoPlano(medicion.calibrar)
+        self._probe_emission = sincronia.VentanaDeEmision(list(self._sinks), o.rate, segundos=o.measure_s + 2.0)
+        self._measurer = sincronia.MedicionEnSegundoPlano(self._measure)
         self._mic = self._recal_stack.enter_context(self._microphone(microphone, o.measure_s + 4.0))
         self._recal_stack.callback(self._measurer.cerrar)
-        self.loop = sincronia.Controlador(self.installation, self.motor, confirmar_todo=True)
-        self._next_measure = time.monotonic() + o.every_s
+        # Per speaker, following each one's drift, on absolute arrivals: the references are
+        # taken after the delay line, so the loop's own corrections are not in what it measures
+        # (`arrival_loop.py`; `sincronia.Controlador` treated them as residuals and added them
+        # again on every round).
+        self.loop = arrival_loop.ArrivalLoop(self.installation, self.motor)
+        probe = getattr(self.motor, "sonda", None)
+        self._next_measure = time.monotonic() + (PROBE_EVERY_S if probe is not None and probe.enabled else o.every_s)
         self.log("lazo", motivo=f"recalibración encendida, con {microphone}")
 
     def disable_recalibration(self) -> None:
@@ -616,12 +730,55 @@ class AudioSession:
 
     @property
     def drift_ms_h(self) -> dict[str, float] | None:
+        """What the loop moves each speaker's delay per hour to follow its drift."""
         return self.loop.deriva_ms_h() if self.loop is not None else None
+
+    @property
+    def drift_ppm(self) -> dict[str, float] | None:
+        """Each speaker's playback latency drift against the others, in ppm (positive: falls behind)."""
+        return (self.loop.drift_ppm() or None) if self.loop is not None else None
+
+    @staticmethod
+    def _measure(reference: str, recorded: np.ndarray, references: dict[str, np.ndarray], rate: int) -> Any:
+        """On the measuring thread: against the probe, or against the music as before."""
+        if reference == "probe":
+            return probe_measure.measure(recorded, references, rate)
+        return medicion.calibrar(recorded, references, rate)
+
+    def _arrivals(self, result: Any) -> tuple[dict[str, float], set[str], str | None]:
+        """A measurement as absolute arrivals, the speakers to believe, and why none if none."""
+        if isinstance(result, probe_measure.ProbeMeasurement):
+            why = "; ".join(f"{n}: {r}" for n, r in sorted(result.reasons.items())) or None
+            return dict(result.arrivals_ms), set(result.valid), why
+        # `calibrar` gives corrections (last arrival - arrival): an arrival up to a constant.
+        # As before, its measurement is believed whole or not at all (correlated references).
+        arrivals = {n: -v for n, v in result.retardos_ms.items()}
+        if not result.confiable:
+            return arrivals, set(), f"la medición no es estable en: {', '.join(result.dudosos())}"
+        return arrivals, set(arrivals) - set(result.sin_sonar()), None
+
+    def _calibration_delays(self) -> dict[str, float]:
+        """Each speaker's calibration delay as it plays now (the line's position minus Haas)."""
+        now = getattr(self.motor, "retardos_actuales_ms", None)
+        current = now() if now is not None else {}
+        rear = self.installation.retardo_traseros_ms
+        return {
+            p.nombre: current.get(p.nombre, p.retardo_ms + p.ambiente * rear) - p.ambiente * rear
+            for p in self.installation.parlantes
+        }
 
     def _recalibration_step(self, blocks: dict[str, np.ndarray]) -> None:
         o = self.options
-        # Se guarda **exactamente lo que se mandó**, que es la referencia del lazo.
+        # Se guarda **exactamente lo que se mandó**, que es la referencia del lazo, y lo que la
+        # sonda sumó (ceros si está apagada), que es la referencia con la sonda.
         self._emission.agregar(blocks)
+        self._probe_emission.agregar(self._probe_blocks(blocks))
+        probe = getattr(self.motor, "sonda", None)
+        if probe is None or not probe.full:
+            self.probe_since = None
+        elif self.probe_since is None:
+            self.probe_since = time.monotonic()
+        self.loop.advance()
         self._mic.bombear()
         # The microphone's own level, so the panel shows it is hearing the room.
         heard = self._mic.ultimos(0.1)
@@ -631,18 +788,23 @@ class AudioSession:
 
         ready, result = self._measurer.recoger()
         if ready:
+            window = self._launch.get("window", o.measure_s)
             if isinstance(result, Exception):
                 self._record("error", motivo=f"la medición falló: {result}")
-            elif self._last_fade >= self._launched_at - o.measure_s - sincronia.VentanaDeEmision.MARGEN_S:
+            elif self._last_fade >= self._launched_at - window - sincronia.VentanaDeEmision.MARGEN_S:
                 # The loop proposes nothing while a fade was inside the measured window:
                 # it would be measuring a cut signal (spec §6.5).
                 self._record("descartado", motivo="hubo un corte durante la medición")
+            elif result is None:
+                self._record("descartado", motivo="no se pudo alinear la grabación con las referencias")
             else:
-                self._note_residual(result)
-                adjustment = self.loop.proponer(result)
+                arrivals, valid, why = self._arrivals(result)
+                self._note_residual(arrivals, valid)
+                adjustment = self.loop.propose(arrivals, valid, self._launch.get("t_mid", time.monotonic()))
                 self._record(
                     "ajuste" if adjustment.aceptado else "descartado",
-                    motivo=adjustment.motivo,
+                    motivo=adjustment.motivo + (f" ({why})" if why else ""),
+                    referencia=self._launch.get("reference"),
                     cambios_ms={n: round(v, 3) for n, v in adjustment.cambios_ms.items()},
                     retardos_ms={p.nombre: round(p.retardo_ms, 3) for p in self.installation.parlantes},
                 )
@@ -650,32 +812,48 @@ class AudioSession:
         now = time.monotonic()
         if now < self._next_measure or self._measurer.ocupado:
             return
-        self._next_measure = now + o.every_s
-        references = self._emission.referencias(o.measure_s)
-        recorded = self._mic.ultimos(o.measure_s + sincronia.VentanaDeEmision.MARGEN_DEL_MICROFONO_S)
+        on_probe = self._probe_ready(now)
+        window = PROBE_WINDOW_S if on_probe else o.measure_s
+        probe = getattr(self.motor, "sonda", None)
+        self._next_measure = now + (PROBE_EVERY_S if probe is not None and probe.enabled else o.every_s)
+        source = self._probe_emission if on_probe else self._emission
+        references = source.referencias(window)
+        recorded = self._mic.ultimos(window + sincronia.VentanaDeEmision.MARGEN_DEL_MICROFONO_S)
         if references is None or recorded is None:
             return
         # The threshold follows the master volume: it asks whether *content* is playing, and
         # the references are recorded after the volume. With a fixed threshold, at -20 dB the
         # loop called music "no signal" (2026-10-01, music at -42 to -47 dBFS per speaker).
-        # Whether the room hears it well enough is the loop's own filters' job.
-        if not self._emission.hay_senal(references, minimo_rms=SIGNAL_RMS * 10 ** (self.motor.volumen_db / 20)):
+        # Whether the room hears it well enough is the loop's own filters' job. The probe is
+        # off in silence by itself (`dsp/probe.py`): no probe anywhere, nothing to measure.
+        if (on_probe and not any(np.any(x) for x in references.values())) or (
+            not on_probe
+            and not self._emission.hay_senal(references, minimo_rms=SIGNAL_RMS * 10 ** (self.motor.volumen_db / 20))
+        ):
             self._record("sin señal", motivo="no hay contenido sonando: no se mide")
             return
         self._launched_at = now
+        self._launch = {
+            "reference": "probe" if on_probe else "music",
+            "window": window,
+            # The middle of the measured window, on the loop's clock: the drift is fitted on it.
+            "t_mid": now - sincronia.VentanaDeEmision.MARGEN_S - window / 2,
+            "delays": self._calibration_delays(),
+        }
         try:
-            self._measurer.lanzar(recorded, references, o.rate)
+            self._measurer.lanzar(self._launch["reference"], recorded, references, o.rate)
         except Exception as exc:  # noqa: BLE001 - the loop is a side channel: it never ends the audio
             # Card best-effort-side-channels: a measurement that cannot start is reported and
             # tried again next round. On 2026-10-02 one (in another process) took the session down.
             self._record("error", motivo=f"la medición no arrancó ({exc!r}); se intenta en la próxima vuelta")
 
-    def _note_residual(self, result: Any) -> None:
-        """Keep what a reliable measurement of the loop said was still misaligned."""
-        if result is None or not getattr(result, "confiable", False):
-            return
-        silent = set(result.sin_sonar()) if hasattr(result, "sin_sonar") else set()
-        heard = {n: v for n, v in result.retardos_ms.items() if n not in silent and np.isfinite(v)}
+    def _note_residual(self, arrivals: dict[str, float], valid: set[str]) -> None:
+        """Keep the misalignment a measurement of the loop saw: the spread of each believed
+        speaker's arrival plus the calibration delay it played with. Until 2026-10-02 it was the
+        spread of the arrivals alone, which leaves out the corrections in place (the references
+        are taken after the delay line, `arrival_loop.py`): it showed the uncorrected offsets."""
+        delays = self._launch.get("delays", {})
+        heard = {n: arrivals[n] + delays.get(n, 0.0) for n in valid if n in arrivals and np.isfinite(arrivals[n])}
         if len(heard) < 2:  # noqa: PLR2004 - a misalignment needs two speakers
             return
         self.last_residual = {

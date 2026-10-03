@@ -127,6 +127,16 @@ Y las propuestas siguientes para Blue **crecieron** (+11,3 ms), cuando con ganan
 0,5 y un objetivo estable tendrían que encogerse. **Eso no es convergencia.** Después del
 segundo ajuste, el filtro de estabilidad rechazó todo lo que quedaba de sesión.
 
+**Nota del 2026-10-02: había además un error del lazo que explica este crecimiento**
+([experimentos/11](11-sonda-enmascarada-en-simulacion.md), paso 2). La ventana de emisión guarda
+la referencia **después** de la línea de retardo, así que lo que mide el lazo es la latencia propia
+de cada parlante, sin las correcciones ya aplicadas; pero el controlador la trataba como un
+residuo y la **volvía a sumar** en cada vuelta. Comprobado con el motor real: retardos aplicados
+de 0/0/0, 0/5/0 y 4/0/2 ms daban las mismas correcciones. Una propuesta que crece después de
+aplicar la anterior es justo esa firma. El lazo nuevo (`arrival_loop.py`) mide llegadas absolutas
+y sigue la deriva de cada parlante; queda por confirmar con parlantes que las propuestas dejen de
+crecer. La dificultad de medir a Blue contra la música, que sigue abajo, es real e independiente.
+
 **El patrón señala a Blue, y Blue es el parlante de `ambiente` alto.** Su señal es la más
 decorrelacionada y la que menos se parece a un frente directo, o sea la más difícil de medir
 por correlación. La condición del efecto y la condición de la medición, que

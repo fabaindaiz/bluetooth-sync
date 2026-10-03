@@ -206,8 +206,8 @@ Sent as raw messages to `POST /v1/command`. All additive to version 1.
 | `op` | Fields | Effect |
 |---|---|---|
 | `set` (speaker) | also `delay_ms` [0, 100] and `muted` (bool) | `delay_ms` by hand only while the recalibration loop is off (`conflict` otherwise); `muted` is not saved |
-| `set` (global) | also `layout` (`quad`, `lcrs`), `block_size` (1024…8192), `player_latency_ms` [50, 500], `sink_description`, `recalibrate_every_s` [5, 300], `recalibrate_measure_s` [10, 30] | the last five apply on the next `start`; `state.config.pending_restart` lists them meanwhile |
-| `assign` | `speaker`, `role` | sets the role's `pan` and `ambience`; one speaker per role |
+| `set` (global) | also `layout` (`quad`, `lcrs`, `5.0`, `hex`, `7.0`, `octagon`, `rings`; see *Layouts and roles*), `block_size` (1024…8192), `player_latency_ms` [50, 500], `sink_description`, `recalibrate_every_s` [5, 300], `recalibrate_measure_s` [10, 30] | the last five apply on the next `start`; `state.config.pending_restart` lists them meanwhile |
+| `assign` | `speaker`, `role` | sets the role's `pan` and `ambience`; one speaker per role; a role of another layout is `out_of_range` |
 | `source` | `kind` (`system`, `app`, `file`, `tone`), `name` | switches on a worker thread; verified in `pw-dump` |
 | `tone` | `speaker`, `seconds` [0.5, 10] | 660 Hz at -26 dBFS on one speaker |
 | `recalibrate` | `active` | switches the loop on or off while playing |
@@ -242,6 +242,32 @@ The state also carries `speakers[].role/muted/connected/codec/pid`, `services`, 
   All `null` (and `speakers` empty) until the loop has measured in this session. `age_s` says
   how old it is, so a client does not show a stale number as the present one.
 
+### Layouts and roles
+
+A role is a shortcut for a `(pan, ambience)` pair (with A2DP a speaker gets a mix, not a
+channel). Every layout's roles come from one formula by angle around the listener (0° is the
+front, positive to the right), rounded to 0.01 (`control.role_from_angle`):
+
+> pan = 0.7 · sin θ / sin 45° · ambience = 0.35 − 0.2 · cos θ / cos 45°, kept in [0.1, 0.55]
+
+It gives **exactly** the roles of before (`quad`, `lcrs`), so nothing that was saved changes
+(`tests/test_many_speakers.py`). The new layouts (additive, 2026-10-02; none heard yet):
+
+| `layout` | Roles: angle → (pan, ambience) |
+|---|---|
+| `quad` | FL −45° (−0.7, 0.15) · FR 45° · RL −135° (−0.7, 0.55) · RR 135° |
+| `lcrs` | FL −45° · FC 0° (0, 0.1) · FR 45° · RC 180° (0, 0.55) |
+| `5.0` | FL −30° (−0.49, 0.11) · FC 0° · FR 30° · SL −110° (−0.93, 0.45) · SR 110° |
+| `hex` | FL −30° · FR 30° · SL −90° (−0.99, 0.35) · SR 90° · RL −150° (−0.49, 0.55) · RR 150° |
+| `7.0` | FL −30° · FC 0° · FR 30° · SL −90° · SR 90° · RL −150° · RR 150° |
+| `octagon` | FL −22.5° (−0.38, 0.1) · FR · WL −67.5° (−0.91, 0.24) · WR · SL −112.5° (−0.91, 0.46) · SR · RL −157.5° (−0.38, 0.55) · RR |
+| `rings` | the `quad` inside, and outside a diamond turned 45° with 0.25 more ambience: OF 0° (0, 0.35) · OL −90° (−0.99, 0.6) · OR 90° · OB 180° (0, 0.8) |
+
+`state.roles` lists each layout's role names; `control.LAYOUT_ANGLES` has their angles (for a
+map that draws them). `assign` takes any role of any layout (`FL`, `FR`, `RL`, `RR`, `FC`, `RC`,
+`SL`, `SR`, `WL`, `WR`, `OF`, `OL`, `OR`, `OB`) and the service checks it against the current
+layout. A speaker whose values match no role of the layout reads `role: null` (custom).
+
 ## The chain (spec 2026-10-02 §4)
 
 The engine is a list of stages, each with algorithms and knobs, described in
@@ -259,7 +285,7 @@ version 1.
              "algorithm_apply": "cut",
              "algorithms": [{"id": "peak", "title": "De pico", "summary": "…", "help": "…",
                              "cost": "", "latency_ms": 0.0, "implemented": true,
-                             "available": true, "unavailable_reason": null,
+                             "available": true, "unavailable_reason": null, "notice": null,
                              "params": [{"id": "ceiling_db", "title": "Techo", "summary": "…", "help": "…",
                                          "kind": "float", "default": -1.0, "low": -6.0, "high": 0.0,
                                          "step": 0.5, "unit": "dBFS", "choices": [], "scope": "global",
@@ -296,16 +322,28 @@ version 1.
     the stored one; `eq.dead_band_db` is used when `eq_apply` computes a new curve.
   - `decorrelate.mean_ms` (it is latency: `chain_latency_ms` follows it) and `spread_ms`; the
     filter grows past `length` when the delay asked would not fit.
+  - `decorrelate.assignment` (`order`, the default, or `mix`): which filter of the bank goes to
+    which speaker. `mix` gives the least alike filters to the speakers with the most alike
+    (pan, ambience); it lowers the correlation a model predicts, but in simulation what the
+    speakers played did not follow (worse above 500 Hz in 20 of 32 cases,
+    `docs/research/experimentos/16-…` §9), so it is only for the blind A/B. Choosing it goes through the cut; a `pan` or `ambience` that changes the best
+    assignment waits for the next cut (the metric `reassign_pending` says so) instead of cutting.
 - Each stage's live metrics (the stream's `chain` event): `ambience` `{mix_now, share}`,
-  `decorrelate` `{active, length, mean_ms}`, `diffuse` `{active, tail_db: {speaker: dB of tail
+  `decorrelate` `{active, length, mean_ms, worst_above_500, worst_feeds, assignment: {speaker:
+  filter index}, assignment_mode, reassign_pending, notice}`, `diffuse` `{active, tail_db: {speaker: dB of tail
   against what the speaker plays}}`, `align` `{delay_now_ms, moving}`, `eq` `{active,
   max_boost_db, boost_energy_db}`, `bass` `{active, to, reason, removed_db: {speaker: dB the
   high-pass took}, harmonics_db: {speaker: dB of harmonics against the bass they came from},
   feed_dbfs}`, `volume` `{volume_db_now, mode}`, `limiter` `{kind, latency_ms, reduction_db,
   active_pct}`; every stage also has `pending`.
 - An algorithm may be unavailable in this installation, with a reason: `bass.crossover`
-  without a speaker of a bass-capable kind (`JBL Charge 6`; set `kind` on the speaker),
-  `decorrelate.group_delay` with more than 6 speakers. Choosing it is `unavailable` (409).
+  without a speaker of a bass-capable kind (`JBL Charge 6`; set `kind` on the speaker).
+  Choosing it is `unavailable` (409).
+- An available algorithm may carry a `notice` (null otherwise; additive, 2026-10-02):
+  `decorrelate.group_delay` with more than 6 speakers says how far apart its filters are, e.g.
+  "con 8 parlantes la separación es menor: el peor par sobre 500 Hz es 0,52 (con 3, 0,46); …".
+  Until 2026-10-02 it was unavailable there, and the session could not start with 7 or 8
+  speakers. The engine's `decorrelate` metrics carry the same text in `notice`.
 - `chosen` is what the listener chose, sparse; `value` is what is in effect (choices over
   defaults). Choosing the default is still a choice; `chain_reset` removes it.
 - Errors: unknown stage or param → `unknown_field`; unknown algorithm, out of range or not

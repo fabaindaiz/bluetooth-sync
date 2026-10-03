@@ -94,12 +94,88 @@ SPEAKER_FIELDS: dict[str, Field] = {
 }
 """`delay_ms` is normally the recalibration loop's; by hand only while the loop is off."""
 
+
+def role_from_angle(angle_deg: float, ambience_lift: float = 0.0) -> tuple[float, float]:
+    """(pan, ambience) of a speaker at `angle_deg` around the listener (0 is the front, positive
+    to the right), rounded to 0.01.
+
+    pan = 0.7 * sin(angle) / sin(45°); ambience = 0.35 - 0.2 * cos(angle) / cos(45°), kept in
+    [0.1, 0.55]. The constants are the ones that give **exactly** the roles the first listening
+    kept (`experimentos/09`): FL at -45° is (-0.7, 0.15), RL at -135° is (-0.7, 0.55), FC at 0°
+    is (0, 0.1) and RC at 180° is (0, 0.55). Experiment 16 §5 proposed the same shape with an
+    ambience cap of 0.6, which gave RC 0.6 instead of today's 0.55.
+
+    `ambience_lift` raises the ambience (and its range) for an outer ring (`rings`).
+    """
+    t = math.radians(angle_deg)
+    pan = 0.7 * math.sin(t) / math.sin(math.pi / 4)
+    ambience = 0.35 - 0.2 * math.cos(t) / math.cos(math.pi / 4)
+    ambience = min(max(ambience, 0.1), 0.55) + ambience_lift
+    return round(max(-1.0, min(1.0, pan)), 2) + 0.0, round(ambience, 2)
+
+
+LAYOUT_ANGLES: dict[str, dict[str, tuple[float, float]]] = {
+    "quad": {"FL": (-45, 0), "FR": (45, 0), "RL": (-135, 0), "RR": (135, 0)},
+    "lcrs": {"FL": (-45, 0), "FC": (0, 0), "FR": (45, 0), "RC": (180, 0)},
+    # ITU-R BS.775 places the front pair at ±30° and the surrounds at ±110°.
+    "5.0": {"FL": (-30, 0), "FC": (0, 0), "FR": (30, 0), "SL": (-110, 0), "SR": (110, 0)},
+    "hex": {"FL": (-30, 0), "FR": (30, 0), "SL": (-90, 0), "SR": (90, 0), "RL": (-150, 0), "RR": (150, 0)},
+    "7.0": {
+        "FL": (-30, 0),
+        "FC": (0, 0),
+        "FR": (30, 0),
+        "SL": (-90, 0),
+        "SR": (90, 0),
+        "RL": (-150, 0),
+        "RR": (150, 0),
+    },
+    # Eight at the edges with no privileged front: the pure envelopment of experiment 16 §5.
+    "octagon": {
+        "FL": (-22.5, 0),
+        "FR": (22.5, 0),
+        "WL": (-67.5, 0),
+        "WR": (67.5, 0),
+        "SL": (-112.5, 0),
+        "SR": (112.5, 0),
+        "RL": (-157.5, 0),
+        "RR": (157.5, 0),
+    },
+    # Two rings for a large room the listener walks through: today's quad inside, and outside a
+    # diamond turned 45° (so no outer speaker shares a pan with an inner one) with 0.25 more
+    # ambience: the walls carry the diffuse part, the inner ring the image.
+    "rings": {
+        "FL": (-45, 0),
+        "FR": (45, 0),
+        "RL": (-135, 0),
+        "RR": (135, 0),
+        "OF": (0, 0.25),
+        "OL": (-90, 0.25),
+        "OR": (90, 0.25),
+        "OB": (180, 0.25),
+    },
+}
+"""Each layout's roles as (angle in degrees, ambience lift). `ROLES` comes from these through
+`role_from_angle`. INFERIDO: none of the new layouts has been heard yet."""
+
+ROLES: dict[str, dict[str, tuple[float, float]]] = {
+    layout: {role: role_from_angle(angle, lift) for role, (angle, lift) in roles.items()}
+    for layout, roles in LAYOUT_ANGLES.items()
+}
+"""A role is a shortcut for a `(pan, ambience)` pair: with A2DP a speaker gets a mix, not a
+channel. `quad` and `lcrs` are the values `aurasync init` gives and the first listening kept
+(`experimentos/09`); every layout comes from `role_from_angle`, which reproduces those two
+exactly (`tests/test_control.py`). A speaker whose values match no role of the layout is
+"custom"."""
+ALL_ROLES: tuple[str, ...] = tuple(dict.fromkeys(role for roles in ROLES.values() for role in roles))
+"""Every role of every layout, for `assign` (the service checks it is one of the layout's)."""
+
+
 GLOBAL_FIELDS: dict[str, Field] = {
     "rear_delay_ms": Field(float, 0.0, 50.0, attr="retardo_traseros_ms"),
     "volume_db": Field(float, -60.0, 0.0),
     "extract_ambience": Field(bool),
     "decorrelate": Field(bool),
-    "layout": Field(str, choices=("quad", "lcrs")),
+    "layout": Field(str, choices=tuple(ROLES)),
     # Applied when the next session starts:
     "block_size": Field(int, choices=(1024, 2048, 4096, 8192)),
     "player_latency_ms": Field(int, 50, 500),
@@ -109,6 +185,10 @@ GLOBAL_FIELDS: dict[str, Field] = {
     "output_mode": Field(str, choices=("combinado", "separado")),
     "eq_active": Field(bool),
     "recalibrate": Field(bool),
+    # The masked probe under the music, for the loop (dsp/probe.py, i-7c8794-e3e40d). Live; off
+    # by default until the blind A/B says it is inaudible.
+    "probe": Field(bool),
+    "probe_margin_db": Field(float, -40.0, -10.0),
 }
 RESTART_FIELDS = (
     "block_size",
@@ -124,14 +204,6 @@ ARTISTIC_SPEAKER_FIELDS = ("pan", "ambience", "gain_db")
 ARTISTIC_GLOBAL_FIELDS = ("rear_delay_ms", "extract_ambience", "decorrelate")
 """What a preset holds. Not `delay_ms` (the loop's) nor `volume_db` (the listener's, which
 would bias an A/B comparison)."""
-
-ROLES: dict[str, dict[str, tuple[float, float]]] = {
-    "quad": {"FL": (-0.7, 0.15), "FR": (0.7, 0.15), "RL": (-0.7, 0.55), "RR": (0.7, 0.55)},
-    "lcrs": {"FL": (-0.7, 0.15), "FC": (0.0, 0.1), "FR": (0.7, 0.15), "RC": (0.0, 0.55)},
-}
-"""A role is a shortcut for a `(pan, ambience)` pair: with A2DP a speaker gets a mix, not a
-channel. The values are the ones `aurasync init` gives and the first listening kept
-(`experimentos/09`). A speaker whose values match no role of the layout is "custom"."""
 
 
 def role_of(pan: float, ambience: float, layout: str) -> str | None:
@@ -212,7 +284,7 @@ OPS: dict[str, Op] = {
     "start": Op(optional={"recalibrate": Field(bool)}),
     "stop": Op(),
     "set": Op(required={"changes": Field(dict)}, optional={"speaker": SPEAKER}),
-    "assign": Op(required={"speaker": SPEAKER, "role": Field(str, choices=("FL", "FR", "RL", "RR", "FC", "RC"))}),
+    "assign": Op(required={"speaker": SPEAKER, "role": Field(str, choices=ALL_ROLES)}),
     "presets": Op(),
     "preset_save": Op(required={"name": NAME}),
     "preset_load": Op(required={"name": NAME}),
