@@ -94,6 +94,20 @@ def test_a_speaker_the_microphone_does_not_hear_is_not_believed():
     assert "s2" in result.reasons
 
 
+@pytest.mark.parametrize("seed", [4, 5])
+@pytest.mark.parametrize("heard", [{1, 6}, {0, 3, 5}])
+def test_a_microphone_that_hears_only_some_of_eight_measures_those(seed, heard):
+    """Partial calibration (a phone that hears only the speakers near it, 2026-10-03): the
+    speakers it does not hear give a peak anywhere in the 1.5 s searched, and the consensus
+    median used to include them, so with most unheard it threw away the ones heard."""
+    recording, references, _, truth = _engine_run(8, seed, decorrelate=True, heard=heard)
+    result = probe_measure.measure(recording, references, SR)
+    heard_names = {f"s{i}" for i in heard}
+    assert result.valid == frozenset(heard_names), result.reasons
+    errors = {nm: abs(result.arrivals_ms[nm] - truth[nm]) for nm in heard_names}
+    assert max(errors.values()) < 0.05, errors
+
+
 def test_a_speaker_whose_arrival_jumps_inside_the_window_is_not_believed():
     """A stream that resynchronises halfway through the window: the whole window has two
     peaks and picks one, the halves disagree. Only the repetition between the halves sees it."""

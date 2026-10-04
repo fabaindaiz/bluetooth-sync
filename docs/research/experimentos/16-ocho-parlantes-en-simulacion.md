@@ -373,6 +373,23 @@ mediciones con más de 1 ms de error). Con 8 la música es más densa en el micr
 (+4,3 dB de interferencia por sonda), y eso se come el margen. **Con 8 parlantes: −20 dB, o
 ventanas de 4 s.**
 
+### 4.1.1 Un micrófono que no oye a todos (2026-10-03, `PC-Ryzen5`). SIMULADO
+
+Para calibrar de a partes, con el micrófono de un teléfono que solo oye los parlantes cercanos.
+**La sonda ya distingue a cada parlante:** en 12 semillas × cada tamaño de subconjunto de 8 (y de
+3), ningún parlante que el micrófono no oía fue aceptado nunca (0 falsos positivos), y el error de
+los aceptados fue ≤ 0,03 ms. Lo que fallaba era **el consenso**: la mediana se tomaba sobre todos
+los parlantes, y uno que no se oye da un pico en cualquier lugar de los 1,5 s buscados. Con la
+mayoría sin oír, esos picos ponían la mediana y se descartaba a los oídos: con 2 de 8 (semilla 4)
+los dos quedaban medidos al 0,01 ms y descartados por "−466 ms lejos de los demás"; con 1 de 8, la
+mitad de las veces. **Corregido:** el consenso es entre los parlantes cuyas dos mitades coinciden
+(`probe_measure.measure`). Test: `host/tests/test_probe_measure.py::test_a_microphone_that_hears_only_some_of_eight_measures_those`
+(2 y 3 de 8, dos semillas), visto fallar antes del cambio.
+
+Que el lazo combine mediciones parciales de **micrófonos en posiciones distintas** es otra cosa,
+pendiente: hoy todas alimentan un mismo seguimiento por parlante, y cada posición suma su propia
+diferencia de camino acústico ([research/13](../13-dispositivos-pi-pico-y-panel-independiente.md) §5.3).
+
 ### 4.2 Seguir una deriva de 22 ppm
 
 `lazo.track` simula una hora:

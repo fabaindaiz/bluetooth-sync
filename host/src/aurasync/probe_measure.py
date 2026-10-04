@@ -13,8 +13,8 @@ parameter that should not matter, and shows up twice in independent measurements
   and of music — two independent measurements. They must agree within `AGREEMENT_MS`, and
   the whole window with them (a change of the window length, the parameter that should not
   matter);
-- **consensus**: the arrival must be within `CONSENSUS_MS` of the median of the speakers'
-  arrivals, as in `medicion.alineacion_gruesa`: all the speakers share the playback latency
+- **consensus**: the arrival must be within `CONSENSUS_MS` of the median of the arrivals of
+  the speakers whose halves agreed (not of every speaker: see `measure`), as in `medicion.alineacion_gruesa`: all the speakers share the playback latency
   to within a PipeWire quantum, and a peak hundreds of ms away is not that speaker;
 - **a probe to measure**: each half must carry probe (`dsp/probe.py` switches it off in
   silence).
@@ -127,8 +127,13 @@ def measure(
         a1, a2 = halves[name]
         if abs(a1 - a2) > agreement_ms or abs(arrivals[name] - 0.5 * (a1 + a2)) > agreement_ms:
             reasons[name] = f"the two halves disagree: {a1:.2f} and {a2:.2f} ms"
-    if arrivals:
-        median = float(np.median(list(arrivals.values())))
+    # The consensus is among the speakers whose two halves agreed: one the microphone does not
+    # hear gives a peak anywhere in the lags searched, and with most speakers unheard (a phone
+    # near two of eight) those peaks set the median and threw out the speakers heard
+    # (`tests/test_probe_measure.py`, 2026-10-03).
+    agreed = [a for name, a in arrivals.items() if name not in reasons]
+    if agreed:
+        median = float(np.median(agreed))
         for name, a in arrivals.items():
             if name not in reasons and abs(a - median) > CONSENSUS_MS:
                 reasons[name] = f"{a - median:+.0f} ms away from the others"
