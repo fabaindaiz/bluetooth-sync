@@ -545,7 +545,8 @@ function render(s) {
 }
 
 function renderTop(s) {
-  $("engine-badge").hidden = !s.service.simulated;
+  $("engine-badge").hidden = !s.service.simulated && !s.service.demo;
+  $("engine-badge").textContent = s.service.demo ? "DEMO" : "SIMULADO";
   $("dirty").hidden = !s.dirty;
   $("save").hidden = !s.dirty;
   $("pair-open").hidden = !(s.pairing && s.pairing.urls && s.pairing.urls.some((u) => !u.includes("127.0.0.1")));

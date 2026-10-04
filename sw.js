@@ -26,10 +26,10 @@
 // To a page: `{aurasync: "busy?"}` on a port, and `{aurasync: "updated", version}`.
 
 /** @type {string} */
-const VERSION = "0.0.0-40b04b711750";
+const VERSION = "0.0.0-7b8e4547c142";
 /** Every file of the build as `[name, sha256]`, relative to this worker. The first is the page.
  * @type {[string, string][]} */
-const ENTRIES = [["index.html","84035b1cf871d583d45e5b26eb9f3c45158ba89511694f675816fe84555feced"],["app.js","a1f70e7041f6e72a607a573ae472d9193a985f482ebdc25d690c705b6c0126ff"],["apple-touch-icon.png","c2fe5ee0d74dab6df882f0958e1a794f2c47af9b7467335c32220bec6f24136e"],["build.json","b62b70ecd105e3cded07406bbe36512ef256b22e6230dacdd2be9d67728bc155"],["cadena.js","5be39dc9510b12000bd2863237f792d9f1eca0bea95a27155abeff9a5de46506"],["icon-192.png","dc1b6556b094d20fa97c741244eddefa4a4993c41007d1e7f72bd48d50b7eede"],["icon-512.png","a42bf763b1adb892e0f7834c72765b44a4b37f6818889f8746ea5039dabafd84"],["icon.svg","d9d4b9c0f873e6b5d5050b2be9abf758de0fa05c5914c9113da9f90cde430e63"],["manifest.webmanifest","c9331af6834b7071726f7f579521881d76b5a1709203812128815eb534561f6b"],["tailwind.css","0c67f153ad8af2a24a18ebf73de4623085fbefaf60a05d0b3d5f8db56c99718e"]];
+const ENTRIES = [["index.html","84035b1cf871d583d45e5b26eb9f3c45158ba89511694f675816fe84555feced"],["app.js","fb9be8c83af12957b4320cfabbeebeac60fd42d997a85ee4b27665d05a500f6c"],["apple-touch-icon.png","c2fe5ee0d74dab6df882f0958e1a794f2c47af9b7467335c32220bec6f24136e"],["build.json","b62b70ecd105e3cded07406bbe36512ef256b22e6230dacdd2be9d67728bc155"],["cadena.js","c15f09e63fd9da3258e8938301297993fa40239648f4f3c8638426c4ed44b068"],["icon-192.png","dc1b6556b094d20fa97c741244eddefa4a4993c41007d1e7f72bd48d50b7eede"],["icon-512.png","a42bf763b1adb892e0f7834c72765b44a4b37f6818889f8746ea5039dabafd84"],["icon.svg","d9d4b9c0f873e6b5d5050b2be9abf758de0fa05c5914c9113da9f90cde430e63"],["manifest.webmanifest","c9331af6834b7071726f7f579521881d76b5a1709203812128815eb534561f6b"],["tailwind.css","dfd66c25bed1aa89f6e42df89da3eab034d2e07318a703ef3de3e58faae37b51"]];
 
 const CACHE_PREFIX = "aurasync-";
 const CACHE_NAME = CACHE_PREFIX + VERSION;
