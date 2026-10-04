@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>aurasync</title>
+  <meta name="aurasync-mode" content="remote">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="aurasync">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="stylesheet" href="./tailwind.css">
+  <script src="./app.js" defer></script>
+  <!-- La pantalla Cadena, en Preact: se compila de host/web (d-7c8794-6da524) y convive con app.js. -->
+  <script type="module" src="./cadena.js"></script>
+</head>
+<body class="min-h-screen bg-zinc-100 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100">
+  <!-- Arriba: identidad, conexión y la barra de reproducción, siempre a mano. -->
+  <header id="topbar" class="sticky top-0 z-30 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+      <div class="font-bold tracking-wide">aurasync</div>
+      <span id="engine-badge" class="chip chip-warn" hidden>SIMULADO</span>
+      <span id="connection" class="chip" role="status">Conectando…</span>
+      <!-- En la PWA: el equipo al que habla; abre la pantalla de conexión (host/web/src/connect/). -->
+      <button type="button" id="device-open" class="chip" hidden></button>
+      <span id="dirty" class="chip chip-warn" hidden>cambios sin guardar</span>
+      <button type="button" id="save" class="btn small-btn" hidden>Guardar instalación</button>
+      <button type="button" id="pair-open" class="btn btn-ghost small-btn ml-auto" hidden>Conectar teléfono</button>
+    </div>
+
+    <section id="player" aria-label="Reproducción" class="mx-auto grid max-w-7xl grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 px-4 pb-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3 sm:pb-3">
+      <div class="flex items-center gap-2">
+        <button type="button" id="run" class="btn btn-primary sm:btn-big">Iniciar</button>
+      </div>
+      <label class="field min-w-0 sm:min-w-40 sm:flex-1">
+        <span>Volumen <output id="volume-out" class="num font-semibold text-zinc-800 dark:text-zinc-100" data-pending-style="text"></output></span>
+        <input id="volume" type="range" min="-60" max="0" step="1">
+      </label>
+      <div class="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1">
+        <select id="source-kind" class="input min-h-9 max-w-[11rem] flex-1 py-0.5 text-xs sm:min-h-10 sm:max-w-none sm:text-sm" aria-label="Fuente">
+          <option value="system">Fuente: todo el sistema</option>
+          <option value="app">Fuente: una aplicación</option>
+          <option value="file">Fuente: un archivo</option>
+          <option value="tone">Fuente: señal de prueba</option>
+        </select>
+        <select id="source-app" class="input min-h-9 max-w-[9rem] py-0.5 text-xs sm:text-sm" aria-label="Aplicación" hidden></select>
+        <input id="source-file" type="text" autocomplete="off" placeholder="/home/…/tema.wav" class="input min-h-9 max-w-[12rem] py-0.5 text-xs sm:text-sm" aria-label="Ruta del archivo WAV" hidden>
+        <button type="button" id="chip-quality" class="chip" title="Cortes del audio: tocá para ver cuándo y por qué">cortes —</button>
+        <span class="chip" title="Latencia de escrito a oído">Latencia <span id="latency-total" class="tabular-nums"></span></span>
+        <span id="chip-preset" class="chip" hidden></span>
+        <button type="button" id="chip-alert" class="chip chip-bad" title="Un parlante necesita atención: tocá para ver" hidden></button>
+      </div>
+    </section>
+
+    <nav id="nav" class="mx-auto hidden max-w-7xl gap-1 overflow-x-auto px-4 pb-2" aria-label="Secciones"></nav>
+  </header>
+
+  <div id="disconnected" class="border-b border-rose-300 bg-rose-50 px-4 py-2 text-sm dark:border-rose-800 dark:bg-rose-950" role="alert" hidden>
+    Sin conexión con aurasync. Reintentando…
+  </div>
+  <div id="warnings" class="flex flex-col gap-0.5 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm dark:border-amber-800 dark:bg-amber-950/50" role="status" hidden></div>
+  <!-- Los avisos de abajo: el de «Deshacer» (host/web/src/undo.ts, en vez de confirm()) y el de siempre. -->
+  <div class="notices">
+    <div id="undo" class="undo" role="status" aria-live="polite" hidden>
+      <span data-undo-text class="undo-text"></span>
+      <button type="button" data-undo-button class="undo-btn">Deshacer</button>
+      <span class="undo-time" aria-hidden="true"><span data-undo-bar class="undo-bar"></span></span>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+
+  <!-- La pantalla de conexión de la PWA (Preact): equipos recordados, agregar, emparejar. Vacía en el panel local. -->
+  <div id="connect-root"></div>
+
+  <main id="views" class="mx-auto max-w-7xl px-4 pt-4 pb-24 sm:pb-8"></main>
+
+  <nav id="bottom-nav" class="fixed inset-x-0 bottom-0 z-30 hidden border-t border-zinc-200 bg-white/95 px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95" aria-label="Secciones"></nav>
+
+  <!-- Todas las tarjetas. La organización elegida las reparte en sus vistas (app.js). -->
+  <datalist id="tick-zero"><option value="0"></option></datalist>
+  <div id="cards" hidden>
+
+    <section data-card="now" class="card" aria-labelledby="h-now">
+      <div class="card-head"><h2 id="h-now" class="card-title">Ahora</h2><span id="now-preset" class="chip"></span></div>
+      <ul id="now-alerts" class="alerts" aria-live="polite" hidden></ul>
+      <dl id="now-facts" class="now-facts"></dl>
+      <!-- La fila "Sincronía" de los datos de arriba: app.js la agrega al final de #now-facts. -->
+      <template id="now-sync-row">
+        <dt>Sincronía</dt>
+        <dd id="now-sync" class="sync" data-zone="none">
+          <span class="sync-head">
+            <span id="sync-value" class="sync-value">sin medición</span>
+            <span class="sync-ruler" aria-hidden="true" title="Zonas: menos de 2 ms, 2 a 5, 5 a 10 y más de 10 ms (research/09 §3); la escala llega a 15 ms">
+              <span class="sync-zone fused" style="width: 13.333%"></span><span class="sync-zone first" style="width: 20%"></span><span class="sync-zone double" style="width: 33.333%"></span><span class="sync-zone haas" style="width: 33.334%"></span>
+              <span id="sync-pos" class="sync-pos" hidden><span class="sync-marker"></span></span>
+            </span>
+            <span class="sync-shape" aria-hidden="true"></span>
+            <span id="sync-phrase"></span>
+            <span id="sync-note" class="sync-note"></span>
+          </span>
+        </dd>
+      </template>
+      <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Efectos">
+        <label class="toggle"><input type="checkbox" data-global="extract_ambience"><span><b>Ambiente</b><small>lo envolvente de la grabación, a los parlantes</small></span></label>
+        <label class="toggle"><input type="checkbox" data-global="decorrelate"><span><b>Separar parlantes</b><small>que cada uno suene un poco distinto</small></span></label>
+        <label class="toggle"><input type="checkbox" data-global="eq_active"><span><b>Ecualización</b><small>realza lo que le falta a cada parlante</small></span></label>
+        <label class="toggle"><input type="checkbox" data-global="recalibrate"><span><b>Mantener sincronía</b><small>corrige la deriva mientras suena</small></span></label>
+      </div>
+      <div id="now-gate" class="mic-gate" role="alert" hidden></div>
+      <div class="row mt-3">
+        <button type="button" id="now-calibrate" class="btn" title="Calibra 10 s a volumen bajo y aplica la alineación si la medición es confiable">Calibrar y aplicar</button>
+        <button type="button" id="now-identify" class="btn btn-ghost" title="Un tono corto en cada parlante, de a uno, con su nombre en pantalla">Identificar parlantes</button>
+        <span id="now-action" class="muted small" role="status"></span>
+      </div>
+    </section>
+
+    <section data-card="quick" class="card" aria-labelledby="h-quick">
+      <div class="card-head"><h2 id="h-quick" class="card-title">Parlantes</h2><span class="muted small">ambiente, volumen y silencio</span></div>
+      <!-- Con 4 parlantes o más: acciones por grupo (experimentos/16 §7). La dibuja app.js. -->
+      <div id="quick-group" class="quick-group" role="group" aria-label="Acciones por grupo" hidden></div>
+      <div id="quick" class="flex flex-col gap-3"></div>
+    </section>
+
+    <section data-card="presets" class="card" aria-labelledby="h-presets">
+      <div class="card-head"><h2 id="h-presets" class="card-title">Presets</h2></div>
+      <ul id="presets" class="preset-list"></ul>
+      <div class="row mt-3">
+        <input id="preset-name" type="text" maxlength="64" placeholder="Nombre del preset" autocomplete="off" class="preset-input flex-1">
+        <button type="button" id="preset-save" class="btn">Guardar el actual</button>
+      </div>
+    </section>
+
+    <!-- El monitor de audífonos (spec 2026-10-04-headphone-monitor-design.md): suena junto con los parlantes, sin sincronía. -->
+    <section data-card="monitor" class="card" aria-labelledby="h-monitor">
+      <div class="card-head"><h2 id="h-monitor" class="card-title">Monitor (audífonos)</h2><span class="muted small">no sincronizado con los parlantes</span></div>
+      <p class="muted small">Escuchar por audífonos u otra salida mientras suenan los parlantes. Llega con su propio retraso: sirve para escuchar la mezcla, no para estar en sincronía con la sala.</p>
+      <div class="row mt-2">
+        <label class="field"><span>Qué se oye</span>
+          <select id="monitor-mode" aria-label="Qué se oye en el monitor">
+            <option value="off">Apagado</option>
+            <option value="stereo">Estéreo: la entrada, sin procesar</option>
+            <option value="mix">Mezcla: los parlantes, a izquierda y derecha</option>
+            <option value="binaural">Binaural: la sala en audífonos</option>
+          </select>
+        </label>
+        <label class="field"><span>Salida</span>
+          <select id="monitor-target" aria-label="Salida del monitor"></select>
+        </label>
+        <label class="field"><span>Nivel <output id="monitor-gain-value"></output></span>
+          <input id="monitor-gain" type="range" min="-40" max="0" step="1" value="-12" aria-label="Nivel del monitor">
+        </label>
+      </div>
+      <p id="monitor-state" class="small mt-2" role="status"></p>
+    </section>
+
+    <section data-card="ab" class="card" aria-labelledby="h-ab">
+      <div class="card-head"><h2 id="h-ab" class="card-title">A/B ciego</h2><span class="muted small">¿se oye la diferencia entre dos presets?</span></div>
+      <div class="row">
+        <label class="field"><span>A</span><select id="ab-a" class="input"></select></label>
+        <label class="field"><span>B</span><select id="ab-b" class="input"></select></label>
+        <label class="check" title="Mientras suena el A/B, el preset más fuerte se baja por la diferencia de sonoridad: el más fuerte suele ganar por ser más fuerte"><input type="checkbox" id="ab-match" checked> Igualar la sonoridad</label>
+        <button type="button" id="ab-start" class="btn">Empezar</button>
+      </div>
+      <div id="ab-live" class="mt-3 flex flex-col gap-2" hidden>
+        <div class="segmented" role="group" aria-label="Escuchar">
+          <button type="button" data-ab="a" class="seg text-lg font-semibold">A</button>
+          <button type="button" data-ab="b" class="seg text-lg font-semibold">B</button>
+          <button type="button" data-ab="x" class="seg text-lg font-semibold">X</button>
+        </div>
+        <div class="row items-center">
+          <span class="muted small">X es…</span>
+          <button type="button" data-answer="a" class="btn">A</button>
+          <button type="button" data-answer="b" class="btn">B</button>
+          <button type="button" id="ab-stop" class="btn btn-ghost">Terminar</button>
+        </div>
+        <p id="ab-score" class="text-sm"></p>
+        <p id="ab-loudness" class="ab-loudness text-sm" aria-live="polite"></p>
+      </div>
+      <p id="ab-result" class="mt-2 text-sm" hidden></p>
+    </section>
+
+    <!-- La cadena entera, dibujada desde la operación `chain` (cadena.js, compilado de host/web). -->
+    <section data-card="chain" class="card" aria-labelledby="h-chain">
+      <div class="card-head"><h2 id="h-chain" class="card-title">Cadena</h2><span class="muted small">cada etapa en el orden en que suena · (?) explica cada perilla</span></div>
+      <div id="chain-root"></div>
+    </section>
+
+    <section data-card="room" class="card" aria-labelledby="h-room">
+      <div class="card-head">
+        <h2 id="h-room" class="card-title">Sala</h2>
+      </div>
+      <!-- Una por distribución del servicio (`roles`): app.js las dibuja. -->
+      <div id="room-layouts" class="segmented mb-3 w-full" role="group" aria-label="Distribución"></div>
+      <div id="room" class="room" aria-label="Plano de la sala"><div class="room-front">frente</div></div>
+    </section>
+
+    <section data-card="speakers" class="card" aria-labelledby="h-speakers">
+      <div class="card-head"><h2 id="h-speakers" class="card-title">Parlantes en detalle</h2><span class="muted small">rol, pan, ambiente, volumen y retardo</span></div>
+      <div class="table-wrap">
+        <table class="table speakers-table">
+          <thead><tr><th>Parlante</th><th>Estado</th><th>Tipo</th><th>Rol</th><th>Pan</th><th>Ambiente</th><th>Volumen</th><th>Retardo (ms)</th><th></th></tr></thead>
+          <tbody id="speakers"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section data-card="devices" class="card" aria-labelledby="h-devices">
+      <div class="card-head">
+        <h2 id="h-devices" class="card-title">Dispositivos Bluetooth <span id="devices-count" class="muted small font-normal"></span></h2>
+        <button type="button" id="scan" class="btn small-btn" title="Busca 8 s dispositivos en modo emparejamiento. Mientras busca, el audio puede cortarse.">Buscar cerca</button>
+      </div>
+      <div class="table-wrap">
+        <table class="table devices-table">
+          <thead><tr><th>Dispositivo</th><th>Estado</th><th>Batería</th><th>Señal</th><th></th></tr></thead>
+          <tbody id="devices"></tbody>
+        </table>
+      </div>
+      <p class="muted small mt-2">Se listan los dispositivos de audio que conoce el sistema. Uno apagado o fuera de alcance aparece como «emparejado, sin conectar». Para uno nuevo, ponelo en modo emparejamiento (botón Bluetooth del parlante) y tocá <b>Buscar cerca</b>. La señal solo se conoce mientras se busca.</p>
+    </section>
+
+    <section data-card="calibration" class="card" aria-labelledby="h-cal">
+      <div class="card-head"><h2 id="h-cal" class="card-title">Calibración y ecualización</h2></div>
+      <div class="row">
+        <label class="field"><span>Micrófono</span><select id="cal-mic" aria-label="Micrófono de calibración"></select></label>
+        <label class="field"><span>Segundos</span><input id="cal-seconds" type="number" min="5" max="20" step="1" value="10" class="num-input"></label>
+        <label class="field"><span>Amplitud (máx. 0,2)</span><input id="cal-amplitude" type="number" min="0.02" max="0.2" step="0.01" value="0.1" class="num-input"></label>
+        <button type="button" id="cal-run" class="btn btn-primary">Calibrar</button>
+        <button type="button" id="cal-apply" class="btn">Aplicar alineación</button>
+        <button type="button" id="eq-apply" class="btn" title="Realza lo que le falta a cada parlante dentro de su banda; nunca recorta">Ecualizar</button>
+        <button type="button" id="eq-reset" class="btn btn-ghost">Quitar ecualización</button>
+      </div>
+      <!-- Paso 1: el nivel del micrófono antes de medir, como Dirac Live (research/11 §4.2). -->
+      <div id="mic-check" class="mic-check" data-state="none">
+        <span class="mic-label">Micrófono</span>
+        <span id="mic-track" class="mic-track" role="meter" aria-label="Nivel del micrófono" aria-valuemin="-80" aria-valuemax="0" aria-valuenow="-80" aria-valuetext="sin lectura">
+          <span class="mic-window" aria-hidden="true"></span>
+          <span id="mic-pos" class="mic-pos" hidden><span class="mic-marker"></span></span>
+        </span>
+        <span id="mic-value" class="mic-value num">—</span>
+        <span class="mic-state"><span class="mic-shape" aria-hidden="true"></span><span id="mic-state-text">sin lectura</span></span>
+      </div>
+      <p id="mic-note" class="muted small mt-1" hidden></p>
+      <div id="cal-gate" class="mic-gate" role="alert" hidden></div>
+      <ol class="muted small mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        <li>1. Calibrar</li><li>2. Aplicar alineación</li><li>3. Ecualizar</li><li>4. Calibrar otra vez para verificar</li>
+      </ol>
+      <div id="cal-progress" class="mt-3 h-2 overflow-hidden rounded bg-sky-100 dark:bg-sky-950" hidden><div id="cal-bar" class="h-full w-0 bg-sky-600"></div></div>
+      <p id="cal-note" class="muted small mt-2"></p>
+      <div class="table-wrap mt-2" id="cal-table" hidden>
+        <table class="table">
+          <thead><tr><th>Parlante</th><th>Retardo (ms)</th><th>Ganancia (dB)</th><th>Estabilidad (ms)</th><th>Banda útil (−10 dB)</th><th></th></tr></thead>
+          <tbody id="cal-results"></tbody>
+        </table>
+      </div>
+      <div class="row mt-3">
+        <input id="cal-note-input" type="text" maxlength="500" placeholder="Nota para la medición (opcional)" class="input flex-1">
+        <button type="button" id="cal-save" class="btn btn-ghost">Guardar medición</button>
+      </div>
+    </section>
+
+    <!-- El modo espacial y los papeles de los parlantes (spec 2026-10-04). -->
+    <section data-card="spatial" class="card" aria-labelledby="h-spatial">
+      <div class="card-head"><h2 id="h-spatial" class="card-title">Espacial</h2></div>
+      <p class="muted small">Cada parlante es principal (sonido directo, con dirección) o ambiental (el ambiente, sin dirección). En modo espacial cada instrumento sale de los principales de su lado.</p>
+      <div class="row mt-2">
+        <label class="field"><span>Modo</span>
+          <select id="spatial-render" aria-label="Modo de render">
+            <option value="classic">Clásico</option>
+            <option value="spatial">Espacial</option>
+            <option value="front">Frente intacto</option>
+          </select>
+        </label>
+        <label class="field"><span>Carácter (ubicación ↔ envolvimiento)</span>
+          <input id="spatial-character" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Carácter">
+        </label>
+        <button type="button" id="spatial-all-principal" class="btn btn-ghost">Todos principales</button>
+      </div>
+      <ul id="spatial-speakers" class="mt-2 grid gap-1"></ul>
+      <div id="spatial-room" class="mt-2"></div>
+      <details id="spatial-explain" class="mt-3">
+        <summary class="cursor-pointer">Cada perilla: recomendación y cómo cambia el sonido</summary>
+        <div id="spatial-docs" class="mt-2 grid gap-3"></div>
+      </details>
+    </section>
+
+    <!-- El estimador base (spec 2026-10-03): sugiere retardos con todas las mediciones; nada cambia hasta "Aplicar". -->
+    <section data-card="estimator" class="card" aria-labelledby="h-est">
+      <div class="card-head"><h2 id="h-est" class="card-title">Sincronía sugerida</h2></div>
+      <p class="muted small">Junta las mediciones de todos los micrófonos y sugiere un retardo por parlante. No cambia nada hasta que aplicas.</p>
+      <p id="est-reason" class="muted small mt-1"></p>
+      <div class="table-wrap mt-2" id="est-table" hidden>
+        <table class="table">
+          <thead><tr><th>Parlante</th><th>Ahora (ms)</th><th>Sugerido (ms)</th><th>Cambio (ms)</th><th>± (ms)</th></tr></thead>
+          <tbody id="est-rows"></tbody>
+        </table>
+      </div>
+      <p id="est-summary" class="muted small mt-2"></p>
+      <div class="row mt-2">
+        <button type="button" id="est-apply" class="btn btn-primary" disabled>Aplicar sugerencia</button>
+        <span id="est-applied" class="chip chip-ok" hidden>Aplicada</span>
+      </div>
+      <details id="est-explain" class="mt-3">
+        <summary id="est-explain-open" class="cursor-pointer">Configuración y qué cambia en el sonido</summary>
+        <div class="mt-2">
+          <h3 class="small">En conjunto</h3>
+          <p id="est-together-text" class="small mt-1">Calculando…</p>
+          <div id="est-together-fig" class="mt-1"></div>
+        </div>
+        <div id="est-settings" class="mt-3 grid gap-3"></div>
+      </details>
+    </section>
+
+    <section data-card="response" class="card" aria-labelledby="h-resp">
+      <div class="card-head"><h2 id="h-resp" class="card-title">Respuesta en frecuencia</h2><span class="muted small">en el micrófono · ±2 dB · bajo 100 Hz orientativa · punteada: ecualización · tenue: poco confiable</span></div>
+      <div id="resp-box" hidden>
+        <div id="resp-chart" class="chart resp-chart"></div>
+        <div id="resp-legend" class="legend"></div>
+      </div>
+      <p id="resp-empty" class="muted small">Calibrá para medir la respuesta de cada parlante.</p>
+    </section>
+
+    <section data-card="health" class="card" aria-labelledby="h-health">
+      <div class="card-head"><h2 id="h-health" class="card-title">Salud</h2></div>
+      <div class="tiles">
+        <div class="tile"><div class="tile-label">Cortes en la salida (xruns)</div><div id="t-xruns" class="tile-value"></div><div id="t-xruns-sub" class="tile-sub"></div></div>
+        <div class="tile"><div class="tile-label">Entrada</div><div id="t-input" class="tile-value"></div><div id="t-input-sub" class="tile-sub"></div></div>
+        <div class="tile"><div class="tile-label">Motor</div><div id="t-motor" class="tile-value"></div><div id="t-motor-sub" class="tile-sub"></div></div>
+        <div class="tile"><div class="tile-label">Margen de la salida</div><div id="t-pipe" class="tile-value"></div><div id="t-pipe-sub" class="tile-sub"></div></div>
+        <div class="tile"><div class="tile-label">Ruteo</div><div id="t-routing" class="tile-value"></div><div id="t-routing-sub" class="tile-sub"></div></div>
+        <div class="tile sm:col-span-2"><div class="tile-label">Recalibración</div><div id="t-recal" class="tile-value"></div><div id="t-recal-sub" class="tile-sub"></div></div>
+      </div>
+      <div class="mt-3">
+        <div class="flex items-baseline justify-between"><span class="tile-label">Retardo que aplica el lazo, por parlante (ms)</span><span id="t-drift" class="text-xs font-semibold"></span></div>
+        <div id="drift-chart" class="chart"></div>
+        <div id="drift-legend" class="legend"></div>
+      </div>
+      <table class="table mt-3">
+        <caption class="tile-label text-left">Latencia por tramo</caption>
+        <tbody id="latency"></tbody>
+      </table>
+    </section>
+
+    <section data-card="cuts" class="card" aria-labelledby="h-cuts">
+      <div class="card-head"><h2 id="h-cuts" class="card-title">Cortes</h2><span id="cuts-count" class="chip"></span></div>
+      <p id="cuts-likely" class="callout" hidden></p>
+      <div id="cuts-timeline" class="cuts-timeline" role="img" aria-label="Cortes de los últimos 10 minutos"></div>
+      <div class="cuts-axis muted small"><span>hace 10 min</span><span>hace 5</span><span>ahora</span></div>
+      <div class="legend mt-1">
+        <span class="legend-item"><span class="cut-dot cut-fault" data-shape="círculo"></span>falla</span>
+        <span class="legend-item"><span class="cut-dot cut-xrun" data-shape="cuadrado"></span>PipeWire / Bluetooth</span>
+        <span class="legend-item"><span class="cut-dot cut-input" data-shape="triángulo"></span>la fuente</span>
+        <span class="legend-item"><span class="cut-dot cut-fade" data-shape="anillo"></span>corte intencional</span>
+        <span class="legend-item"><span class="cut-dot cut-radio" data-shape="rombo"></span>la radio descartó un paquete</span>
+      </div>
+      <div id="radio" class="radio-box mt-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="tile-label">Radio, por parlante <span class="muted">(paquetes que el enlace Bluetooth descartó)</span></h3>
+          <button type="button" id="radio-log" class="btn small-btn" aria-describedby="radio-log-note">Activar registro de radio</button>
+        </div>
+        <p id="radio-log-note" class="muted small mt-1">Es un <b>cambio de sistema</b> (el registro de bluez5 en WirePlumber): se anota antes con cómo revertirlo en <code>cambios-de-sistema.txt</code>, y se revierte al desactivarlo o al detener el servicio (<code>aurasync radio-log off</code>).</p>
+        <p id="radio-note" class="muted small mt-1" role="status"></p>
+        <div id="radio-lanes" class="radio-lanes"></div>
+      </div>
+      <div class="table-wrap mt-2">
+        <table class="table">
+          <thead><tr><th>Hora</th><th>Dónde</th><th>Qué pasó</th><th>Detalle</th><th>Mientras</th></tr></thead>
+          <tbody id="cuts-list"></tbody>
+        </table>
+      </div>
+      <p class="muted small mt-2">Cada corte queda con lo que el motor sabía en ese momento: si el lazo medía, si Bluetooth buscaba dispositivos, qué orden acababa de ejecutarse. Los intencionales (cargar un preset, aplicar una calibración) se listan para no confundirlos con fallas.</p>
+    </section>
+
+    <section data-card="levels" class="card" aria-labelledby="h-levels">
+      <div class="card-head"><h2 id="h-levels" class="card-title">Niveles</h2><button type="button" id="levels-pause" class="btn btn-ghost pause-btn" aria-pressed="false" title="Detiene el movimiento de los medidores (WCAG 2.2.2)">Pausar</button></div>
+      <div id="meter-scale" class="meter-scale" aria-hidden="true"></div>
+      <div id="meters" class="meters"></div>
+      <p id="meters-sync" class="muted small mt-2"></p>
+      <p class="muted small mt-1">dBFS. Barra: RMS; raya: pico, retenido 1,5 s (cae 20 dB en 1,7 s). Verde bajo −18, ámbar hasta −6, rojo arriba. El recuadro dice SAT si hubo saturación; tocalo para apagarlo. Pausar detiene el movimiento.</p>
+    </section>
+
+    <section data-card="input" class="card" aria-labelledby="h-input">
+      <div class="card-head"><h2 id="h-input" class="card-title">Entrada</h2><span id="input-stale" class="muted small" hidden>sin música ahora: lo último que llegó</span><button type="button" id="input-pause" class="btn btn-ghost pause-btn" aria-pressed="false" title="Detiene el movimiento del espectro y de la correlación (WCAG 2.2.2)">Pausar</button></div>
+      <div class="input-live" aria-label="Espectro de la entrada, en tercios de octava de 50 Hz a 20 kHz">
+        <div id="input-bars" class="input-bars"></div>
+        <div class="input-axis muted small"><span>50 Hz</span><span>500</span><span>5 k</span><span>20 kHz</span></div>
+      </div>
+      <div class="corr mt-2" aria-label="Correlación entre L y R">
+        <span class="muted small">−1</span>
+        <div class="corr-track"><div id="corr-marker" class="corr-pos" hidden><div class="corr-marker"></div></div></div>
+        <span class="muted small">+1</span>
+        <span id="corr-value" class="num small w-10 text-right">—</span>
+      </div>
+      <p class="muted small">Correlación L/R en vivo: +1 mono, 0 canales independientes, negativa en contrafase.</p>
+      <dl id="input-facts" class="facts mt-2"></dl>
+      <p id="input-note" class="muted small mt-2"></p>
+    </section>
+
+    <section data-card="services" class="card" aria-labelledby="h-services">
+      <div class="card-head"><h2 id="h-services" class="card-title">Servicios</h2><span class="muted small">clic en un servicio: solo sus logs</span></div>
+      <div class="table-wrap">
+        <table class="table services-table">
+          <thead><tr><th>Servicio</th><th>Estado</th><th>PID</th><th>Activo</th><th>Reinicios</th><th>Detalle</th><th></th></tr></thead>
+          <tbody id="services"></tbody>
+        </table>
+      </div>
+      <!-- En la PWA: qué hizo el service worker (sw <estado> <en caché>/<total>  upd <estado>). -->
+      <p id="pwa-status" class="muted small mt-2 font-mono" role="status" hidden></p>
+    </section>
+
+    <section data-card="logs" class="card" aria-labelledby="h-logs">
+      <div class="card-head"><h2 id="h-logs" class="card-title">Logs</h2><span id="log-count" class="muted small"></span></div>
+      <div class="row mb-2">
+        <label class="field"><span>Servicio</span><select id="log-service" class="input"><option value="">todos</option></select></label>
+        <label class="field"><span>Nivel mínimo</span>
+          <select id="log-level" class="input">
+            <option value="debug">debug</option>
+            <option value="info" selected>info</option>
+            <option value="warning">warning</option>
+            <option value="error">error</option>
+          </select>
+        </label>
+        <label class="field min-w-32 flex-1"><span>Buscar</span><input id="log-search" type="text" autocomplete="off" class="input"></label>
+        <button type="button" id="log-pause" class="btn">Pausar</button>
+        <button type="button" id="log-clear" class="btn btn-ghost">Limpiar vista</button>
+        <button type="button" id="log-download" class="btn btn-ghost">Descargar .log</button>
+      </div>
+      <ol id="logs" class="logs" aria-live="off"></ol>
+    </section>
+
+    <section data-card="config" class="card" aria-labelledby="h-config">
+      <div class="card-head"><h2 id="h-config" class="card-title">Ajustes</h2><span class="muted small">pasá el mouse o tocá (?) para más detalle</span></div>
+      <p class="setting-desc mb-3">El sonido —ambiente, decorrelación, ecualización, retardo trasero, graves, volumen y limitador— está en <button type="button" class="link-btn" data-goto-card="chain">Cadena</button>, con cada algoritmo y sus perillas.</p>
+      <h3 class="setting-group">Sincronía</h3>
+      <div class="settings">
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Recalibración continua <small class="muted">en vivo</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Recalibración continua" aria-describedby="help-recalibracion-continua">?</button>
+              <span id="help-recalibracion-continua" role="tooltip" class="help-pop">Cada tanto escucha con el micrófono y compara con lo que se mandó a cada parlante. Si uno se corrió, mueve su retardo de a poco (0,5 ms por segundo: no se oye). Sin esto los parlantes se desalinean alrededor de 1 ms por minuto. Necesita un micrófono (Calibrar → Micrófono).</span>
+            </span>
+          </div>
+          <label class="check"><input type="checkbox" data-global="recalibrate"> Mantener la sincronía</label>
+          <p class="setting-desc">Corrige mientras suena la deriva de los relojes de los parlantes. Va encendida; apagarla es avanzado.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Sonda enmascarada <small class="muted">en vivo · experimental</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Sonda enmascarada" aria-describedby="help-sonda">?</button>
+              <span id="help-sonda" role="tooltip" class="help-pop">Un ruido distinto en cada parlante, moldeado para quedar por debajo de la música, que el lazo usa para medir en vez de la música misma. Con la música los parlantes llevan cosas parecidas y la medición se confunde; con la sonda no (en simulación ninguna de 646 mediciones erró por más de 1 ms). Va apagada hasta probar a ciegas que no se oye.</span>
+            </span>
+          </div>
+          <label class="check"><input type="checkbox" data-global="probe"> Medir con la sonda</label>
+          <div class="flex items-center gap-2 mt-2">
+            <span class="setting-desc">Bajo la música (dB)</span>
+            <input type="number" data-global="probe_margin_db" data-number="1" min="-40" max="-10" step="1" class="num-input" aria-label="Cuántos dB bajo la música va la sonda">
+          </div>
+          <p class="setting-desc">Más bajo se oye menos, pero mide peor. −20 dB es lo que se probó en simulación.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Medir cada (s) <small data-restart="recalibrate_every_s">al reiniciar</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Medir cada (s)" aria-describedby="help-medir-cada-s">?</button>
+              <span id="help-medir-cada-s" role="tooltip" class="help-pop">Más seguido sigue mejor la deriva, pero usa más CPU (cada medición cuesta ~1 s de cálculo, en un proceso aparte). Con la deriva medida, unos 1,35 ms por minuto, cada 20 s alcanza de sobra.</span>
+            </span>
+          </div>
+          <input type="number" data-global="recalibrate_every_s" data-number="1" min="5" max="300" step="1" class="num-input" aria-label="Cada cuántos segundos mide el lazo">
+          <p class="setting-desc">Cada cuántos segundos vuelve a medir.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Escuchar durante (s) <small data-restart="recalibrate_measure_s">al reiniciar</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Escuchar durante (s)" aria-describedby="help-escuchar-durante-s">?</button>
+              <span id="help-escuchar-durante-s" role="tooltip" class="help-pop">Con música hacen falta al menos 10 s para que la medición sea confiable: con 4 s, dos de cada tres mediciones que parecían buenas erraban por más de 1 ms (experimentos/08).</span>
+            </span>
+          </div>
+          <input type="number" data-global="recalibrate_measure_s" data-number="1" min="10" max="30" step="1" class="num-input" aria-label="Cuántos segundos escucha el lazo">
+          <p class="setting-desc">Cuántos segundos de música usa cada medición.</p>
+        </div>
+      </div>
+      <h3 class="setting-group">Salida <small class="muted">avanzado</small></h3>
+      <div class="settings">
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Salida <small data-restart="output_mode">al reiniciar</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Salida" aria-describedby="help-salida">?</button>
+              <span id="help-salida" role="tooltip" class="help-pop">Combinada: un solo stream de N canales a un sink que reparte a cada parlante con remuestreo adaptativo; la diferencia de reloj se corrige de a poco. Separada: un pw-play por parlante; cada parlante es su propio reloj y la diferencia se libera como saltos de 42,67 ms (medido: 4 de 13 calibraciones). Queda solo para comparar.</span>
+            </span>
+          </div>
+          <select data-global="output_mode" class="input" aria-label="Modo de salida">
+            <option value="combinado">combinada: un reloj para todos</option>
+            <option value="separado">separada: un pw-play por parlante</option>
+          </select>
+          <p class="setting-desc">Cómo llega el audio a los parlantes. Combinada es la que no salta.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Bloque <small data-restart="block_size">al reiniciar</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Bloque" aria-describedby="help-bloque">?</button>
+              <span id="help-bloque" role="tooltip" class="help-pop">Más chico: menos latencia y controles que responden antes, pero más trabajo por segundo y menos margen ante un atraso. La tubería guarda dos bloques de margen, así que un bloque más grande también aguanta atrasos más largos sin cortar.</span>
+            </span>
+          </div>
+          <select data-global="block_size" data-number="1" class="input" aria-label="Tamaño de bloque">
+            <option value="1024">1024 (21 ms)</option>
+            <option value="2048">2048 (43 ms)</option>
+            <option value="4096">4096 (85 ms)</option>
+            <option value="8192">8192 (171 ms)</option>
+          </select>
+          <p class="setting-desc">Cuánto audio procesa el motor de una vez.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Buffer de pw-play (ms) <small data-restart="player_latency_ms">al reiniciar</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Buffer de pw-play (ms)" aria-describedby="help-buffer-de-pw-play-ms">?</button>
+              <span id="help-buffer-de-pw-play-ms" role="tooltip" class="help-pop">PipeWire toma audio de la tubería de a este tamaño. La tubería se dimensiona como este valor más dos bloques. Subirlo agrega latencia y no reduce los cortes si el motor entrega a tiempo; bajarlo de 50 ms no se probó.</span>
+            </span>
+          </div>
+          <input type="number" data-global="player_latency_ms" data-number="1" min="50" max="500" step="10" class="num-input" aria-label="Buffer de pw-play en ms">
+          <p class="setting-desc">Cuánto pide pw-play por ciclo. 50 ms es lo medido como suficiente.</p>
+        </div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Nombre de la salida <small data-restart="sink_description">al reiniciar</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Nombre de la salida" aria-describedby="help-nombre-de-la-salida">?</button>
+              <span id="help-nombre-de-la-salida" role="tooltip" class="help-pop">Es el nombre del dispositivo al que las aplicaciones mandan la música. Elegilo como salida en el menú de sonido, o elegí una aplicación en Fuente.</span>
+            </span>
+          </div>
+          <input type="text" data-global="sink_description" maxlength="64" autocomplete="off" class="input" aria-label="Nombre de la salida">
+          <p class="setting-desc">Cómo aparece aurasync en el menú de sonido del sistema.</p>
+        </div>
+        <div class="setting"><div class="setting-head"><span class="setting-title">Emisor</span></div><strong class="text-sm">A2DP</strong><p class="setting-desc">Bluetooth clásico, un enlace por parlante. Auracast espera a las placas nuevas (E4).</p></div>
+      </div>
+    </section>
+  </div>
+
+  <dialog id="pair-dialog" class="m-auto max-h-[90vh] max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-900 backdrop:bg-black/50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100">
+    <h2 class="card-title">Conectar un teléfono</h2>
+    <p class="mt-2 text-sm">Escaneá el código con la cámara del teléfono, en la misma red: abre la app de aurasync, que pide acceso a este equipo. La solicitud aparece abajo para aprobarla.</p>
+    <img id="pair-qr" alt="Código QR con el enlace para emparejar un teléfono con este equipo" width="240" height="240" class="mx-auto my-3 rounded-lg bg-white" hidden>
+    <p id="pair-note" class="muted small" role="status"></p>
+    <div id="pair-admin-root" class="mt-3" hidden></div>
+    <form method="dialog" class="mt-3 text-right"><button type="submit" class="btn">Cerrar</button></form>
+  </dialog>
+</body>
+</html>
