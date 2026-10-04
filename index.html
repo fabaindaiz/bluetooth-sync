@@ -44,8 +44,15 @@
           <option value="app">Fuente: una aplicación</option>
           <option value="file">Fuente: un archivo</option>
           <option value="tone">Fuente: señal de prueba</option>
+          <option value="multichannel">Fuente: render multicanal</option>
         </select>
         <select id="source-app" class="input min-h-9 max-w-[9rem] py-0.5 text-xs sm:text-sm" aria-label="Aplicación" hidden></select>
+        <!-- El modo, a la vista en todas las pestañas (antes solo en Parlantes → Espacial y en Cadena; probes/18). -->
+        <select id="now-render" data-render-quick class="input min-h-9 max-w-[11rem] flex-1 py-0.5 text-xs sm:min-h-10 sm:max-w-none sm:text-sm" aria-label="Cómo se reparte el sonido entre los parlantes" title="Clásico: una mezcla por parlante · Espacial: cada instrumento en su lado · Frente intacto: el estéreo adelante y el ambiente alrededor">
+          <option value="classic">Modo: clásico</option>
+          <option value="spatial">Modo: espacial</option>
+          <option value="front">Modo: frente intacto</option>
+        </select>
         <input id="source-file" type="text" autocomplete="off" placeholder="/home/…/tema.wav" class="input min-h-9 max-w-[12rem] py-0.5 text-xs sm:text-sm" aria-label="Ruta del archivo WAV" hidden>
         <button type="button" id="chip-quality" class="chip" title="Cortes del audio: tocá para ver cuándo y por qué">cortes —</button>
         <span class="chip" title="Latencia de escrito a oído">Latencia <span id="latency-total" class="tabular-nums"></span></span>
@@ -163,6 +170,7 @@
         <label class="check" title="Mientras suena el A/B, el preset más fuerte se baja por la diferencia de sonoridad: el más fuerte suele ganar por ser más fuerte"><input type="checkbox" id="ab-match" checked> Igualar la sonoridad</label>
         <button type="button" id="ab-start" class="btn">Empezar</button>
       </div>
+      <p id="ab-why" class="muted small mt-1" role="status"></p>
       <div id="ab-live" class="mt-3 flex flex-col gap-2" hidden>
         <div class="segmented" role="group" aria-label="Escuchar">
           <button type="button" data-ab="a" class="seg text-lg font-semibold">A</button>
@@ -300,6 +308,21 @@
       <div class="row mt-2">
         <button type="button" id="est-apply" class="btn btn-primary" disabled>Aplicar sugerencia</button>
         <span id="est-applied" class="chip chip-ok" hidden>Aplicada</span>
+      </div>
+      <!-- Medir desde este teléfono (spec 2026-10-03 §6.3): el audio no sale del teléfono, solo las llegadas. -->
+      <div class="mt-3" data-sync-here>
+        <h3 class="small">Medir desde este dispositivo</h3>
+        <p class="muted small">Graba 8 s con el micrófono de este teléfono o computador, donde estés escuchando, y mide contra la sonda (tiene que estar encendida, en Ajustes). La grabación se procesa acá: al equipo solo van los tiempos de llegada.</p>
+        <div class="row mt-1">
+          <label class="field"><span>Esta medición</span>
+            <select id="est-here-role" aria-label="Qué pesa esta medición">
+              <option value="target">Fija la sincronía para este lugar</option>
+              <option value="vote">Vota junto con las demás</option>
+            </select>
+          </label>
+          <button type="button" id="est-here" class="btn">Medir desde aquí</button>
+        </div>
+        <p id="est-here-note" class="small mt-1" role="status" aria-live="polite"></p>
       </div>
       <details id="est-explain" class="mt-3">
         <summary id="est-explain-open" class="cursor-pointer">Configuración y qué cambia en el sonido</summary>

@@ -594,7 +594,7 @@ function renderControls(s) {
     apps.dataset.synced = "\u0000";
   }
   if (source.kind === "app") syncValue(apps, source.name || "");
-  if (source.kind === "file") syncValue($("source-file"), source.name || "");
+  if (source.kind === "file" || source.kind === "multichannel") syncValue($("source-file"), source.name || "");
   syncSourceFields();
   syncValue($("volume"), s.global.volume_db);
   setText($("volume-out"), `${nf($("volume").value, 0)} dB`);
@@ -607,7 +607,9 @@ function renderControls(s) {
 function syncSourceFields() {
   const kind = $("source-kind").value;
   $("source-app").hidden = kind !== "app";
-  $("source-file").hidden = kind !== "file";
+  // Un WAV estéreo, o uno multicanal: un canal por parlante, en el orden de la sala (un render de afuera).
+  $("source-file").hidden = kind !== "file" && kind !== "multichannel";
+  $("source-file").placeholder = kind === "multichannel" ? "/home/…/render-3-canales.wav" : "/home/…/tema.wav";
 }
 
 // -- sala y parlantes -----------------------------------------------------------
@@ -698,6 +700,21 @@ function renderRoom(s) {
   let note = room.querySelector(".room-custom");
   if (!note) { note = el("div", { class: "room-custom" }); room.append(note); }
   note.textContent = custom.length ? `sin rol: ${custom.length}` : "";
+  // Con una sala que no es la de esta cantidad de parlantes (3 en cuadrafonía), decirlo y ofrecer la
+  // salida, en vez de solo «sin rol: 1» (probes/18-usabilidad).
+  let hint = $("room-hint");
+  if (!hint) {
+    hint = el("p", { id: "room-hint", class: "callout small mt-2", role: "status" });
+    room.after(hint);
+  }
+  const offer = custom.length > 0 && s.global.layout !== "auto";
+  hint.hidden = !offer;
+  if (offer) {
+    const fix = el("button", { type: "button", class: "btn small-btn ml-1", "data-room-auto": "", text: "Usar «Automático»" });
+    fix.addEventListener("click", () => send("set", { changes: { layout: "auto" } }));
+    const what = custom.length === 1 ? "1 parlante quedó sin lugar" : `${custom.length} parlantes quedaron sin lugar`;
+    hint.replaceChildren(`${what} en esta sala (tiene lugar para ${s.speakers.length - custom.length}). «Automático» los reparte a todos alrededor.`, fix);
+  }
   const scan = $("scan");
   scan.disabled = s.scanning;
   scan.textContent = s.scanning ? "Buscando…" : "Buscar parlantes";
@@ -867,6 +884,8 @@ function renderSpeakers(s) {
 
 const quickRows = new Map();
 
+const NARROW = window.matchMedia("(max-width: 639px)");
+
 function quickRow(speaker) {
   const name = speaker.name;
   const current = () => latest && latest.speakers.find((sp) => sp.name === name);
@@ -915,8 +934,10 @@ function renderQuick(s) {
     row.fold.hidden = !many;
     syncFold(row.box, row.fold, many, `quick:${sp.name}`);
     // Plegada, el nombre corto y el estado debajo: en el teléfono no entran en una línea con Tono y Silenciar.
-    row.box.querySelector(".fold-title").classList.toggle("fold-stack", many);
-    row.title.textContent = `${many ? sp.name.replace("JBL ", "") : sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
+    row.box.querySelector(".fold-title").classList.toggle("fold-stack", many || NARROW.matches);
+    // En el teléfono, el nombre corto: entero se cortaba en «JBL Go 4…» y no decía cuál era (probes/18).
+    const short = many || NARROW.matches;
+    row.title.textContent = `${short ? sp.name.replace("JBL ", "") : sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
     row.title.title = sp.name;
     setStatus(row.status, SPEAKER_STATUS, speakerState(s, sp), sp.muted ? " · mudo" : "");
     syncValue(row.ambience.input, sp.ambience);
@@ -1046,9 +1067,9 @@ function deviceRow(d, playing) {
   return el("tr", {},
     el("td", {}, el("div", { class: "speaker-name", text: d.name || d.address }),
       el("div", { class: "speaker-sub", text: d.address })),
-    el("td", { text: state }),
-    el("td", { class: `num ${d.battery_pct != null && d.battery_pct <= 20 ? "text-rose-600" : ""}`, text: battery }),
-    el("td", { class: "num", text: d.rssi_dbm != null ? `${d.rssi_dbm} dBm` : "—" }),
+    el("td", { "data-label": "Estado", text: state }),
+    el("td", { "data-label": "Batería", class: `num ${d.battery_pct != null && d.battery_pct <= 20 ? "text-rose-600" : ""}`, text: battery }),
+    el("td", { "data-label": "Señal", class: "num", text: d.rssi_dbm != null ? `${d.rssi_dbm} dBm` : "—" }),
     el("td", {}, actions));
 }
 
@@ -1852,10 +1873,11 @@ function micReading(s) {
 }
 
 // Para los tests: lo que el panel lee del micrófono en este instante (el aviso lo decide así).
-window.aurasyncMicReading = () => micReading(latest);
+window.aurasyncMicReading = () => gateReading();
 
 function paintMicCheck() {
   const r = micReading(latest);
+  if (MIC_BLOCKING.has(r.state)) lastBlocking = { reading: r, at: performance.now() };
   const box = $("mic-check");
   if (box.dataset.state !== r.state) box.dataset.state = r.state;
   const pos = $("mic-pos");
@@ -1881,8 +1903,21 @@ function paintMicCheck() {
 }
 
 // Antes de calibrar: con el micrófono fuera de la ventana, avisa y pide confirmar (sin confirm()).
-function gateCalibration(box, go) {
+// La última lectura que pedía avisar, y cuándo: al terminar una calibración el lazo vuelve a empezar
+// y por unos segundos no hay lectura; sin esto, el atajo calibraba sin avisar aunque el micrófono
+// acabara de estar demasiado bajo (lo encontró el test instrumentado, 2026-10-04).
+const GATE_MEMORY_MS = 15000;
+let lastBlocking = null;
+
+function gateReading() {
   const r = micReading(latest);
+  if (MIC_BLOCKING.has(r.state)) lastBlocking = { reading: r, at: performance.now() };
+  else if (r.state === "none" && lastBlocking && performance.now() - lastBlocking.at < GATE_MEMORY_MS) return lastBlocking.reading;
+  return r;
+}
+
+function gateCalibration(box, go) {
+  const r = gateReading();
   if (!MIC_BLOCKING.has(r.state)) {
     box.hidden = true;
     box.replaceChildren();
@@ -2150,6 +2185,10 @@ function renderPresets(s) {
   const active = Boolean(ab && ab.active);
   $("ab-live").hidden = !active;
   $("ab-start").disabled = active || s.presets.length < 2 || s.session.status !== "playing";
+  // Por qué no se puede empezar, en vez de un botón gris sin explicación (probes/18-usabilidad).
+  $("ab-why").textContent = active ? ""
+    : s.presets.length < 2 ? `Hacen falta dos presets para comparar (hay ${s.presets.length}): guardá cómo suena ahora en Presets, cambiá algo y guardá otro.`
+    : s.session.status !== "playing" ? "Iniciá la reproducción para comparar." : "";
   if (active) {
     for (const button of document.querySelectorAll("[data-ab]")) {
       button.setAttribute("aria-pressed", String(button.dataset.ab === ab.playing));
@@ -2330,11 +2369,11 @@ function setup() {
   kind.addEventListener("change", () => {
     syncSourceFields();
     if (kind.value === "app") app.focus();
-    else if (kind.value === "file") file.focus();
+    else if (kind.value === "file" || kind.value === "multichannel") file.focus();
     else sendFrom(kind, "source", { kind: kind.value });
   });
   app.addEventListener("change", () => { if (app.value) sendFrom(app, "source", { kind: "app", name: app.value }); });
-  file.addEventListener("change", () => { const v = file.value.trim(); if (v) sendFrom(file, "source", { kind: "file", name: v }); });
+  file.addEventListener("change", () => { const v = file.value.trim(); if (v) sendFrom(file, "source", { kind: kind.value === "multichannel" ? "multichannel" : "file", name: v }); });
   const volume = $("volume");
   liveRange(volume, $("volume-out"), (v) => `${nf(v, 0)} dB`, (v) => { markPending($("volume-out")); return setGlobal(volume, { volume_db: v }); });
   $("scan").addEventListener("click", () => send("scan"));
@@ -2612,6 +2651,38 @@ function drawFigure(fig) {
 function setupEstimator() {
   $("est-apply").addEventListener("click", applyEstimator);
   $("est-explain").addEventListener("toggle", () => { if ($("est-explain").open) loadExplain(); });
+  $("est-here").addEventListener("click", measureHere);
+}
+
+// Medir desde este dispositivo (sync/fromHere.ts): 8 s de micrófono, medidos acá contra la sonda.
+// La sonda sube en 50 ms y el anillo del servidor tiene que tener lo que se va a grabar: un respiro.
+const PROBE_SETTLE_MS = 2500;
+async function measureHere() {
+  const button = $("est-here");
+  const note = $("est-here-note");
+  const run = window.aurasync && window.aurasync.syncHere;
+  if (!run) { note.textContent = "Este panel no puede medir desde aquí."; return; }
+  button.disabled = true;
+  if (!(latest && latest.global && latest.global.probe)) {
+    // Se mide contra la sonda: se enciende acá mismo en vez de mandar a Ajustes (probes/18-usabilidad).
+    note.dataset.state = "running";
+    note.textContent = "Encendiendo la sonda (se mide contra ella; queda encendida, se apaga en Ajustes)…";
+    const reply = await send("set", { changes: { probe: true } });
+    if (!reply || !reply.ok) { note.dataset.state = "failed"; note.textContent = "No se pudo encender la sonda."; button.disabled = false; return; }
+    await new Promise((r) => setTimeout(r, PROBE_SETTLE_MS));
+  }
+  note.dataset.state = "running";
+  note.textContent = "Grabando 8 s… quedate quieto y en silencio.";
+  try {
+    const result = await run({ role: $("est-here-role").value });
+    note.textContent = result.message;
+    note.dataset.state = result.ok ? "done" : "failed";
+  } catch (err) {
+    note.textContent = `No se pudo medir: ${err && err.message ? err.message : err}`;
+    note.dataset.state = "failed";
+  } finally {
+    button.disabled = false;
+  }
 }
 
 // -- espacial (spec 2026-10-04) ------------------------------------------------------
@@ -2624,7 +2695,7 @@ let spatialLoading = 0;
 function renderSpatial(s) {
   const kinds = s.speakers.map((sp) => `${sp.name}:${sp.role_kind}:${sp.pan}:${sp.ambience}`).join("|");
   const render = (s.chain_summary && s.chain_summary.spatial) || "classic";
-  if (!$("spatial-render").matches(":focus")) $("spatial-render").value = render;
+  for (const id of ["spatial-render", "now-render"]) if (!$(id).matches(":focus")) $(id).value = render;
   const rows = s.speakers.map((sp) => {
     const kind = sp.role_kind || "principal";
     const seg = (value, label) => {
@@ -2739,7 +2810,7 @@ function drawRoom(fig) {
 }
 
 function setupSpatial() {
-  $("spatial-render").addEventListener("change", () => send("chain_set", { stage: "spatial", algorithm: $("spatial-render").value }));
+  for (const id of ["spatial-render", "now-render"]) $(id).addEventListener("change", () => send("chain_set", { stage: "spatial", algorithm: $(id).value }));
   $("spatial-character").addEventListener("change", () => spatialParam("character", Number($("spatial-character").value)));
   $("spatial-all-principal").addEventListener("click", () => {
     for (const p of (window.aurasyncLastSpeakers || [])) send("set", { speaker: p, changes: { role_kind: "principal" } });
