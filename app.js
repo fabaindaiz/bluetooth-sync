@@ -1851,6 +1851,9 @@ function micReading(s) {
   return { state, rms: mic.rms, peak: mic.peak, playing };
 }
 
+// Para los tests: lo que el panel lee del micrófono en este instante (el aviso lo decide así).
+window.aurasyncMicReading = () => micReading(latest);
+
 function paintMicCheck() {
   const r = micReading(latest);
   const box = $("mic-check");
@@ -2094,20 +2097,17 @@ function appliedMessage(reply) {
   return `Alineación aplicada${skipped.length ? `; quedaron como estaban: ${skipped.join(", ")}` : ""}`;
 }
 
-// Quitar la ecualización: se apaga al instante (se oye), y las curvas se borran al vencer el aviso.
+// Quitar la ecualización: al instante, y «Deshacer» vuelve a escribir las curvas (`set` escribe
+// `eq_db` desde el 2026-10-04; antes se borraban al vencer el aviso, research/10 §7.1).
 let eqClearing = false;
 async function clearEq() {
-  const before = await captureNow();
-  const on = Boolean(latest && latest.global.eq_active);
-  if (on) await send("set", { changes: { eq_active: false } });
   eqClearing = true;
   $("eq-reset").disabled = true;
-  const putBack = async () => { if (before) { const now = await captureNow(); if (now) await undoer().restore(before, now); } };
-  deferUndo("Ecualización quitada", async () => {
-    await send("eq_reset");
-    if (on) await putBack();
+  try {
+    await withUndo("Ecualización quitada", () => send("eq_reset"));
+  } finally {
     eqClearing = false;
-  }, async () => { if (on) await putBack(); eqClearing = false; });
+  }
 }
 
 // -- presets y A/B -------------------------------------------------------------------
