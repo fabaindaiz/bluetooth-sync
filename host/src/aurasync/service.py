@@ -66,6 +66,7 @@ from aurasync.bt_volume import BluetoothVolume
 from aurasync.chain import ChainValues
 from aurasync.config import Instalacion, Parlante, ruta_por_defecto
 from aurasync.control import ContractError
+from aurasync.cut_report import CutReporter
 from aurasync.dsp import eq, profiles
 from aurasync.logbuffer import LogBuffer
 from aurasync.motor import Motor
@@ -352,6 +353,8 @@ class Service:
         self.preset: str | None = None
         self.installation: Instalacion | None = None
         self.session: AudioSession | None = None
+        self._cut_reporter: CutReporter | None = None
+        """The open session's cuts, into the log (`cut_report.py`)."""
         self.motor: Motor | None = None
         self.dirty = False
         """The installation in memory differs from the file: `save` writes it."""
@@ -465,6 +468,7 @@ class Service:
                 if self.session is not None:
                     self._watch_system_cuts()
                     self._step()
+                    self._report_cuts()
                     self._drain(block=False)
                 else:
                     self._drain(block=True)
@@ -491,6 +495,14 @@ class Service:
             self.log(f"session failed: {exc!r}\n{traceback.format_exc()}", level=logging.ERROR, part="session")
             self.errors["session"] = repr(exc)
             self._close_session("error", f"internal error: {exc!r}")
+
+    def _report_cuts(self) -> None:
+        reporter = self._cut_reporter
+        if reporter is None or self.session is None:
+            return
+        line = reporter.tick(getattr(self.session, "block_ms", None))
+        if line is not None:
+            self.log(line, level=logging.WARNING, part="session")
 
     def _drain(self, *, block: bool) -> None:
         self._run_engine_calls()
@@ -705,6 +717,8 @@ class Service:
             raise
         self.session, self.motor = session, motor
         self.session_options = options
+        cuts = getattr(session, "cuts", None)
+        self._cut_reporter = CutReporter(cuts) if cuts is not None else None
         self.status.move("playing")
         self.log(
             f"session open: {len(installation.parlantes)} speakers, block {options.block}, "
@@ -1515,6 +1529,9 @@ class Service:
 
     def _close_session(self, status: str, reason: str | None) -> None:
         if self.session is not None:
+            reporter, self._cut_reporter = self._cut_reporter, None
+            if reporter is not None:
+                self.log(reporter.session_summary(), part="session")
             try:
                 calibration = getattr(self.session, "calibration", None)
                 if calibration is not None:

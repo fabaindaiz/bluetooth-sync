@@ -89,7 +89,80 @@ conversa antes de comprar nada.
 
 ## 4. Resultados
 
-Pendiente.
+### 4.1 Sesión del 2026-10-02 (noche), `PC-Ryzen5`: lo oído, y lo que se descartó sin parlantes
+
+**Entorno:** `PC-Ryzen5`, kernel 7.2.8-2-cachyos, PipeWire 1.6.9, WirePlumber 0.5.18, BlueZ
+5.87, aurasync 0.0.0 en `489fc8a`; 3 Go 4 por A2DP (SBC), salida `combinado`, bloque 4096,
+`pw-play` 50 ms. Firmware de los Go 4: no se anotó. Cadena: ambience `avendano_jot`, diffuse
+`noise_tail`, bass `protect` (80 Hz, orden 8, armónicos -14 dB), limiter `peak`, eq
+`boost_only`, decorrelate `group_delay`, volume `avrcp`.
+
+**Lo oído. REPORTADO (usuario).** Durante la reproducción empezaron "microcortes constantes,
+como 2/s", que se iban al reiniciar. Los logs muestran que lo reiniciado fue **la sesión de
+aurasync** (stop y start desde el panel, 23:43:02 y 00:11:28), no PipeWire, WirePlumber ni
+bluetoothd: systemd no registró ningún reinicio de esos servicios. A las 00:27:07–00:27:13 los
+tres transportes A2DP fallaron en 6 s (`Failure in Bluetooth audio transport` en WirePlumber,
+sin errores del controlador en el kernel). Logs: `~/.local/share/aurasync/sesiones/2026-10-02-PC-Ryzen5/`
+(fuera del repositorio).
+
+**Lo que no quedó.** El registro de radio estaba apagado (`radio_log.active` false, ninguna
+línea de bluez5), y los eventos de `cuts.py` vivían solo en memoria: se perdieron al cerrar
+cada sesión. **No hay ningún número de los cortes de esa noche.** Desde este cambio el
+servicio los escribe en su log (`host/src/aurasync/cut_report.py`): una línea cada 10 s con
+fallas (cuántas por tipo, el nivel mínimo de la tubería, el último atraso del motor, la causa
+probable) y el total al cerrar la sesión.
+
+**Descartado: el procesamiento no se queda sin tiempo. MEDIDO en `PC-Ryzen5`, sin parlantes.**
+Con la instalación y la cadena reales (`~/.config/aurasync/`), entrada sintética:
+
+| Qué | Mediana | Peor | Presupuesto |
+|---|---|---|---|
+| `Motor.procesar`, 3 parlantes, 15 min de audio (10 500 bloques) | 5,33–5,38 ms | 10,5 ms | 85,3 ms |
+| `AudioSession.step` completo (motor, medidores, telemetría, calidad), 15 min | 7,5–7,7 ms | 14,9 ms | 85,3 ms |
+| `aurasync service --simular` con un `/v1/stream` abierto, 30 min en tiempo real | 6,1–6,4 ms | 15,6 ms | 85,3 ms |
+
+En los dos primeros, ningún bloque pasó de la mitad del presupuesto, y el costo no crece con el
+tiempo. En los 30 min del servicio simulado hubo 7 cortes `late` (43–66 ms tarde), **todos
+mientras `scripts/check.sh` corría los tests en paralelo** (01:05:06–01:09:11) y ninguno fuera
+de ese rato: otro proceso que satura la CPU atrasa al motor, pero no tanto como para vaciar la
+tubería. La tubería
+hacia `pw-play` tiene 220 ms (`pipe_size_ms`): para vaciarla, el hilo del motor tendría que
+trabarse más de 200 ms, dos veces por segundo. La cadena del usuario cuesta lo mismo que la de
+fábrica (5,4 ms las dos). Parsear un `pw-dump` de este equipo (250 KB) toma 1 ms.
+
+**Encontrado de paso, sin ser la causa. MEDIDO.** `QualityMeter.summary` recalcula la sonoridad
+integrada desde el inicio de la sesión, en el hilo del motor, cada 0,5 s: 0,33 ms al principio y
+1,9 ms a los 15 min, lineal. A las 4 h serían ~30 ms.
+
+**Corregido el 2026-10-03, con la regla del usuario: el stream se procesa siempre sobre datos de
+largo fijo, y el historial va aparte y asíncrono.** Lo que dependía del historial en el hilo del
+motor:
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| `QualityMeter.summary`, cada 0,5 s | 0,33 → 1,90 ms en 15 min, lineal; 5 listas sin tope (~3 MB a los 30 min) | 0,13–0,14 ms planos en 15 min (MEDIDO); los medidores guardan 3 s, y la sonoridad integrada la lleva `LoudnessHistory` en su hilo, con un histograma de memoria fija (`GatedIntegrator`, dentro de 0,01 LU del cálculo completo) |
+| `CutLog.summary` en la foto, cada bloque | 0,001 ms vacío, 0,68 ms con el registro lleno (MEDIDO) | el hilo `aurasync-cut-summary` lo arma (al llegar un corte, o cada 1 s) y la foto lee el último |
+| `CutReporter`, cada bloque | copiaba el registro entero | lee solo lo nuevo (`CutLog.since`) |
+| `Room` de `--simular` | guardaba cada bloque si nadie leía el micrófono (~690 MB en 30 min, estimado) | 30 s como máximo |
+
+Revisado y descartado (está acotado o no depende de la sesión): `telemetry`, el historial del
+limitador, los buffers del DSP, los cachés (`lru_cache`, todos con tope), los subprocesos y los
+hilos (uno por sesión o por orden, todos cerrados). Lo que sí crece a lo largo del servicio y no
+se reinicia con la sesión (`RadioMonitor._links`, `LogBuffer`) no explica que reiniciar la
+sesión lo arregle. Con el cambio, `aurasync service --simular` 15 min en tiempo real con un `/v1/stream` abierto
+(MEDIDO, `PC-Ryzen5`): 0 cortes, motor 5,85–6,04 ms, 19 hilos y 6 descriptores todo el rato, sin
+procesos hijos, y la memoria de 96,2 a 97,2 MB (de 05:07:45 a 05:21:45, frenando).
+**Nada de esto explica solo dos cortes por segundo:** el peor caso medido era
+de ~2,6 ms por bloque de 85 ms. Si los cortes vuelven, el log nuevo dice de qué tipo son.
+
+**Lectura. INFERIDO.** 2 cortes por segundo es exactamente el techo con que PipeWire 1.6.9
+anota un paquete descartado por el enlace (`reduce bitpool`, a lo más uno cada 0,5 s, §1), y
+experimentos/10 §5.5 había contado ~1,2 por segundo con los tres sonando. Que reiniciar la sesión
+lo arregle calza con la deriva de reloj de §1.1 (la tubería vuelve a llenarse), aunque esa
+deriva daría cortes esporádicos y no dos por segundo. Si también calza con la radio no está
+verificado: no se sabe si recrear los streams devuelve el sink Bluetooth a su estado inicial.
+Lo que las separa es correr C2 con el registro de radio prendido **antes** de que empiece
+a sonar.
 
 ## Veredicto
 

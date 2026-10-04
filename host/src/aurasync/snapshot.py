@@ -411,7 +411,7 @@ def _health(svc: Service, block_ms: float, lost: list[str]) -> dict[str, Any]:
         "xruns": svc.observer.view.get("xruns", {}) if session is not None else {},
         "pipe_level_ms": round(session.pipe_ms, 1) if getattr(session, "pipe_ms", None) is not None else None,
         "bt_discovering": bool(svc.observer.view.get("discovering")),
-        "cuts": session.cuts.summary() if session is not None and hasattr(session, "cuts") else None,
+        "cuts": session.cuts.latest() if session is not None and hasattr(session, "cuts") else None,
         "streams_open": svc.streams.get("open", 0),
     }
 

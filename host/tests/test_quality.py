@@ -121,6 +121,7 @@ def test_the_input_reads_as_one_stereo_meter_would():
         pair = (left[i : i + BLOCK], right[i : i + BLOCK])
         meter.push(pair, {"A": pair[0]})
         stereo.push(np.column_stack(pair))
+    assert meter.history.wait_idle()  # the integrated loudness is kept on its own thread
     got = meter.summary()["input"]
     assert got["s"] == pytest.approx(stereo.short_term, abs=0.051)
     assert got["m"] == pytest.approx(stereo.momentary, abs=0.051)

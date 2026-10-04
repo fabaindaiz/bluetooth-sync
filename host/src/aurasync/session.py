@@ -469,6 +469,8 @@ class AudioSession:
     def close(self) -> None:
         """Closes everything in reverse order. Safe to call twice."""
         self._stack.close()
+        self.quality.close()
+        self.cuts.close()
         self._routing_pool.shutdown(wait=False, cancel_futures=True)
         self._routing_future = None
         if self._cal_mic is not None:

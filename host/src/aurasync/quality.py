@@ -10,6 +10,13 @@ cheap: 0.28 ms per 4096-sample block for the input and 3 outputs (MEDIDO on the 
 `probes/18-costo-de-la-cadena/costo.py`; the budget was 0.5 ms). The readings are computed
 when `summary()` is called, which the session does at most at `SUMMARY_HZ`.
 
+**What the engine thread holds has a fixed length** (user, 2026-10-03: the stream is always
+processed over fixed-length data, the history apart and asynchronous). The meters keep only
+their last 3 s; the input's integrated loudness, the one reading that is history, is kept by
+`LoudnessHistory` on its own thread, which the engine hands each new step with one queue put.
+Until 2026-10-03 `summary()` rebuilt it from every step since the start, on the engine thread,
+twice a second: 1.9 ms at 15 min and growing (experimentos/12 §4.1).
+
 Derived numbers:
 
 - `net_gain_lu`: short-term loudness of the **sum of the outputs' powers** (every speaker
@@ -30,12 +37,14 @@ Non-finite values (silence: -inf LUFS) are `None` in the summary: JSON has no in
 from __future__ import annotations
 
 import math
+import queue
+import threading
 import time
 from typing import Any
 
 import numpy as np
 
-from aurasync.dsp.loudness import ABSOLUTE_GATE, RELATIVE_GATE, LoudnessMeter
+from aurasync.dsp.loudness import GatedIntegrator, LoudnessMeter
 
 SUMMARY_HZ = 2.0
 FLATTENING_DB = 1.0
@@ -51,13 +60,64 @@ def _lufs(mean_square: float) -> float:
     return -0.691 + 10 * math.log10(mean_square) if mean_square > 0 else -math.inf
 
 
+class LoudnessHistory:
+    """The integrated loudness of the input, kept on its own thread (`GatedIntegrator`).
+
+    `push` is what the engine thread calls: one `put` of the new steps. The worker sums the
+    two channels' steps and publishes `integrated`, a float the engine thread only reads.
+    """
+
+    def __init__(self, window: int, step_n: int) -> None:
+        self._integrator = GatedIntegrator(window, step_n)
+        self.integrated = -math.inf
+        self._queue: queue.SimpleQueue[tuple[list[float], list[float]] | None] = queue.SimpleQueue()
+        self._pending = 0
+        self._lock = threading.Lock()
+        self.thread = threading.Thread(target=self._work, name="aurasync-loudness-history", daemon=True)
+        self.thread.start()
+
+    def push(self, left: list[float], right: list[float]) -> None:
+        if not left:
+            return
+        with self._lock:
+            self._pending += 1
+        self._queue.put((left, right))
+
+    def _work(self) -> None:
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            for a, b in zip(*item, strict=True):
+                self._integrator.push(a + b)
+            self.integrated = self._integrator.integrated
+            with self._lock:
+                self._pending -= 1
+
+    def wait_idle(self, timeout: float = 5.0) -> bool:
+        """For tests: until every step pushed has been counted."""
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            with self._lock:
+                if self._pending == 0:
+                    return True
+            time.sleep(0.005)
+        return False
+
+    def close(self) -> None:
+        self._queue.put(None)
+        self.thread.join(timeout=1.0)
+
+
 class QualityMeter:
     def __init__(self, sr: int, names: list[str]) -> None:
         self.sr = sr
-        self.channels = (LoudnessMeter(sr, 1), LoudnessMeter(sr, 1))
+        self.channels = (LoudnessMeter(sr, 1, history=False), LoudnessMeter(sr, 1, history=False))
         """The input, one meter per channel: its PSR is per channel, and its loudness is the sum
         of the two (G = 1 each), as one stereo meter would give, without a third oversampling."""
-        self.outputs: dict[str, LoudnessMeter] = {name: LoudnessMeter(sr, 1) for name in names}
+        self.outputs: dict[str, LoudnessMeter] = {name: LoudnessMeter(sr, 1, history=False) for name in names}
+        ref = self.channels[0]
+        self.history = LoudnessHistory(ref._momentary_steps, ref._step_n)  # noqa: SLF001
         self.samples = 0
         """Samples pushed so far: the A/B waits on audio time, not on the wall clock."""
         self.cost_ms = 0.0
@@ -71,12 +131,15 @@ class QualityMeter:
             return
         if pair is None:
             pair = (np.zeros(n), np.zeros(n))
+        before = self.channels[0].steps_total
         for meter, x in zip(self.channels, pair, strict=True):
             meter.push(x)
+        new = self.channels[0].steps_total - before
+        self.history.push(*(m.last_steps(new) for m in self.channels))
         for name, x in outputs.items():
             meter = self.outputs.get(name)
             if meter is None:
-                meter = self.outputs[name] = LoudnessMeter(self.sr, 1)
+                meter = self.outputs[name] = LoudnessMeter(self.sr, 1, history=False)
             meter.push(x)
         self.samples += n
         self.cost_ms = 0.9 * self.cost_ms + 0.1 * (time.perf_counter() - started) * 1000
@@ -87,22 +150,12 @@ class QualityMeter:
         return _lufs(sum(m._mean(steps) for m in meters if m._steps))  # noqa: SLF001
 
     def _input_integrated(self) -> float:
-        """Gated loudness of the stereo input since the start (BS.1770: 400 ms blocks every
-        100 ms, absolute gate -70 LUFS, relative gate -10 LU), from the channels' steps."""
-        left, right = (np.asarray(m._steps) for m in self.channels)  # noqa: SLF001
-        meter = self.channels[0]
-        window = meter._momentary_steps  # noqa: SLF001
-        if len(left) < window:
-            return -math.inf
-        sums = np.convolve(left + right, np.ones(window), mode="valid") / (window * meter._step_n)  # noqa: SLF001
-        with np.errstate(divide="ignore"):
-            levels = -0.691 + 10 * np.log10(sums)
-        kept = sums[levels > ABSOLUTE_GATE]
-        if len(kept) == 0:
-            return -math.inf
-        relative = _lufs(float(kept.mean())) + RELATIVE_GATE
-        kept = sums[(levels > ABSOLUTE_GATE) & (levels > relative)]
-        return _lufs(float(kept.mean()))
+        """Gated loudness of the stereo input since the start, as `LoudnessHistory` last published it."""
+        return self.history.integrated
+
+    def close(self) -> None:
+        """Stops the history's thread. Safe to call twice."""
+        self.history.close()
 
     @property
     def outputs_short_term(self) -> float:

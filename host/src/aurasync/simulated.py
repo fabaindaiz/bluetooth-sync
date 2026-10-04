@@ -26,6 +26,7 @@ import re
 import subprocess
 import threading
 import time
+from collections import deque
 from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
@@ -49,6 +50,10 @@ ROOM_GAINS = (1.0, 0.8, 0.6, 0.9, 0.7, 0.95, 0.75, 0.85)
 """Each speaker's level at the microphone, distinct for up to 8 (the sixth was 1.0, like the
 first, until 2026-10-02)."""
 ROOM_NOISE = 0.001
+ROOM_BUFFER_S = 30.0
+"""The most the room keeps for a microphone that is not reading, like a capture device that
+drops what nobody takes. The simulated microphone's ring is ~14 s. Until 2026-10-03 the room
+kept every block: ~690 MB in 30 min of `--simular` without the loop."""
 ROOM_COLOUR_DB = np.interp(
     np.log10(response.THIRDS),
     np.log10([50, 100, 160, 250, 400, 1000, 4000, 8000, 12500, 20000]),
@@ -96,7 +101,8 @@ class Room:
         self.gains = {n: ROOM_GAINS[i % len(ROOM_GAINS)] for i, n in enumerate(names)}
         self._tails = {n: np.zeros(d) for n, d in self.delays.items()}
         self._colour = {n: eq.StreamingFIR(eq.fir(ROOM_COLOUR_DB)) for n in names}
-        self._pending: list[np.ndarray] = []
+        self._pending: deque[np.ndarray] = deque()
+        self._pending_n = 0
         self._lock = threading.Lock()
         self._rng = np.random.default_rng(7)
 
@@ -110,10 +116,13 @@ class Room:
         mix += ROOM_NOISE * self._rng.standard_normal(n)
         with self._lock:
             self._pending.append(mix)
+            self._pending_n += n
+            while self._pending_n > ROOM_BUFFER_S * self.rate:
+                self._pending_n -= len(self._pending.popleft())
 
     def take(self) -> np.ndarray:
         with self._lock:
-            pending, self._pending = self._pending, []
+            pending, self._pending, self._pending_n = list(self._pending), deque(), 0
         return np.concatenate(pending) if pending else np.zeros(0)
 
 

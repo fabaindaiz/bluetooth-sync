@@ -45,6 +45,7 @@ the chain is flattening the music.
 from __future__ import annotations
 
 import functools
+import itertools
 from collections import deque
 
 import numpy as np
@@ -172,8 +173,12 @@ class LoudnessMeter:
     move at 10 Hz (EBU Tech 3341 asks for at least 10 Hz). They are computed when read.
     """
 
-    def __init__(self, sr: int, channels: int, weights: list[float] | None = None) -> None:
+    def __init__(self, sr: int, channels: int, weights: list[float] | None = None, *, history: bool = True) -> None:
+        """`history=False` keeps only the last 3 s of steps (what momentary and short-term read):
+        fixed-length state for the engine thread, which never asks for `integrated`. The
+        integrated loudness of a live stream is `GatedIntegrator`'s, fed apart."""
         self.sr, self.channels = sr, channels
+        self.history = history
         self.weights = np.ones(channels) if weights is None else np.asarray(weights, dtype=float)
         self._kernels_ascending = np.ascontiguousarray(interpolation_kernels()[:, ::-1].T)
         self._step_n = round(STEP_S * sr)
@@ -190,7 +195,9 @@ class LoudnessMeter:
     def reset(self) -> None:
         self._context = np.zeros((self.channels, 2 * HALF_WIDTH))
         self._pending = np.zeros((self.channels, 0))
-        self._steps: list[float] = []
+        self._steps: list[float] | deque[float] = [] if self.history else deque(maxlen=self._short_steps)
+        self.steps_total = 0
+        """Steps completed since the start (or the last `reset`), kept or not."""
         self._total = 0
         self._peak = 0.0
         self._recent_peaks: deque[tuple[int, float]] = deque()
@@ -213,6 +220,7 @@ class LoudnessMeter:
             steps = pending[:, : whole * self._step_n].reshape(self.channels, whole, self._step_n)
             power = np.abs(np.fft.rfft(steps, axis=2)) ** 2 @ self._k_power  # (channels, whole)
             self._steps.extend((self.weights @ power).tolist())
+            self.steps_total += whole
         self._pending = pending[:, whole * self._step_n :]
 
     def _true_peak(self, x: np.ndarray) -> float:
@@ -242,12 +250,19 @@ class LoudnessMeter:
 
     def _mean(self, count: int) -> float:
         """Mean square of the last `count` steps (zeros before the start)."""
-        return float(sum(self._steps[-count:])) / (count * self._step_n)
+        return float(sum(itertools.islice(reversed(self._steps), count))) / (count * self._step_n)
 
     @property
     def step_energies(self) -> np.ndarray:
-        """K-weighted energy (channel-weighted sum) of every completed 100 ms step so far."""
+        """K-weighted energy (channel-weighted sum) of every completed 100 ms step so far
+        (without `history`, of the last 3 s)."""
         return np.asarray(self._steps)
+
+    def last_steps(self, count: int) -> list[float]:
+        """The last `count` step energies, oldest first (at most what is kept)."""
+        if count <= 0:
+            return []
+        return list(itertools.islice(reversed(self._steps), count))[::-1]
 
     @property
     def momentary(self) -> float:
@@ -262,6 +277,9 @@ class LoudnessMeter:
     @property
     def integrated(self) -> float:
         """Gated loudness since the start (or the last `reset`), LUFS."""
+        if not self.history:
+            msg = "a meter without history has no integrated loudness: feed a GatedIntegrator"
+            raise ValueError(msg)
         if len(self._steps) < self._momentary_steps:
             return -np.inf
         steps = np.asarray(self._steps)
@@ -292,6 +310,61 @@ class LoudnessMeter:
         """Peak to short-term loudness ratio, dB."""
         short = self.short_term
         return self.true_peak_short_dbtp - short if np.isfinite(short) else np.nan
+
+
+BIN_DB = 0.01
+"""Width of `GatedIntegrator`'s level bins. A gating block within one bin of the relative gate
+can land on the wrong side of it: the error is far under the 0.1 LU the meter is read at."""
+TOP_LUFS = 20.0
+"""Gating blocks louder than this go in the top bin (a 0 dBFS square wave is +3 LUFS)."""
+
+
+class GatedIntegrator:
+    """BS.1770 integrated loudness of a stream, in fixed memory and fixed time per step.
+
+    It is fed the 100 ms step energies (`LoudnessMeter.last_steps`, the channels already
+    summed) and keeps a histogram of the 400 ms gating blocks above the absolute gate: their
+    count and summed energy per `BIN_DB` of level. The relative gate is applied over the bins,
+    so reading it costs the same at minute 1 and at hour 4, unlike `LoudnessMeter.integrated`,
+    which goes over every step since the start.
+    """
+
+    def __init__(self, window: int, step_n: int) -> None:
+        self.window, self.step_n = window, step_n
+        self._recent: deque[float] = deque(maxlen=window)
+        bins = int(np.ceil((TOP_LUFS - ABSOLUTE_GATE) / BIN_DB)) + 1
+        self._count = np.zeros(bins)
+        self._energy = np.zeros(bins)
+        self._floor = ABSOLUTE_GATE + (np.arange(bins) + 0.5) * BIN_DB
+        """Each bin's middle level, against which the relative gate is compared."""
+
+    @property
+    def nbytes(self) -> int:
+        return self._count.nbytes + self._energy.nbytes + self._floor.nbytes
+
+    def push(self, energy: float) -> None:
+        self._recent.append(energy)
+        if len(self._recent) < self.window:
+            return
+        block = sum(self._recent) / (self.window * self.step_n)
+        if block <= 0:
+            return
+        level = OFFSET + 10 * np.log10(block)
+        if level <= ABSOLUTE_GATE:
+            return
+        i = min(int((level - ABSOLUTE_GATE) / BIN_DB), len(self._count) - 1)
+        self._count[i] += 1
+        self._energy[i] += block
+
+    @property
+    def integrated(self) -> float:
+        total = self._count.sum()
+        if total == 0:
+            return -np.inf
+        relative = _lufs(float(self._energy.sum() / total)) + RELATIVE_GATE
+        kept = self._floor > relative
+        n = self._count[kept].sum()
+        return _lufs(float(self._energy[kept].sum() / n)) if n else -np.inf
 
 
 def integrated_lufs(x: np.ndarray, sr: int, weights: list[float] | None = None) -> float:

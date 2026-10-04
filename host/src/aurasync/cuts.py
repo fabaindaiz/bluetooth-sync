@@ -49,20 +49,37 @@ CAUSES = {
     "radio": "el enlace Bluetooth descartó un paquete",
 }
 FAULTS = {"underrun", "low", "late", "xrun", "input_gap", "lost", "routing", "radio"}
+SUMMARY_S = 1.0
+"""How often the summary is rebuilt apart while nothing new happens (its 1 and 10 min
+windows age). A new event rebuilds it at once."""
 COINCIDE_S = 1.0
 """A cut this close to a radio drop is counted as the radio's (the journal lags a little)."""
 
 
 class CutLog:
+    """The events, and a summary of them built on a thread of its own.
+
+    The engine thread adds events and reads `latest()`, both O(1): the summary goes over up to
+    `CAPACITY` events (~0.7 ms with a full log, MEDIDO on PC-Ryzen5, 2026-10-03), and the
+    snapshot that carries it is built every block. Until then it was built there, so a log
+    filling with cuts made every block slower.
+    """
+
     def __init__(self, clock=time.monotonic) -> None:
         self.clock = clock
         self._events: deque[dict[str, Any]] = deque(maxlen=CAPACITY)
         self._lock = threading.Lock()
+        self._seq = 0
+        self._latest: dict[str, Any] | None = None
+        self._changed = threading.Event()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
         self.context: dict[str, Any] = {}
         """What the engine thread is doing; copied into each event."""
 
     def add(self, kind: str, where: str | None = None, detail: str = "", **extra: Any) -> None:
         event = {
+            "seq": 0,
             "t": round(self.clock(), 3),
             "at": datetime.now().astimezone().isoformat(timespec="milliseconds"),
             "kind": kind,
@@ -74,7 +91,52 @@ class CutLog:
             **extra,
         }
         with self._lock:
+            self._seq += 1
+            event["seq"] = self._seq
             self._events.append(event)
+        self._changed.set()
+
+    def since(self, seq: int) -> list[dict[str, Any]]:
+        """The events after `seq`, oldest first. Costs what is new, not what is kept."""
+        out = []
+        with self._lock:
+            for e in reversed(self._events):
+                if e["seq"] <= seq:
+                    break
+                out.append(e)
+        return out[::-1]
+
+    def latest(self) -> dict[str, Any]:
+        """The last summary built apart. Before the first one is ready: an empty one (the thread
+        starts on the first call and builds it at once)."""
+        if self._thread is None:
+            self._latest = {
+                "now": round(self.clock(), 3),
+                "events": [],
+                "faults_10min": 0,
+                "faults_1min": 0,
+                "by_kind": {},
+                "likely": None,
+            }
+            self._changed.set()
+            self._thread = threading.Thread(target=self._work, name="aurasync-cut-summary", daemon=True)
+            self._thread.start()
+        return self._latest  # type: ignore[return-value]
+
+    def _work(self) -> None:
+        while not self._stop.is_set():
+            self._changed.wait(SUMMARY_S)
+            self._changed.clear()
+            if self._stop.is_set():
+                return
+            self._latest = self.summary()
+
+    def close(self) -> None:
+        """Stops the summary's thread. Safe to call twice."""
+        self._stop.set()
+        self._changed.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
 
     def recent(self, seconds: float = 600.0) -> list[dict[str, Any]]:
         now = self.clock()
