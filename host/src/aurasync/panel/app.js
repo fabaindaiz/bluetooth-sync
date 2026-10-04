@@ -62,9 +62,9 @@ function share(name, detail) {
 // Las mismas tarjetas, repartidas de cuatro maneras. Se elige con ?layout= (y queda
 // recordada); docs/research/10-panel-de-control.md mide las cuatro con las tareas típicas.
 
-const CARDS_ALL = ["now", "presets", "quick", "ab", "chain", "room", "speakers", "devices", "calibration", "response",
+const CARDS_ALL = ["now", "presets", "quick", "ab", "chain", "room", "speakers", "devices", "calibration", "response", "estimator",
   "health", "cuts", "levels", "input", "services", "logs", "config"];
-const WIDE = new Set(["chain", "speakers", "devices", "services", "logs", "config", "calibration"]);
+const WIDE = new Set(["chain", "speakers", "devices", "services", "logs", "config", "calibration", "estimator"]);
 const LAYOUTS = {
   pagina: { nav: "none", views: [{ id: "todo", label: "Todo", icon: "list", cards: CARDS_ALL }] },
   pestanas: { nav: "tabs", views: [
@@ -76,7 +76,7 @@ const LAYOUTS = {
     { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     // Primero conectar, después ajustar cada parlante, al final la sala.
     { id: "parlantes", label: "Parlantes", icon: "speaker", cards: ["devices", "speakers", "room"] },
-    { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response"] },
+    { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response", "estimator"] },
     { id: "diagnostico", label: "Diagnóstico", icon: "activity", cards: ["health", "cuts", "services", "logs"],
       columns: { left: ["health", "cuts"], right: ["services"], bottom: ["logs"] } },
     { id: "ajustes", label: "Ajustes", icon: "sliders", cards: ["config"] },
@@ -85,7 +85,7 @@ const LAYOUTS = {
     { id: "inicio", label: "Inicio", icon: "home", cards: ["now", "presets", "quick", "hub"] },
     { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     { id: "parlantes", label: "Sala y parlantes", icon: "speaker", cards: ["devices", "speakers", "room"] },
-    { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response"] },
+    { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response", "estimator"] },
     { id: "comparar", label: "A/B ciego", icon: "compare", cards: ["ab", "levels"] },
     { id: "diagnostico", label: "Diagnóstico", icon: "activity", cards: ["health", "cuts", "input", "services", "logs"],
       columns: { left: ["health", "cuts", "input"], right: ["services"], bottom: ["logs"] } },
@@ -95,7 +95,7 @@ const LAYOUTS = {
     { id: "sonido", label: "Sonido", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input"] },
     { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     { id: "sala", label: "Sala", icon: "speaker", cards: ["devices", "speakers", "room"] },
-    { id: "medir", label: "Medir", icon: "target", cards: ["calibration", "response", "health", "cuts"] },
+    { id: "medir", label: "Medir", icon: "target", cards: ["calibration", "response", "estimator", "health", "cuts"] },
     { id: "sistema", label: "Sistema", icon: "server", cards: ["services", "logs", "config"] },
   ] },
 };
@@ -535,6 +535,7 @@ function render(s) {
   renderMicrophones(s);
   renderConfig(s);
   renderCalibration(s);
+  renderEstimator(s);
   renderPresets(s);
   share("state", s);
 }
@@ -2384,6 +2385,7 @@ function setup() {
   });
   setupConfig();
   setupLogs();
+  setupEstimator();
   $("now-calibrate").addEventListener("click", () => gateCalibration($("now-gate"), calibrateAndApply));
   $("chip-quality").addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
   $("now-identify").addEventListener("click", identifySpeakers);
@@ -2409,6 +2411,200 @@ function setup() {
     pollLogs();
     openStream();
   });
+}
+
+// -- sincronía sugerida (spec 2026-10-03) -----------------------------------------
+// El estimador base del servicio junta las mediciones de todos los micrófonos y sugiere retardos
+// absolutos; nada cambia hasta "Aplicar". Cada perilla dice su recomendación, cómo cambia el
+// sonido y una figura SIMULADA, una por una y en conjunto (d-7c8794-0a4586).
+
+let estLast = null;
+let estExplainLoading = 0;
+
+const SERIES_STYLE = {
+  // El trazo distingue las series, no solo el color (WCAG 1.4.1).
+  recommended: { stroke: "#0284c7", width: 2.5, dash: "" },
+  current: { stroke: "#d97706", width: 2, dash: "6 3" },
+  other: { stroke: "#a1a1aa", width: 1.5, dash: "2 3" },
+};
+
+function fmtMs(v) {
+  return v === null || v === undefined ? "—" : Number(v).toFixed(2);
+}
+
+function renderEstimator(s) {
+  const b = s.sync_suggestion || null;
+  estLast = b;
+  const has = !!(b && b.delays_ms && Object.keys(b.delays_ms).length);
+  $("est-apply").disabled = !has || b.applied;
+  $("est-applied").hidden = !(b && b.applied);
+  $("est-table").hidden = !has;
+  if (!has) {
+    const why = b && b.reason ? b.reason : "falta una medición de al menos dos parlantes";
+    $("est-reason").textContent = `Todavía no hay sugerencia: ${why}.`;
+    $("est-rows").replaceChildren();
+    $("est-summary").textContent = "";
+    return;
+  }
+  $("est-reason").textContent = b.reason ? `Aviso: ${b.reason}.` : "";
+  const rows = Object.entries(b.delays_ms).map(([name, delay]) => {
+    const now = b.current_ms[name];
+    const change = now === undefined ? null : delay - now;
+    return el("tr", {},
+      el("td", { text: name }),
+      el("td", { class: "num", text: fmtMs(now) }),
+      el("td", { class: "num", text: fmtMs(delay) }),
+      el("td", { class: "num", text: change === null ? "—" : `${change >= 0 ? "+" : ""}${change.toFixed(2)}` }),
+      el("td", { class: "num", text: fmtMs(b.sigma_ms[name]) }));
+  });
+  $("est-rows").replaceChildren(...rows);
+  const parts = [];
+  if (b.spread_now_ms !== null) parts.push(`Desalineación estimada ahora: ${fmtMs(b.spread_now_ms)} ms`);
+  if (b.spread_after_ms !== null) parts.push(`después de aplicar: ±${fmtMs(b.spread_after_ms)} ms`);
+  parts.push(`alineado para «${b.anchor}»`);
+  parts.push(`${b.based_on} mediciones`);
+  $("est-summary").textContent = `${parts.join(" · ")}.`;
+}
+
+async function applyEstimator() {
+  if (!estLast) return;
+  const reply = await send("sync_apply", { suggestion_id: estLast.id });
+  if (reply && reply.ok) toast(`Sugerencia ${estLast.id} aplicada.`);
+}
+
+async function loadExplain(expect = null) {
+  const token = ++estExplainLoading;
+  for (let i = 0; i < 60 && token === estExplainLoading; i++) {
+    const reply = await send("sync_explain");
+    const e = reply && reply.ok ? reply.result : null;
+    const fresh = e && e.docs && (!expect || Object.entries(expect).every(([k, v]) => e.settings[k] === v));
+    if (fresh) {
+      renderExplain(e);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+function settingControl(id, doc, value) {
+  const choices = Object.keys(doc.sounds_choices || {});
+  let input;
+  if (choices.length) {
+    input = el("select", { "aria-label": doc.title });
+    for (const c of choices) {
+      const opt = el("option", { value: c, text: c });
+      if (String(value) === c) opt.selected = true;
+      input.append(opt);
+    }
+  } else {
+    input = el("input", { type: "number", step: "any", class: "num-input", value: String(value), "aria-label": doc.title });
+  }
+  input.addEventListener("change", async () => {
+    let v = input.value;
+    if (choices.length) v = v === "True" ? true : v === "False" ? false : v;
+    else v = Number(v);
+    const reply = await send("sync_set", { changes: { [id]: v } });
+    if (reply && reply.ok) loadExplain({ [id]: v });
+  });
+  return input;
+}
+
+function renderExplain(e) {
+  $("est-together-text").textContent = e.together.text;
+  $("est-together-fig").replaceChildren(drawFigure(e.together.figure));
+  const nodes = Object.entries(e.docs).map(([id, doc]) => {
+    const value = e.settings[id];
+    const rec = typeof doc.recommended === "number" ? `${doc.recommended} ${doc.unit || ""}`.trim() : String(doc.recommended);
+    const box = el("div", { "data-setting": id, class: "setting" },
+      el("div", { class: "row" }, el("strong", { text: doc.title }), settingControl(id, doc, value)),
+      el("p", { class: "muted small", text: doc.summary }),
+      el("p", { class: "small est-recommended", text: `Recomendado: ${rec}. ${doc.why_recommended}` }));
+    const choices = Object.entries(doc.sounds_choices || {});
+    if (choices.length) {
+      box.append(el("ul", { class: "small" }, ...choices.map(([c, t]) => el("li", { text: `${c}: ${t}` }))));
+    } else {
+      box.append(el("p", { class: "small", text: `Más bajo: ${doc.sounds_low}` }));
+      box.append(el("p", { class: "small", text: `Más alto: ${doc.sounds_high}` }));
+    }
+    box.append(el("p", { class: "muted small", text: doc.help }));
+    if (doc.figure) {
+      box.append(drawFigure(doc.figure));
+      box.append(el("span", { class: "chip chip-warn est-evidence", text: doc.figure.evidence }));
+    }
+    return box;
+  });
+  $("est-settings").replaceChildren(...nodes);
+}
+
+function drawFigure(fig) {
+  const W = 320, H = 140, L = 34, B = 20, T = 8, R = 8;
+  const all = fig.series.flatMap((s) => s.points).filter((p) => p[1] !== null);
+  const xs = all.map((p) => p[0]), ys = all.map((p) => p[1]);
+  const x0 = Math.min(...xs, 0), x1 = Math.max(...xs, 1);
+  const y1 = Math.max(...ys, 0.01) * 1.1;
+  const X = (x) => L + ((x - x0) / (x1 - x0 || 1)) * (W - L - R);
+  const Y = (y) => H - B - (y / y1) * (H - B - T);
+  const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img", class: "mt-1" });
+  const title = svg("title");
+  title.textContent = fig.caption;
+  root.append(title);
+  root.append(svg("line", { x1: L, y1: H - B, x2: W - R, y2: H - B, stroke: "currentColor", "stroke-opacity": "0.4" }));
+  root.append(svg("line", { x1: L, y1: T, x2: L, y2: H - B, stroke: "currentColor", "stroke-opacity": "0.4" }));
+  const yl = svg("text", { x: 2, y: T + 8, "font-size": "9", fill: "currentColor" });
+  yl.textContent = `${y1.toFixed(2)} ms`;
+  root.append(yl);
+  if (fig.kind !== "bars") {
+    const xl = svg("text", { x: W - R, y: H - 4, "font-size": "9", fill: "currentColor", "text-anchor": "end" });
+    xl.textContent = fig.x;
+    root.append(xl);
+  }
+  // Barras: una franja por lugar (categoría), las series lado a lado dentro de ella, y el nombre
+  // del lugar debajo. Las marcas de una línea de tiempo son líneas verticales.
+  const cats = [...new Set(fig.series.flatMap((s) => s.points.map((p) => p[0])))].sort((a, b) => a - b);
+  const band = (W - L - R) / Math.max(cats.length, 1);
+  const bw = (band * 0.8) / Math.max(fig.series.length, 1);
+  for (const m of fig.marks || []) {
+    if (fig.kind === "bars") {
+      const ci = cats.indexOf(m.x);
+      if (ci < 0) continue;
+      const t = svg("text", { x: L + ci * band + band / 2, y: H - 6, "font-size": "9", fill: "currentColor", "text-anchor": "middle" });
+      t.textContent = m.label;
+      root.append(t);
+    } else {
+      root.append(svg("line", { x1: X(m.x), y1: T, x2: X(m.x), y2: H - B, stroke: "currentColor", "stroke-dasharray": "1 3" }));
+    }
+  }
+  fig.series.forEach((s, k) => {
+    const st = SERIES_STYLE[s.style] || SERIES_STYLE.other;
+    if (fig.kind === "bars") {
+      for (const [x, y] of s.points) {
+        if (y === null) continue;
+        const left = L + cats.indexOf(x) * band + band * 0.1 + k * bw;
+        root.append(svg("rect", { x: left.toFixed(1), y: Y(y), width: Math.max(bw - 2, 1).toFixed(1), height: H - B - Y(y),
+          fill: st.stroke, "fill-opacity": s.style === "other" ? "0.4" : "0.85", stroke: st.stroke, "stroke-dasharray": st.dash }));
+      }
+      return;
+    }
+    let path = [];
+    const flush = () => {
+      if (path.length > 1) root.append(svg("polyline", { points: path.join(" "), fill: "none", stroke: st.stroke,
+        "stroke-width": st.width, "stroke-dasharray": st.dash }));
+      path = [];
+    };
+    for (const [x, y] of s.points) {
+      if (y === null) flush();
+      else path.push(`${X(x).toFixed(1)},${Y(y).toFixed(1)}`);
+    }
+    flush();
+  });
+  const legend = el("ul", { class: "muted small flex flex-wrap gap-x-4" },
+    ...fig.series.map((s) => el("li", { text: `${s.style === "recommended" ? "━" : s.style === "current" ? "╍" : "┈"} ${s.label}` })));
+  return el("figure", {}, root, el("figcaption", { class: "muted small", text: fig.caption }), legend);
+}
+
+function setupEstimator() {
+  $("est-apply").addEventListener("click", applyEstimator);
+  $("est-explain").addEventListener("toggle", () => { if ($("est-explain").open) loadExplain(); });
 }
 
 document.addEventListener("DOMContentLoaded", setup);

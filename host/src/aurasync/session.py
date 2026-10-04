@@ -365,6 +365,9 @@ class AudioSession:
         self.quality = QualityMeter(options.rate, [p.nombre for p in installation.parlantes])
         """Loudness in and out, PSR, true peak (spec 2026-10-02 §6.2): 0.3 ms per block."""
         self.cuts = CutLog()
+        self.on_measurement: Callable[[dict[str, float], frozenset[str], float], None] | None = None
+        """Set by the service: each loop measurement (arrivals, the speakers believed, the window's
+        middle on `time.monotonic`) also goes to the sync estimator (spec 2026-10-03 §4.1)."""
         self._routing_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-ruteo")
         self._routing_future = None
         self._last_step_at: float | None = None
@@ -802,6 +805,11 @@ class AudioSession:
             else:
                 arrivals, valid, why = self._arrivals(result)
                 self._note_residual(arrivals, valid)
+                if self.on_measurement is not None:
+                    try:
+                        self.on_measurement(arrivals, frozenset(valid), self._launch.get("t_mid", time.monotonic()))
+                    except Exception:  # noqa: BLE001 - a side channel never stops the loop or the audio
+                        self.log("sincronía", motivo="el estimador no tomó la medición; el lazo sigue")
                 adjustment = self.loop.propose(arrivals, valid, self._launch.get("t_mid", time.monotonic()))
                 self._record(
                     "ajuste" if adjustment.aceptado else "descartado",

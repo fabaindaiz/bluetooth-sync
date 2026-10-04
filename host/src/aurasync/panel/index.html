@@ -230,6 +230,33 @@
       </div>
     </section>
 
+    <!-- El estimador base (spec 2026-10-03): sugiere retardos con todas las mediciones; nada cambia hasta "Aplicar". -->
+    <section data-card="estimator" class="card" aria-labelledby="h-est">
+      <div class="card-head"><h2 id="h-est" class="card-title">Sincronía sugerida</h2></div>
+      <p class="muted small">Junta las mediciones de todos los micrófonos y sugiere un retardo por parlante. No cambia nada hasta que aplicas.</p>
+      <p id="est-reason" class="muted small mt-1"></p>
+      <div class="table-wrap mt-2" id="est-table" hidden>
+        <table class="table">
+          <thead><tr><th>Parlante</th><th>Ahora (ms)</th><th>Sugerido (ms)</th><th>Cambio (ms)</th><th>± (ms)</th></tr></thead>
+          <tbody id="est-rows"></tbody>
+        </table>
+      </div>
+      <p id="est-summary" class="muted small mt-2"></p>
+      <div class="row mt-2">
+        <button type="button" id="est-apply" class="btn btn-primary" disabled>Aplicar sugerencia</button>
+        <span id="est-applied" class="chip chip-ok" hidden>Aplicada</span>
+      </div>
+      <details id="est-explain" class="mt-3">
+        <summary id="est-explain-open" class="cursor-pointer">Configuración y qué cambia en el sonido</summary>
+        <div class="mt-2">
+          <h3 class="small">En conjunto</h3>
+          <p id="est-together-text" class="small mt-1">Calculando…</p>
+          <div id="est-together-fig" class="mt-1"></div>
+        </div>
+        <div id="est-settings" class="mt-3 grid gap-3"></div>
+      </details>
+    </section>
+
     <section data-card="response" class="card" aria-labelledby="h-resp">
       <div class="card-head"><h2 id="h-resp" class="card-title">Respuesta en frecuencia</h2><span class="muted small">en el micrófono · ±2 dB · bajo 100 Hz orientativa · punteada: ecualización · tenue: poco confiable</span></div>
       <div id="resp-box" hidden>

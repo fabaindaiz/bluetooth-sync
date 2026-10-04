@@ -147,6 +147,7 @@ no push in version 1: a client polls `GET /v1/state`.
 | `GET /v1/clients` · `DELETE /v1/clients/{id}` · `PATCH /v1/clients/{id}` (`{"name"}`) | `clients` · `client_revoke` · `client_rename` |
 | `GET /v1/pair` · `POST /v1/pair/code` (body optional: `{"seconds"}`) | `pair_status` · `pair_start` |
 | `POST /v1/pair/{request}/approve` (body optional: `{"scope"}`) · `POST /v1/pair/{request}/deny` | `pair_approve` · `pair_deny` |
+| `GET /v1/sync` · `PATCH /v1/sync` (body = `changes`) · `POST /v1/sync/apply` (body optional: `{"suggestion_id"}`) · `GET /v1/sync/explain` | `sync_state` · `sync_set` · `sync_apply` · `sync_explain` |
 | `POST /v1/command` | the raw message, exactly as it would travel over serial |
 
 Without credentials (see *Remote clients*): `GET /v1/hello`, `GET /v1/tls/root.pem|crt|mobileconfig`,
@@ -375,6 +376,21 @@ curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "limiter", "
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "ambience", "speaker": "JBL Go 4 Red", "params": {"pan": -0.5}}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_reset", "stage": "limiter"}'
 ```
+
+## The sync estimator (spec 2026-10-03)
+
+A base estimator on the server takes every sync measurement (today the loop's, from the
+server's microphone; later point and continuous ones from phones) and **suggests** absolute
+delays; nothing changes until `sync_apply` (d-7c8794-2c6f91). It runs on its own thread.
+
+| Op | Args | Effect |
+|---|---|---|
+| `sync_state` (read) | — | `{"settings", "suggestion", "applied_id", "levels", "sources", "dropped"}`. `suggestion`: `{"id", "delays_ms", "current_ms", "sigma_ms", "spread_now_ms", "spread_after_ms", "anchor", "based_on", "at", "reason", "drift_ppm", "jumps"}`, or null. `levels` are statistics only (d-7c8794-e61118) |
+| `sync_set` (control) | `changes` (object of settings) | validated (`out_of_range` otherwise), written to `sync.json` next to `chain.json`, and the estimator refits |
+| `sync_apply` (control) | `suggestion_id` (optional) | applies the current suggestion's delays through the cut; speakers without a suggestion keep theirs. `conflict` if there is none, if `suggestion_id` is not the current one, or if it was applied already |
+| `sync_explain` (read) | — | every setting's recommendation, how it changes the sound, and a SIMULADO figure, plus `together` (the whole configuration). Built on the estimator's thread: `{"pending": true}` until it is ready |
+
+The snapshot carries `sync_suggestion` (the suggestion plus `applied` and `method`, never the figures).
 
 ## Quality, the radio, the speakers' volume (spec 2026-10-02 §3, §5, §6)
 

@@ -325,6 +325,11 @@ OPS: dict[str, Op] = {
         required={"stage": Field(str, 1, 64)},
         optional={"algorithm": Field(str, 1, 64), "params": Field(dict), "speaker": SPEAKER},
     ),
+    # The sync estimator (spec 2026-10-03 §6.1): it suggests delays; `sync_apply` applies them.
+    "sync_state": Op(),
+    "sync_set": Op(required={"changes": Field(dict)}),
+    "sync_apply": Op(optional={"suggestion_id": Field(int)}),
+    "sync_explain": Op(),
     "chain_reset": Op(required={"stage": Field(str, 1, 64)}, optional={"param": Field(str, 1, 64), "speaker": SPEAKER}),
     # The radio (spec 2026-10-02 §3.2): raise the bluez5 log level so the radio monitor sees drops.
     "radio_log": Op(required={"active": Field(bool)}, optional={"mode": Field(str, choices=("light", "heavy"))}),

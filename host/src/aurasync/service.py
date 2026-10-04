@@ -58,7 +58,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aurasync import __version__, control, remote
+from aurasync import __version__, control, remote, sync_docs
 from aurasync import chain as chain_model
 from aurasync import radio as radio_module
 from aurasync.access import ACCESS_OPS
@@ -73,6 +73,9 @@ from aurasync.motor import Motor
 from aurasync.presets import PresetChainStore, PresetStore, read_lenient, write_atomic
 from aurasync.session import AudioSession, SessionError, SessionOptions
 from aurasync.snapshot import build_snapshot
+from aurasync.sync_estimator import SyncEstimator
+from aurasync.sync_measurement import Measurement
+from aurasync.sync_methods import SyncSettings
 from aurasync.system import Observer
 
 if TYPE_CHECKING:
@@ -82,6 +85,9 @@ if TYPE_CHECKING:
     from aurasync.radio import Drop, LogLevel, RadioMonitor
 
 DEFAULT_PORT = 8731
+SYNC_VERSION = 1
+SERVER_POSITION = "server"
+"""The position id of the server's own microphone: the anchor while no point target exists."""
 TICK_S = 0.05
 REPLY_TIMEOUT_S = 30.0
 """`start` blocks the engine for about two seconds (the routing check); this is far above."""
@@ -405,11 +411,17 @@ class Service:
         )
         self.settings.chain = self._load_chain()
         self.reload_installation()
+        self.sync_path = self.chain_path.parent / "sync.json"
+        """The sync estimator's settings, next to the chain's (a simulation works on a copy)."""
+        self.sync_estimator = SyncEstimator(self._load_sync(), self._current_delays, SERVER_POSITION)
+        self.sync_estimator.explainer = sync_docs.explain
+        self._sync_applied_id: int | None = None
         self._publish()
 
     def close(self) -> None:
-        """Detach the log buffer (tests create many services in one process)."""
+        """Detach the log buffer and stop the sync estimator (tests create many services in one process)."""
         self._logger.removeHandler(self.logs)
+        self.sync_estimator.close()
 
     # -- transport side (any thread) -------------------------------------------------
 
@@ -622,6 +634,7 @@ class Service:
     # -- the installation -----------------------------------------------------------
 
     def reload_installation(self) -> None:
+        self._sync_reset()
         if self.installation_path.exists():
             self.installation = Instalacion.cargar(self.installation_path)
         else:
@@ -717,6 +730,8 @@ class Service:
             raise
         self.session, self.motor = session, motor
         self.session_options = options
+        session.on_measurement = self._loop_measurement
+        self._sync_reset()
         cuts = getattr(session, "cuts", None)
         self._cut_reporter = CutReporter(cuts) if cuts is not None else None
         self.status.move("playing")
@@ -810,6 +825,131 @@ class Service:
                 self.session.set_probe(self.settings.probe, margin)
             except SessionError as exc:
                 raise ContractError(exc.code, exc.message) from exc
+
+    # -- the sync estimator (spec 2026-10-03) -------------------------------------------
+
+    def _sync_reset(self) -> None:
+        """A new session reopens every stream, and the installation may have changed: the
+        latencies measured before no longer hold, and an old suggestion must not be applied
+        (review 2026-10-03)."""
+        estimator = getattr(self, "sync_estimator", None)
+        if estimator is not None:
+            estimator.reset()
+            self._sync_applied_id = None
+
+    def _current_delays(self) -> dict[str, float]:
+        """Read from the estimator's thread: a copy of plain floats, never the motor."""
+        return {p.nombre: p.retardo_ms for p in (self.installation.parlantes if self.installation else [])}
+
+    def _load_sync(self) -> SyncSettings:
+        """Never fails: what cannot be used is logged and left at its default."""
+        if not self.sync_path.exists():
+            return SyncSettings()
+
+        def warn(line: str) -> None:
+            self.log(line, level=logging.WARNING, part="sync")
+
+        data = read_lenient(self.sync_path, warn)
+        if not isinstance(data, dict) or data.get("v") != SYNC_VERSION:
+            if data is not None:
+                warn(f"{self.sync_path}: expected {{'v': {SYNC_VERSION}, 'sync': {{...}}}}; using the defaults")
+            return SyncSettings()
+        return SyncSettings.from_dict(data.get("sync", {}), warn)
+
+    def _loop_measurement(self, arrivals: dict[str, float], valid: frozenset[str], t: float) -> None:
+        """The server microphone's measurement, from the session's loop, to the estimator (O(1))."""
+        believed = {n: float(a) for n, a in arrivals.items() if n in valid and math.isfinite(a)}
+        if not believed:
+            return
+        self.sync_estimator.submit(
+            Measurement(SERVER_POSITION, SERVER_POSITION, "continuous", None, 1.0, t, believed, origin="server")
+        )
+
+    def sync_brief(self) -> dict | None:
+        """What the snapshot carries every block: the suggestion, without figures."""
+        s = self.sync_estimator.suggestion
+        if s is None:
+            return None
+        return {**s.to_dict(), "applied": s.id == self._sync_applied_id, "method": self.sync_estimator.settings.method}
+
+    def sync_state(self) -> dict:
+        est = self.sync_estimator
+        s = est.suggestion
+        return {
+            "settings": est.settings.to_dict(),
+            "suggestion": s.to_dict() if s is not None else None,
+            "applied_id": self._sync_applied_id,
+            "levels": est.levels(),
+            "sources": est.sources(),
+            "dropped": est.dropped,
+            "error": est.error,
+        }
+
+    def sync_set(self, changes: dict) -> dict:
+        try:
+            settings = self.sync_estimator.settings.replace(**changes)
+        except (TypeError, ValueError) as exc:
+            raise ContractError("out_of_range", str(exc)) from exc
+        text = json.dumps({"v": SYNC_VERSION, "sync": settings.to_dict()}, indent=2, ensure_ascii=False) + "\n"
+        write_atomic(self.sync_path, text)
+        self.sync_estimator.set_settings(settings)
+        self.log(f"sync: settings {_brief(changes)}", part="sync")
+        return {**self._changed(dirty=False), "settings": settings.to_dict()}
+
+    def sync_apply(self, suggestion_id: int | None = None) -> dict:
+        s = self.sync_estimator.suggestion
+        if s is None or not s.delays_ms:
+            why = f": {s.reason}" if s is not None and s.reason else ""
+            raise ContractError("conflict", f"there is no suggestion to apply{why}")
+        if suggestion_id is not None and suggestion_id != s.id:
+            raise ContractError(
+                "conflict", f"suggestion {suggestion_id} is not the current one ({s.id}); read it again"
+            )
+        if s.id == self._sync_applied_id:
+            raise ContractError("conflict", f"suggestion {s.id} is already applied; wait for a new one")
+        delays = dict(s.delays_ms)
+        names = {p.nombre for p in (self.installation.parlantes if self.installation else [])}
+        unknown = sorted(set(delays) - names)
+        if unknown:
+            # Refused before the cut: inside it, a missing name would fail on the engine thread
+            # and close the session (review 2026-10-03).
+            raise ContractError(
+                "conflict", f"the suggestion names speakers not in the installation: {', '.join(unknown)}"
+            )
+
+        def apply() -> None:
+            # Absolute delays (d-7c8794-2c6f91): applying twice gives the same. Speakers without
+            # a suggestion (no anchor heard them) keep what they have.
+            for name, delay in delays.items():
+                self.installation.por_nombre(name).retardo_ms = round(delay, 3)
+            if self.motor is not None:
+                self.motor.actualizar()
+
+        # As `calibration_apply`: the loop restarts from the applied delays, so its history
+        # (measured against the old ones) does not pull them back.
+        session = self.session
+        restart_loop = session is not None and session.loop is not None
+        if restart_loop:
+            session.disable_recalibration()
+        if self.motor is not None:
+            self.motor.cortar(apply)
+        else:
+            apply()
+        if restart_loop:
+            session.enable_recalibration(self.options.microphone)
+        self._sync_applied_id = s.id
+        listed = ", ".join(f"{n} {v:.2f} ms" for n, v in delays.items())
+        self.log(f"sync: applied suggestion {s.id}: {listed} (anchor {s.anchor})", part="sync")
+        return {**self._changed(), "applied": s.id, "delays_ms": delays}
+
+    def sync_explain(self) -> dict:
+        """Cached, built on the estimator's thread (the figures are simulations: never here)."""
+        est = self.sync_estimator
+        if est.explain is None or est.explain.get("settings") != est.settings.to_dict():
+            est.request_explain()
+            if est.explain is None:
+                return {"pending": True}
+        return est.explain
 
     # -- the chain (spec 2026-10-02 §4) -------------------------------------------------
 
@@ -1540,6 +1680,7 @@ class Service:
             finally:
                 self.session, self.motor = None, None
                 self.ab = None
+                self._sync_reset()
                 self.status.move(status, reason)
                 self.log(
                     f"session closed{f': {reason}' if reason else ''}",

@@ -102,6 +102,15 @@ def route(method: str, path: str, body: Any) -> dict:
             return {**extra, "v": v, "op": "pair_approve", "request": request}
         case "POST", ["pair", request, "deny"]:
             return {"v": v, "op": "pair_deny", "request": request}
+        # The sync estimator (spec 2026-10-03 §6.1):
+        case "GET", ["sync"]:
+            return {"v": v, "op": "sync_state"}
+        case "PATCH", ["sync"]:
+            return {"v": v, "op": "sync_set", "changes": body}
+        case "POST", ["sync", "apply"]:
+            return {**extra, "v": v, "op": "sync_apply"}
+        case "GET", ["sync", "explain"]:
+            return {"v": v, "op": "sync_explain"}
         case "POST", ["command"]:
             return body
     raise ContractError("not_found", f"no route {method} {path}")

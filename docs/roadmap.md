@@ -1450,6 +1450,30 @@ exactitud desde 7 fuentes simultáneas; el lazo por turnos tarda más en volver 
 **Con qué choca:** con el transporte. Para 8 hacen falta 3–4 adaptadores, 8 Picos, o Auracast
 con un BIG de 8 BIS (research/13 §2.3).
 
+### Estimador base de sincronía alimentado por mediciones continuas y puntuales de varios micrófonos · i-7c8794-737d4e
+**Estado: A medias (2026-10-03). Pasos 1 y 2 hechos en simulación, en `PC-Ryzen5`**; los pasos 3 a 5
+y las pruebas con parlantes, pendientes. Spec: [superpowers/specs/2026-10-03-sync-estimator-design.md](superpowers/specs/2026-10-03-sync-estimator-design.md); plan de los pasos 1–2:
+`docs/superpowers/plans/2026-10-03-sync-estimator-steps-1-2.md`.
+
+**Qué es:** un estimador en el servidor que junta todas las mediciones de sincronía (el micrófono
+del servidor hoy; los celulares del panel después, en medición puntual o continua) y **sugiere**
+retardos absolutos que el usuario aplica desde el panel (d-7c8794-2c6f91). Extiende
+i-7c8794-4745b4 (calibrar sin un micrófono central) e i-7c8794-e3e40d (la sonda).
+
+**Lo hecho (SIMULADO):** `sync_measurement.py`, `sync_sim.py`, `sync_methods.py` (mínimos
+cuadrados robustos: deriva, saltos que se creen al repetirse, base por micrófono, anclas y votos),
+`sync_estimator.py` (hilo propio, O(1) para el motor), `knob_docs.py` y `sync_docs.py` (cada
+perilla con recomendación, cómo suena y figura SIMULADA, y el texto "en conjunto"), las operaciones
+`sync_state`, `sync_set`, `sync_apply`, `sync_explain`, y la tarjeta "Sincronía sugerida" del
+panel. Criterios en dos semillas y con ventana de 10 y 20 min: deriva de 22 ppm seguida con
+< 0,25 ms de error; un salto de 6,52 ms creído con la segunda medición; micrófonos que oyen 2 de 3
+combinados; un micrófono con sesgo constante no mueve nada.
+
+**Lo que falta:** paso 3 (la medición puntual en el navegador: HTTPS, reloj, referencia de la sonda,
+el estimador en JS), paso 4 (celulares en continua, micrófono movido), paso 5 (`tracks` y `kalman`
+con su tabla comparativa), la calibración con ruido como objetivo, y las pruebas con parlantes
+(spec §7).
+
 ### Calibrar el retardo sin un micrófono central · i-7c8794-4745b4
 **Estado:** Planificado. Pedido del usuario el 2026-09-29. El detalle técnico, con el estado de
 evidencia de cada camino, está en
@@ -1479,6 +1503,9 @@ existe y ya mide. Las dos piezas están construidas, así que la comparación es
 
 **Con qué choca:** con nada; es aditivo. Si funciona, la calibración con micrófono queda como
 referencia y verificación, no como el mecanismo de todos los días.
+
+**Desde el 2026-10-03** lo continúa i-7c8794-737d4e: un estimador que junta las mediciones de varios
+micrófonos (los celulares del panel) en vez de depender de uno.
 
 ### Portabilidad del host a macOS · i-7c8794-a848a0
 **Estado:** Planificado. Pedido del usuario el 2026-09-29, junto con los controles en vivo.

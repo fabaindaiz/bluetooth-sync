@@ -7,6 +7,80 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-03 · s-7c8794-0136d1 — Microcortes en PC-Ryzen5: el procesamiento descartado y los cortes al log
+
+**Qué.** En `PC-Ryzen5`, con los 3 Go 4, el usuario oyó microcortes "constantes, como 2/s" que
+se iban al reiniciar la sesión, y pidió arreglarlos porque sospechaba del pipeline de
+procesamiento. Se midió sin parlantes y se descartó: el motor con su cadena, el `step` completo
+y el servicio simulado con un stream abierto quedan en 5–8 ms de los 85 ms del bloque, sin
+crecer en 15–30 min. Los cortes de esa noche no se pueden clasificar: el registro de radio estaba
+apagado, y los eventos de `cuts.py` vivían solo en memoria. Desde ahora el servicio los escribe en
+su log (`cut_report.py`): una línea cada 10 s con fallas, y el total al cerrar la sesión.
+Después el usuario sospechó un leak y fijó la regla: **el stream se procesa siempre sobre datos
+de largo fijo, y el historial va aparte y asíncrono**. Con ella se sacó del hilo del motor lo que
+dependía del historial: la sonoridad integrada de `QualityMeter` (a `LoudnessHistory`, un hilo
+con un histograma fijo, `GatedIntegrator`), el resumen de `CutLog` que la foto armaba en cada
+bloque (al hilo `aurasync-cut-summary`), la copia del registro entero en `CutReporter`
+(`CutLog.since`), y el buffer sin tope de la sala simulada. Al final, el usuario propuso calibrar
+con los teléfonos del panel y pidió que el patrón distinga a cada parlante: la sonda ya lo hace
+(SIMULADO, 0 falsos positivos), pero el consenso de `probe_measure.measure` usaba la mediana de
+todos los parlantes, incluidos los no oídos, y con la mayoría sin oír descartaba a los oídos.
+Corregido; la propuesta quedó en research/13 §5.3 y el hallazgo en experimentos/16 §4.1.1.
+Después, en conversación, se diseñó el **estimador base de sincronía** (spec
+`docs/superpowers/specs/2026-10-03-sync-estimator-design.md`, cinco decisiones nuevas
+d-7c8794-589dec, -2c6f91, -ee5d47, -e61118, -0a4586, roadmap i-7c8794-737d4e) y, con "apruebo el
+plan, continúa autónomamente", se construyeron sus pasos 1 y 2 (plan
+`docs/superpowers/plans/2026-10-03-sync-estimator-steps-1-2.md`): `sync_measurement`, `sync_sim`,
+`sync_methods` (mínimos cuadrados robustos), `sync_estimator`, `sync_levels`, `knob_docs`,
+`sync_docs`, las ops `sync_state`/`sync_set`/`sync_apply`/`sync_explain` con sus rutas REST, el
+enganche del lazo en la sesión y la tarjeta "Sincronía sugerida" del panel. Una revisión final en
+contexto limpio encontró, y se corrigieron con un test visto fallar cada uno: un salto hallado en
+la última vuelta mataba el hilo del estimador (`KeyError`) y nada lo atrapaba; un salto real se
+creía dos ajustes y se perdía (la sugerencia erraba hasta 2 ms ~6 min), ahora se arrastra de un
+ajuste al siguiente; perillas enteras aceptaban decimales; el historial sobrevivía a las sesiones y
+aplicar con un parlante ya no instalado cerraba la sesión; las barras de la figura del voto salían
+del lienzo; el voto no caía en w/(1+w) (las filas de datos son blandas frente a los priors: se
+escalaron); y una medición rechazada no decía por qué y cambiaba el id de la sugerencia.
+**Archivos.** `host/src/aurasync/cut_report.py` (nuevo), `host/src/aurasync/service.py`,
+`host/src/aurasync/quality.py`, `host/src/aurasync/dsp/loudness.py`, `host/src/aurasync/cuts.py`,
+`host/src/aurasync/snapshot.py`, `host/src/aurasync/session.py`, `host/src/aurasync/simulated.py`,
+`host/tests/test_cut_report.py`, `host/tests/test_fixed_length_engine.py` (nuevo),
+`host/tests/test_quality.py`, `docs/research/experimentos/12-microcortes-con-3-go-4.md` §4.1,
+`host/src/aurasync/probe_measure.py`, `host/tests/test_probe_measure.py`,
+`docs/research/experimentos/16-ocho-parlantes-en-simulacion.md` §4.1.1,
+`docs/research/13-dispositivos-pi-pico-y-panel-independiente.md` §5.3.
+**Por qué.** Sin el tipo de corte (motor tarde, tubería vacía, xrun, radio) no se puede arreglar
+la causa, y la de esa noche se perdió con la sesión.
+**Arquitectura.** ✅ Cumple: el reporter lee el `CutLog` desde el hilo del motor y no agrega
+trabajo a otros hilos; código nuevo en inglés, en un módulo nuevo.
+**Qué salió mal en el camino.** La sospecha del usuario (el procesamiento) no se sostuvo: la
+cadena del usuario cuesta lo mismo que la de fábrica. El servicio lanzado al principio de la
+sesión (`aurasync service`, en segundo plano) se detuvo solo al llegar al límite de 2 h de las
+tareas en segundo plano.
+**Qué quedó pendiente.** La causa de los cortes: C2 de experimentos/12 con el registro de radio
+prendido **antes** de que empiece a sonar. Ningún leak encontrado alcanza solo para dos cortes
+por segundo (peor caso medido ~2,6 ms por bloque). La regla del largo fijo no está en
+`docs/decisions.md`: queda propuesta como decisión. `ultimos()` del micrófono continuo
+concatena su anillo entero (~14 s) en cada bloque con el lazo prendido: es fijo, no crece, pero
+cuesta ~1–2 ms (estimado). `test_interpolation.py::test_it_costs_far_less_than_the_formula`
+falla en `PC-Ryzen5` (6,5–7,4× contra el 8× pedido, umbral fijado en el Mac).
+**Desvío del plan.** Ninguno.
+Del estimador: el nivel de la sonda enmascarada no se pudo estimar en simulación (errores
+sistemáticos de hasta 12 dB con cuatro estimadores probados; no se entrega); la calibración con
+ruido como objetivo, los pasos 3 a 5 y toda prueba con parlantes quedan pendientes. En `PC-Ryzen5`
+fallan, igual que en el checkout principal sin estos cambios, tres tests de navegador ya existentes:
+`test_every_setting_explains_itself`, `test_the_navigation_cost_of_the_tabs_does_not_grow` (32,0
+contra 31,4) y `test_pwa` (falta la compilación web).
+**No verificado.** Si los cortes son la radio (el techo de `reduce bitpool` es 2/s) o el reloj
+(§1.1 de experimentos/12): ninguna de las dos se midió esa noche.
+**Medido.** `PC-Ryzen5`: `Motor.procesar` 5,33–5,38 ms de mediana y 10,5 ms de peor en 10 500
+bloques; `AudioSession.step` 7,5–7,7 ms de mediana y 14,9 ms de peor; el servicio `--simular` 30 min en
+tiempo real 6,1–6,4 ms, con 7 cortes `late` (43–66 ms) todos mientras corría `scripts/check.sh`. Con la regla del largo fijo: `quality.summary` 0,13–0,14 ms planos en 15 min
+(antes 0,33 → 1,90 ms); el servicio `--simular` 15 min, 0 cortes, 19 hilos, 6 descriptores, memoria
+96,2 → 97,2 MB. `scripts/check.sh`: 816 tests bien, 1 mal (el umbral de interpolación de siempre).
+
+---
+
 ## 2026-10-02 · s-7c8794-7142ab — Microcortes, la cadena con todas sus perillas, calidad, Rust, dispositivos y el panel como PWA
 
 **Qué.** Sesión en el **Mac** (sin parlantes), con el usuario pidiendo mejoras del motor, del

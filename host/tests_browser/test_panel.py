@@ -417,6 +417,7 @@ def test_every_organisation_reaches_every_card(browser: Browser, svc: Running, l
         "speakers",
         "devices",
         "calibration",
+        "estimator",
         "response",
         "health",
         "levels",

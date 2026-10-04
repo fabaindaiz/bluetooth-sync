@@ -330,6 +330,48 @@ instalada) y Firefox, con la raíz instalada y sin ella.
   instalada en un iPhone, y el aviso de Local Network Access de Chrome desde el origen real de
   Pages (desde `localhost` no aparece).
 
+### 5.3 Calibrar con los teléfonos del panel (2026-10-03, propuesta). INFERIDO salvo lo marcado
+
+**Diseño aprobado y en construcción:** [superpowers/specs/2026-10-03-sync-estimator-design.md](../superpowers/specs/2026-10-03-sync-estimator-design.md) (roadmap i-7c8794-737d4e).
+
+**El pedido (usuario, 2026-10-03):** que los teléfonos conectados al panel graben con su micrófono
+el patrón invisible mientras suena la música y manden la calibración al servidor, para
+recalibrar cuando haga falta; y que el patrón **distinga a cada parlante**, para calibrar de a
+partes cuando un micrófono no oye a todos.
+
+- **El patrón no se puede compartir como semilla.** La sonda (`dsp/probe.py`) es un ruido propio
+  por parlante, pero su nivel sigue cuadro a cuadro y por tercio a la música de ese parlante, y
+  pasa por el limitador: el teléfono no la regenera desde la semilla (VERIFICADO, código).
+- **Dos caminos.** (A) el teléfono graba 4–8 s y los sube (mono, 16 bits, 48 kHz: ~96 KB/s mientras
+  mide) y el servidor corre el estimador que ya existe (`probe_measure.py`); (B) el teléfono
+  calcula, con la referencia de cada parlante (~192 KB/s por parlante en float32) o con semilla y
+  ganancias por banda y el mismo PCG64 que numpy, bit a bit. **Recomendado: A**, porque reusa un
+  estimador validado; B después, si importa que el audio no salga del teléfono (WASM desde el
+  motor en Rust de research/12).
+- **El reloj y la latencia del teléfono se cancelan:** lo que se corrige es la diferencia de
+  llegada entre parlantes dentro de una misma grabación; un retardo común a todos no cambia nada.
+  Para alinear la grabación con la referencia basta estimar el reloj del servidor con unos pocos
+  ida y vuelta por HTTP y buscar la correlación en una ventana amplia, como hoy.
+- **Distinguir parlantes: ya lo hace la sonda (SIMULADO,** [experimentos/16](experimentos/16-ocho-parlantes-en-simulacion.md)
+  §4.1.1): un micrófono que oye solo a algunos mide esos y rechaza los demás, sin falsos
+  positivos. Hacía falta corregir el consenso, que se tomaba sobre todos (corregido el
+  2026-10-03). Una medición necesita al menos **dos** parlantes oídos para decir algo de
+  alineación (`arrival_loop`: una sola llegada no tiene con qué compararse).
+- **Lo que falta para combinar teléfonos:** cada posición mide el retardo electrónico más su
+  diferencia de camino (~3 ms por metro). Lo que hay que corregir es el electrónico, igual en toda
+  la pieza (research/03). Hoy el lazo sigue cada parlante en una sola pista, sin saber de qué
+  micrófono vino la medición: mediciones de dos posiciones se pelearían. Hace falta llevar la
+  pista por (micrófono, parlante) y combinar las diferencias de llegada de grabaciones que
+  comparten parlantes (un sistema de mínimos cuadrados sobre el grafo "quién oyó a quién"; con el
+  plano de los parlantes y varias posiciones se separa lo acústico). Teléfono A oye {Red, Black},
+  B oye {Black, Blue}: Black los encadena.
+- **Riesgos a medir primero:** que el navegador apague su procesado de voz (`echoCancellation`,
+  `noiseSuppression`, `autoGainControl` en false; la supresión de ruido se comería una sonda que
+  es ruido; Safari en iPhone no siempre lo respeta); que `getUserMedia` exige HTTPS (§5, el
+  servicio ya lo trae); que una medición de un teléfono es dato no confiable (permiso de control
+  de `access.py`, los mismos filtros, y nunca mover retardos con una sola); y que la sonda está
+  apagada por defecto hasta el A/B ciego (i-7c8794-e3e40d, paso 4).
+
 ## 6. Dudas abiertas para el usuario
 
 - ~~¿Cuántos parlantes a futuro?~~ **Hasta 8**, como meta para probar los límites (d-7c8794-3b7793). Las demás dudas quedan para más adelante (usuario, 2026-10-02).

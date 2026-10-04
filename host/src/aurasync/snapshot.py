@@ -194,6 +194,7 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
         },
         "calibration": calibration,
         "sync": _sync(session),
+        "sync_suggestion": svc.sync_brief() if hasattr(svc, "sync_brief") else None,
         # Spec 2026-10-02 §6.3: the polling fallback of the stream's `quality` and `radio`.
         "quality": svc.quality,
         "radio": svc.radio_view(),
