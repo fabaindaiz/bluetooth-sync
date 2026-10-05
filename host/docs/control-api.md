@@ -107,6 +107,18 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
 }
 ```
 
+`monitor` (the headphone monitor) reports `mode`, `target`, `gain_db`, `state`, `error`,
+`routed_to`, `reached`, `drops` (blocks its writer dropped) and its cushion, the audio kept ahead in
+the `pw-play` pipe so the Bluetooth driver never finds it empty:
+
+| Field | Meaning |
+|---|---|
+| `cushion_ms` | target cushion: one engine block plus one driver quantum (2048 frames), capped at 400 ms; `null` without a monitor output |
+| `level_ms` | the pipe level read before the last block, or `null` if it could not be read |
+| `refills` | times the pipe was about to starve and was refilled with silence up to the target |
+| `pipe_bytes` | the pipe's real size after asking for room for the cushion, or `null` if it could not be set (a warning is logged) |
+| `trims` | blocks dropped because the pipe held more than the target plus two blocks |
+
 `session.status` is `stopped`, `starting`, `playing` or `error` (with `reason`). There is
 no push in version 1: a client polls `GET /v1/state`.
 

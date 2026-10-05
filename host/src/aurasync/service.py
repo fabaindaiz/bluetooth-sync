@@ -766,7 +766,9 @@ class Service:
         self._sync_reset()
         cuts = getattr(session, "cuts", None)
         self._cut_reporter = CutReporter(cuts) if cuts is not None else None
-        self.monitor.session_opened(session, installation, sink_name=options.sink_name, rate=options.rate)
+        self.monitor.session_opened(
+            session, installation, sink_name=options.sink_name, rate=options.rate, block=options.block
+        )
         self.status.move("playing")
         self.log(
             f"session open: {len(installation.parlantes)} speakers, block {options.block}, "
@@ -1859,7 +1861,12 @@ class Service:
                 gain_db=current.gain_db if gain_db is None else gain_db,
             )
             self.monitor.set(
-                settings, self.session, self.installation, sink_name=self.options.sink_name, rate=self.options.rate
+                settings,
+                self.session,
+                self.installation,
+                sink_name=self.options.sink_name,
+                rate=self.options.rate,
+                block=self.options.block,
             )
         except MonitorError as exc:
             raise ContractError("conflict" if isinstance(exc, LoopError) else "out_of_range", str(exc)) from exc

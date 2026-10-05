@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Self
 import numpy as np
 
 from aurasync.dsp import eq, response
+from aurasync.monitor import Cushion
 from aurasync.radio import MONITOR_TOPIC, SINK_TOPIC, LogLevel, RadioMonitor
 from aurasync.session import AudioSession
 from aurasync.sources import probe_signal
@@ -284,8 +285,9 @@ class SimulatedMonitor:
     """The headphone monitor without PipeWire (monitor.MonitorOutput's shape): it counts what
     it gets and says it reached its target."""
 
-    def __init__(self, settings, names, angles, rate, sink) -> None:  # noqa: ARG002 - the factory's signature
+    def __init__(self, settings, names, angles, rate, sink, block=4096) -> None:  # noqa: ARG002 - the factory's signature
         self.settings = settings
+        self.cushion = Cushion(block, rate)
         self.pushed = 0
         self.writer = None
 

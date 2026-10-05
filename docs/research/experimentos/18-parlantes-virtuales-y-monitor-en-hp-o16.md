@@ -51,6 +51,32 @@ pw-dump > /tmp/e18-pw-dump.json                  # comprobación 3
 # comprobación 2: leer state.monitor.drops del snapshot al inicio y a los 5 min
 ```
 
+## Hallazgo previo (2026-10-05): cortes del monitor
+
+Antes de correr el protocolo, el monitor ya se oyó cortado. **Causa MEDIDA** en `HP-O16` con
+`pw-top` (columna ERR del nodo `pw-play`), audífonos WH-CH520 en A2DP con AAC, bloque del motor de
+4096 cuadros (85,3 ms a 48 kHz), quantum del driver Bluetooth de 2048 cuadros (42,7 ms), música de
+Spotify, ventanas de 30 s:
+
+- El monitor escribía un bloque cada dos ciclos del driver y **nada por adelantado**: cada bloque
+  llegaba justo después del ciclo que lo necesitaba. **352 xruns en 30 s** (11,7/s de 23,4 ciclos/s:
+  la mitad de los ciclos en silencio).
+- Con 100 ms de silencio escritos una vez al abrir (experimento aparte): **0 xruns en 30 s** con música.
+- Con la música en pausa (entrada `None`, el motor marcado por `outputs.Pacer` con `time.monotonic`)
+  los xruns volvieron (~320 en ~1 min): un colchón fijo se vacía. **INFERIDO:** que sea por la diferencia entre el reloj
+  del motor y el del driver; la causa todavía no se sabe (con ~23 % de ciclos sin datos no encaja con
+  una deriva de ppm). Hay que **controlarlo**, no solo cebarlo.
+
+**Arreglo:** el colchón objetivo es un bloque más un quantum del driver (tope 400 ms), se escribe como
+silencio al abrir y se vigila en cada bloque con el nivel de la tubería: por debajo de un quantum se
+rellena hasta el objetivo (un hueco en vez de una racha de cortes) y por encima de objetivo + 2 bloques
+se descarta el bloque. El estado del monitor lo muestra (`cushion_ms`, `level_ms`, `refills`, `trims`).
+
+Cada medición es **una sola corrida**, todavía sin repetir: CLAUDE.md pide repetición entre mediciones
+independientes antes de darla por buena. Las comprobaciones formales de este experimento siguen
+pendientes; falta medir con el arreglo (xruns de `pw-play` y `state.monitor.refills`/`trims` con música
+y en pausa).
+
 ## 4. Resultado
 
 **MEDIDO:** pendiente. Sin número, nada se da por bueno.

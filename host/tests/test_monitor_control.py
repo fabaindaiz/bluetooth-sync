@@ -21,8 +21,9 @@ INST = Instalacion(
 class _Out:
     instances: ClassVar[list["_Out"]] = []
 
-    def __init__(self, settings, names, angles, rate, sink) -> None:
+    def __init__(self, settings, names, angles, rate, sink, block=4096) -> None:
         self.settings, self.names, self.angles, self.rate, self.sink = settings, names, angles, rate, sink
+        self.block = block
         self.opened = self.closed = False
         self.opened_on = None
         _Out.instances.append(self)
@@ -157,3 +158,34 @@ def test_forbidden_targets_ignore_virtual_and_name_both_combine_nodes():
         "aurasync_salida_b",
         "aurasync_monitor",
     }
+
+
+def test_the_state_carries_the_cushion_fields():
+    from aurasync.monitor import Cushion
+
+    ctl = MonitorController(MonitorSettings(), _Out, on_engine=lambda f: f(), save=lambda _d: None)
+    view = ctl.view([], INST, "aurasync")
+    assert (view["cushion_ms"], view["level_ms"], view["refills"], view["trims"]) == (None, None, 0, 0)
+
+    class _Session:
+        monitor = type("M", (), {"cushion": Cushion(4096, 48000)})()
+
+    ctl._session = _Session()  # noqa: SLF001
+    _Session.monitor.cushion.plan(0)  # priming
+    _Session.monitor.cushion.plan(0)  # a real starvation
+    view = ctl.view([], INST, "aurasync")
+    assert view["cushion_ms"] == 128.0
+    assert view["level_ms"] == 0.0
+    assert view["refills"] == 1
+    assert view["trims"] == 0
+
+
+def test_the_block_size_reaches_the_output():
+    _Out.instances.clear()
+    c = MonitorController(MonitorSettings(), _Out, on_engine=lambda f: f(), save=lambda _d: None)
+    session = type("S", (), {"attach_monitor": lambda _self, _out: None})()
+    c.set(
+        MonitorSettings(mode="stereo", target="alsa_out"), session, INST, sink_name="aurasync", rate=48000, block=2048
+    )
+    c.wait()
+    assert _Out.instances[-1].block == 2048

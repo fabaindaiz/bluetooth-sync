@@ -54,20 +54,29 @@ class MonitorController:
     # -- engine thread ----------------------------------------------------------------
 
     def set(
-        self, settings: MonitorSettings, session: Any, installation: Instalacion | None, *, sink_name: str, rate: int
+        self,
+        settings: MonitorSettings,
+        session: Any,
+        installation: Instalacion | None,
+        *,
+        sink_name: str,
+        rate: int,
+        block: int = 4096,
     ) -> None:
         check_target(settings, forbidden_targets(installation, sink_name))
         self.settings = settings
         self.save(settings.to_json())
-        self._apply(session, installation, sink_name, rate)
+        self._apply(session, installation, sink_name, rate, block)
 
-    def session_opened(self, session: Any, installation: Instalacion, *, sink_name: str, rate: int) -> None:
+    def session_opened(
+        self, session: Any, installation: Instalacion, *, sink_name: str, rate: int, block: int = 4096
+    ) -> None:
         try:
             check_target(self.settings, forbidden_targets(installation, sink_name))
         except MonitorError as exc:  # the installation changed since it was chosen
             self.state, self.error = "failed", str(exc)
             return
-        self._apply(session, installation, sink_name, rate)
+        self._apply(session, installation, sink_name, rate, block)
 
     def session_closed(self) -> None:
         self._generation += 1
@@ -76,7 +85,9 @@ class MonitorController:
         if self.settings.mode != "off":
             self.state = "waiting"
 
-    def _apply(self, session: Any, installation: Instalacion | None, sink_name: str, rate: int) -> None:
+    def _apply(
+        self, session: Any, installation: Instalacion | None, sink_name: str, rate: int, block: int = 4096
+    ) -> None:
         self._generation += 1
         generation = self._generation
         self._session = session
@@ -99,7 +110,7 @@ class MonitorController:
         settings = self.settings
 
         def open_it() -> None:
-            out = self.factory(settings, names, angles, rate, f"{sink_name}_monitor")
+            out = self.factory(settings, names, angles, rate, f"{sink_name}_monitor", block=block)
             try:
                 out.open()
             except Exception as exc:  # noqa: BLE001 - reported in the panel; the speakers are unaffected
@@ -129,6 +140,7 @@ class MonitorController:
     def view(self, sinks: list[dict[str, str]], installation: Instalacion | None, sink_name: str) -> dict[str, Any]:
         monitor = getattr(self._session, "monitor", None) if self._session is not None else None
         drops = getattr(getattr(monitor, "writer", None), "drops", 0)
+        cushion = getattr(monitor, "cushion", None)
         return {
             **self.settings.to_json(),
             "state": self.state,
@@ -136,6 +148,11 @@ class MonitorController:
             "routed_to": self.routed_to,
             "reached": self.state == "on" and self.routed_to == self.settings.target,
             "drops": drops,
+            "cushion_ms": None if cushion is None else round(cushion.target_ms, 1),
+            "level_ms": None if cushion is None or cushion.level_ms is None else round(cushion.level_ms, 1),
+            "refills": 0 if cushion is None else cushion.refills,
+            "pipe_bytes": getattr(monitor, "pipe_bytes", None),
+            "trims": 0 if cushion is None else cushion.trims,
             "candidates": candidates(sinks, forbidden_targets(installation, sink_name)),
         }
 

@@ -195,6 +195,9 @@ y el sonido envolvente sin los parlantes, y para escucharlos por el monitor de a
   en la tarjeta «Monitor (audífonos)» con el modo `mix` o `binaural` (el monitor recibe todos los
   canales). `stereo` sale **antes** de la cadena, así que no lleva ningún efecto. Unos audífonos
   inalámbricos en **HFP** (una llamada) suenan mono a 16 kHz: hay que pasarlos antes a **A2DP**.
+- **Colchón del monitor:** escribe por adelantado un bloque más un quantum del driver (tope 400 ms)
+  y lo vigila con el nivel de la tubería de `pw-play` (`cushion_ms`, `level_ms`, `refills`, `trims`
+  en el estado), porque sin él los audífonos cortaban la mitad de los ciclos (experimentos/18).
 - **Falta (fase 2, d-7c8794-618666):** entrar y salir en caliente y el regreso automático de un
   parlante real. Se mide en [experimentos/18](../docs/research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md).
 

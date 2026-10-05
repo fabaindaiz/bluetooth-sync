@@ -2839,7 +2839,8 @@ function monitorStateText(m) {
   if (m.state === "opening") return "Abriendo…";
   if (m.state === "failed") return `No se pudo: ${m.error}`;
   if (!m.reached) return `PipeWire lo mandó a ${m.routed_to ? name(m.routed_to) : "ninguna salida"}, no a ${name(m.target)}.`;
-  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}`;
+  const cushion = m.cushion_ms == null ? "" : ` Colchón ${Math.round(m.cushion_ms)} ms · rellenos ${m.refills || 0}${m.refills ? " (la salida se quedó sin audio y se rellenó)" : ""}${m.trims ? ` · recortes ${m.trims}` : ""}.`;
+  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}${cushion}`;
 }
 
 function renderMonitor(s) {

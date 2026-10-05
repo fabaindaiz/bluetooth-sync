@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import logging
 import math
 import queue
 import subprocess
@@ -33,9 +34,16 @@ MAX_INPUTS = 8
 """The builtin `mixer` of PipeWire's filter-chain takes up to 8 inputs: the speaker maximum."""
 SOFA = "/usr/share/libmysofa/MIT_KEMAR_normal_pinna.sofa"
 """The HRTF that comes with libmysofa (VERIFICADO on PC-Ryzen5, 2026-10-04)."""
+log = logging.getLogger("aurasync.monitor")
 NO_MOVE = "node.dont-move = true node.dont-reconnect = true node.dont-fallback = true"
 LATENCY_MS = 100
 QUEUE_BLOCKS = 4
+DRIVER_QUANTUM_FRAMES = 2048
+"""The Bluetooth driver's quantum with A2DP (WH-CH520, AAC): 2048 frames, 42.7 ms at 48 kHz, as
+`pw-top` showed on HP-O16 on 2026-10-05 (MEDIDO). `pw-play` asks the pipe for one every cycle."""
+MAX_CUSHION_S = 0.4
+"""Cap of the cushion: more than this is latency the listener hears against the picture."""
+BACKLOG_BLOCKS = 2
 SETTLE_S = 0.8
 """How long after opening the routing is read: PipeWire links a stream after its first data."""
 
@@ -169,13 +177,78 @@ def frame(
     return out * gain
 
 
+def _write_all(stream: Any, data: bytes) -> None:
+    """An unbuffered pipe may take part of the data: write until all of it is in."""
+    view = memoryview(data)
+    while view:
+        n = stream.write(view)
+        view = view[n:] if isinstance(n, int) else view[len(view) :]
+
+
+class Cushion:
+    """How much audio the monitor keeps ahead in the pipe of `pw-play`, as a pure decision.
+
+    The engine hands over one block every `block` frames but the driver takes a quantum every
+    cycle: with nothing written ahead each block lands just after the cycle that needed it, and
+    half the cycles are silent (MEDIDO on HP-O16, 2026-10-05). The delay is part of the calculation:
+    the target is one block plus one driver quantum, capped at `MAX_CUSHION_S`. `plan` is asked
+    before every block with the pipe level in frames."""
+
+    def __init__(self, block: int, rate: int) -> None:
+        self.block = block
+        self.rate = rate
+        self.target_frames = min(block + DRIVER_QUANTUM_FRAMES, int(MAX_CUSHION_S * rate))
+        self.refills = 0
+        self.trims = 0
+        self.level_frames: int | None = None
+        self._primed = False
+        """The first level read after the open is the priming: the open-time silence has been
+        draining while the routing was checked, so finding the pipe low then is not a starvation."""
+
+    @property
+    def target_ms(self) -> float:
+        return self.target_frames / self.rate * 1000
+
+    @property
+    def level_ms(self) -> float | None:
+        return None if self.level_frames is None else self.level_frames / self.rate * 1000
+
+    def plan(self, level_frames: int | None) -> tuple[int, bool]:
+        """`(frames of silence to write first, whether to write the block)`."""
+        self.level_frames = level_frames
+        if level_frames is None:
+            return 0, True
+        first, self._primed = not self._primed, True
+        if first and level_frames < DRIVER_QUANTUM_FRAMES:
+            return self.target_frames - level_frames, True
+        if level_frames < DRIVER_QUANTUM_FRAMES:
+            self.refills += 1
+            return self.target_frames - level_frames, True
+        if level_frames > self.target_frames + BACKLOG_BLOCKS * self.block:
+            self.trims += 1
+            return 0, False
+        return 0, True
+
+
 class Writer:
     """Writes frames from its own thread; `push` never waits. When the device falls behind the
     oldest frame is dropped and counted: a monitor that stutters is better than an engine that
-    is late for the speakers."""
+    is late for the speakers. With a `cushion` it reads the pipe `level` (frames) before each
+    block and refills with silence or drops the block as the cushion says."""
 
-    def __init__(self, write: Callable[[bytes], None], depth: int = QUEUE_BLOCKS) -> None:
+    def __init__(
+        self,
+        write: Callable[[bytes], None],
+        depth: int = QUEUE_BLOCKS,
+        *,
+        cushion: Cushion | None = None,
+        level: Callable[[], int | None] | None = None,
+        channels: int = 2,
+    ) -> None:
         self._write = write
+        self.cushion = cushion
+        self._level = level
+        self._channels = channels
         self._queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=depth)
         self.drops = 0
         self.failed = False
@@ -196,6 +269,12 @@ class Writer:
     def _run(self) -> None:
         while (out := self._queue.get()) is not None:
             try:
+                if self.cushion is not None and self._level is not None:
+                    silence, keep = self.cushion.plan(self._level())
+                    if silence:
+                        self._write(bytes(4 * self._channels * silence))
+                    if not keep:
+                        continue
                 self._write(np.clip(out, -1.0, 1.0).astype("<f4").tobytes())
             except (BrokenPipeError, OSError, ValueError):
                 self.failed = True
@@ -217,7 +296,13 @@ class MonitorOutput:
     """The monitor's PipeWire side: the filter-chain (binaural only) and one `pw-play --raw`."""
 
     def __init__(
-        self, settings: MonitorSettings, names: list[str], angles: dict[str, float], rate: int, sink: str
+        self,
+        settings: MonitorSettings,
+        names: list[str],
+        angles: dict[str, float],
+        rate: int,
+        sink: str,
+        block: int = 4096,
     ) -> None:
         self.settings = settings
         self.names = list(names)
@@ -228,6 +313,9 @@ class MonitorOutput:
         self._module: subprocess.Popen | None = None
         self._play: subprocess.Popen | None = None
         self.writer: Writer | None = None
+        self.cushion = Cushion(block, rate)
+        self.pipe_bytes: int | None = None
+        """The pipe's real size after asking for room for the cushion; `None` if it could not be set."""
 
     @property
     def channels(self) -> int:
@@ -280,12 +368,29 @@ class MonitorOutput:
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            bufsize=0,  # no BufferedWriter between the Writer and the pipe: FIONREAD then sees what is queued
         )
         stdin = self._play.stdin
         if stdin is not None:
-            with contextlib.suppress(OSError):
-                fcntl.fcntl(stdin.fileno(), fcntl.F_SETPIPE_SZ, 4 * self.channels * self.rate // 5)
-            self.writer = Writer(stdin.write)
+            # Room for the cushion, a block and the backlog the cushion tolerates.
+            frames = self.cushion.target_frames + (BACKLOG_BLOCKS + 1) * self.cushion.block
+            try:
+                self.pipe_bytes = int(fcntl.fcntl(stdin.fileno(), fcntl.F_SETPIPE_SZ, 4 * self.channels * frames))
+            except (OSError, AttributeError, ValueError) as exc:
+                log.warning("the monitor's pipe could not be resized (%s): the cushion may not fit", exc)
+            try:
+                _write_all(stdin, bytes(4 * self.channels * self.cushion.target_frames))
+            except (BrokenPipeError, OSError) as exc:
+                msg = f"pw-play exited at open: {exc}"
+                raise MonitorError(msg) from exc
+
+            def level() -> int | None:
+                n = sonido.bytes_en_tuberia(stdin)
+                return None if n is None else n // (4 * self.channels)
+
+            self.writer = Writer(
+                lambda data: _write_all(stdin, data), cushion=self.cushion, level=level, channels=self.channels
+            )
 
     def _args(self) -> str:
         return binaural_args(self.names, self.angles, self.sink, str(self.settings.target))

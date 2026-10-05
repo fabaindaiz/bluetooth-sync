@@ -61,7 +61,17 @@ agregaron a las tareas 5 y 6 la regeneración de los tipos del contrato y la rec
 **No verificado.** Nada se escuchó todavía: no hubo ninguna prueba de audio en `HP-O16`. La fase 1 se
 validó solo con tests (`hatch test`, vitest, Playwright contra `--simular`). El INFERIDO de que el
 Dummy-Driver de PipeWire lleva el reloj con todo virtual sigue sin comprobar (experimento 18).
-**Medido.** Nada con parlantes ni con audífonos.
+**Medido.** Nada con parlantes. Con los audífonos (WH-CH520, A2DP AAC, `HP-O16`, una corrida de
+30 s cada una, sin repetir todavía): el monitor sin colchón tuvo 352 xruns en el `pw-play` (`pw-top`,
+~11,7/s de 23,4 ciclos/s); con 100 ms de silencio al abrir, 0 (experimentos/18).
+
+**Arreglo del monitor (después de publicar la fase 1).** El usuario oyó el monitor "con muchos cortes".
+Causa: la tubería hacia el `pw-play` del monitor no tenía colchón; el motor entrega un bloque cada dos
+ciclos del driver y cada bloque llegaba justo después del ciclo que lo necesitaba. Diseño aprobado por el
+usuario: colchón calculado (un bloque + un cuantum, tope 400 ms) y vigilado en cada bloque (relleno si
+queda menos de un cuantum, recorte si pasa de dos bloques sobre el objetivo), visible en el panel. Para los
+parlantes queda pendiente (fase 2): el mismo colchón para todos, a través del corte. La revisión encontró
+un relleno falso en cada apertura y un id mal formado; se corrigieron. `check.sh`: ok (1124).
 
 ---
 
