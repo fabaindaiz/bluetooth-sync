@@ -1542,8 +1542,18 @@ recalibración que se reinicia solo sobre el conjunto nuevo; en el panel, **Hace
 cambiado, recalibrá» tras entrar con el lazo apagado, y la calibración que lista a los que quedan
 fuera. Enmienda al spec §5: en `separado` también se reconstruye toda la parte real.
 
+**Lo hecho (tarea 11, en `HP-O16`, solo con tests):** el colchón de los parlantes (`cushion.py`,
+compartido con el monitor): un solo valor para todos, rellenado a la vez y solo en el fondo de un corte;
+en `separado` con relojes distintos no corta (lo dice en `reason`), con freno de 30 s entre cortes y
+abandono tras 3 rellenos que no recuperaron el nivel.
+
+**Pausa (2026-10-05, a pedido del usuario):** el desarrollo quedó en pausa con las tareas 8 a 11
+construidas y revisadas, sin commit, en el árbol de trabajo de `main`, junto con la igualación de
+volumen del monitor y el volumen por el audífono (ya integrados y revisados). La tarea 12 no empezó.
+
 **Lo que falta:**
-1. **Tareas 11 y 12 del plan** (pendientes).
+1. **Tarea 12 del plan** (render `direct` de los parlantes y su igualación de volumen), que el modo
+   simple (i-7c8794-0ad844) necesita.
 2. **Experimento 18** ([experimentos/18](research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md)),
    en `HP-O16`: bloques en tiempo real con todo virtual, cortes del monitor por minuto y ningún
    `pw-play` hacia un parlante. Necesita que el usuario permita los audífonos WH-CH520 en A2DP.

@@ -154,3 +154,20 @@ cubren Auracast (d-7c8794-b82ee9). Queda como alternativa si fallan.
   el Bluetooth está bloqueado o el micrófono silenciado.
 - **Qué no cambia en `docs/research/`:** nada se contradice. Se corrige un supuesto de
   [00-inventario-linux.md](00-inventario-linux.md): `btmgmt info` no necesitaba root.
+
+
+## Cambios al sistema del 2026-10-05 (con su reversión)
+
+- **ufw:** el usuario abrió los puertos 8731 y 8443 para conectarse desde el celular en la red del
+  cowork. La regla exacta no la vio el agente; la propuesta fue
+  `sudo ufw allow from 192.168.100.0/24 to any port 8731,8443 proto tcp`, o desde la IP del celular.
+  **Revertir:** `sudo ufw status numbered` y `sudo ufw delete <n>`.
+- **rustup** con pacman (rustc/cargo 1.99.0, `rustup 1.29.1-1.1`), y la toolchain 1.99.0 que bajó
+  `engine/rust-toolchain.toml`. **Revertir:** `rustup toolchain uninstall 1.99.0`;
+  `sudo pacman -Rns rustup; rm -rf ~/.rustup ~/.cargo`.
+- **WirePlumber** guardó en `~/.local/state/wireplumber/stream-properties` una línea
+  `Audio/Sink:node.name:hrtfprobe_null` (la sonda del HRTF) y volvió a guardar las claves
+  `aurasync monitor` y `pw-play`. **Revertir:** con WirePlumber detenido, borrar esas líneas; las
+  recrea con valores por defecto (experimentos/18).
+- **Unidad de usuario `aurasync-fase1`** (transitoria, `systemd-run --user`): detenida. No queda
+  instalada.

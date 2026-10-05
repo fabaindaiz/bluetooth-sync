@@ -85,6 +85,37 @@ queda menos de un cuantum, recorte si pasa de dos bloques sobre el objetivo), vi
 parlantes queda pendiente (fase 2): el mismo colchón para todos, a través del corte. La revisión encontró
 un relleno falso en cada apertura y un id mal formado; se corrigieron. `check.sh`: ok (1124).
 
+**Volumen del monitor y cierre por pausa (2026-10-05, tarde).**
+- **Igualación de volumen entre los modos del monitor** (`loudness_match.py`). `stereo` sigue el volumen
+  general (antes ignoraba los ~20 dB del volumen: MEDIDO fuera de línea, `mix` 20,9 dB bajo `stereo`), y
+  `mix`/`binaural` se igualan midiendo. La ganancia del HRTF se MIDIÓ por un sink nulo temporal: +5,5 a
+  +6,4 dB según N, +5,73 dB con 4. La revisión encontró un estallido de ~+20 dB al salir de AVRCP y la
+  igualación congelada con el volumen bajo; se corrigieron.
+- **Volumen del monitor por el audífono, por defecto**, con protección que baja (nunca sube) a 30 % o al
+  último valor. Falla cerrada: si no se verifica, usa software con tope de −12 dB. La recalibración
+  continua viene apagada por defecto, y el micrófono se abre solo 8 s para comprobarlo, con la pestaña
+  visible. La revisión encontró que fallaba abierta y que el panel podía subir el volumen solo; se corrigió.
+- **Despliegues locales** (`~/Desktop/Project/bluetooth-sync-fase1`, unidad `aurasync-fase1`): verificado
+  que bajó el WH-CH520 de 40 % a 30 % y 0 xruns del monitor en 30 s en pausa. El servicio quedó **detenido**
+  a pedido del usuario.
+- **Motor en Rust** (worktree `~/Desktop/Project/bluetooth-sync-rust`, sin commit, spec y plan
+  `2026-10-05-rust-engine-scaffold-and-sinc`): andamio, lectura sinc (8,3–10,5× más rápida), selector y
+  cambio en vivo, upmix espacial (3,2–3,8×) y extractor de ambiente (1,4–2,0×); experimento 20. Hallazgo:
+  el upmix espacial tiene dos discontinuidades donde numpy mismo es mal condicionado (pendiente aparte).
+- **Fase 2:** tareas 8 a 11 construidas y revisadas, e integradas con lo del monitor en el árbol de
+  trabajo de `main` (1274 tests, 102 de navegador), sin commit.
+- **Qué salió mal:** el equipo estuvo muy cargado (hasta ~29) por varias suites en paralelo, lo que hizo
+  fallar tests de tiempo. Dos subagentes quedaron en bucle y se detuvieron. Un id del roadmap lo escribí
+  inventado y se corrigió con `bundle.py`.
+- **Pendiente:**
+  - la tarea 12 de la fase 2, el modo simple (spec escrita, sin aprobar), "Sonando ahora" y la campaña
+    de A/B del EQ;
+  - las etapas 7 a 15 de Rust;
+  - integrar el worktree de Rust en `main`;
+  - la revisión completa de todo el cambio que pidió el usuario;
+  - decidir `pair_window_s: 0` en la red del cowork;
+  - el experimento 18 con música.
+
 ---
 
 ## 2026-10-04 · s-7c8794-a1da58 — Los pendientes sin parlantes y las pruebas de usabilidad por flujos
