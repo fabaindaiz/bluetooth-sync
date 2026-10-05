@@ -355,6 +355,7 @@
         <div class="tile"><div class="tile-label">Cortes en la salida (xruns)</div><div id="t-xruns" class="tile-value"></div><div id="t-xruns-sub" class="tile-sub"></div></div>
         <div class="tile"><div class="tile-label">Entrada</div><div id="t-input" class="tile-value"></div><div id="t-input-sub" class="tile-sub"></div></div>
         <div class="tile"><div class="tile-label">Motor</div><div id="t-motor" class="tile-value"></div><div id="t-motor-sub" class="tile-sub"></div></div>
+        <div class="tile"><div class="tile-label">Motor del DSP</div><div id="t-engine" class="tile-value"></div><div id="t-engine-sub" class="tile-sub"></div></div>
         <div class="tile"><div class="tile-label">Margen de la salida</div><div id="t-pipe" class="tile-value"></div><div id="t-pipe-sub" class="tile-sub"></div></div>
         <div class="tile"><div class="tile-label">Ruteo</div><div id="t-routing" class="tile-value"></div><div id="t-routing-sub" class="tile-sub"></div></div>
         <div class="tile sm:col-span-2"><div class="tile-label">Recalibración</div><div id="t-recal" class="tile-value"></div><div id="t-recal-sub" class="tile-sub"></div></div>
@@ -566,6 +567,20 @@
           <p class="setting-desc">Cómo aparece aurasync en el menú de sonido del sistema.</p>
         </div>
         <div class="setting"><div class="setting-head"><span class="setting-title">Emisor</span></div><strong class="text-sm">A2DP</strong><p class="setting-desc">Bluetooth clásico, un enlace por parlante. Auracast espera a las placas nuevas (E4).</p></div>
+        <div class="setting">
+          <div class="setting-head">
+            <span class="setting-title">Motor del DSP <small class="muted">en un corte · experimental</small></span>
+            <span class="help">
+              <button type="button" class="help-btn" aria-label="Ayuda: Motor del DSP" aria-describedby="help-motor-dsp">?</button>
+              <span id="help-motor-dsp" role="tooltip" class="help-pop">numpy es el motor de siempre y la referencia. rust hace lo mismo compilado en Rust (por ahora, la lectura del retardo de cada parlante), con el mismo resultado dentro de 1e-9. El cambio se hace en el fondo de un corte (80 + 80 ms). Si Rust falla, hay silencio en todos los parlantes desde ese bloque hasta el fondo del corte (unos 160 ms) y numpy sigue desde ahí: la música no se detiene.</span>
+            </span>
+          </div>
+          <select id="engine-select" class="input" aria-label="Motor del DSP" aria-describedby="engine-state">
+            <option value="numpy">numpy (referencia)</option>
+            <option value="rust">rust (experimental)</option>
+          </select>
+          <p id="engine-state" class="setting-desc" role="status"></p>
+        </div>
       </div>
     </section>
   </div>

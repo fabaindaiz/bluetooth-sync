@@ -584,6 +584,39 @@ reply of `ab_stop`) carry:
 
 `state.health.streams_open` is how many `GET /v1/stream` connections are open now.
 
+## The engine: numpy or Rust (spec rust-engine §2, d-7c8794-196e0c)
+
+The stages ported to Rust (today the band-limited read of each speaker's delay line,
+`dsp/interpolation.py`) run with numpy or with the `aurasync_engine` extension
+(`engine/crates/aurasync-engine`, within 1e-9 of numpy). numpy is the default and the oracle.
+
+- **The setting**: `"engine": "numpy" | "rust"` in `service.json` (default `numpy`; any other value
+  stops the service at start, like the other keys). `AURASYNC_ENGINE=numpy|rust` overrides it
+  when the service starts, and is what the CLI and the tests use without a service.
+- **`engine_set {"engine": "numpy" | "rust"}`** (scope `control`): while a session plays, the switch
+  happens at the bottom of the next cut (80 + 80 ms of fade, like `preset_load`); without a session,
+  at once (no audio flows). The choice is written to `service.json` (a simulation keeps nothing)
+  and wins over `AURASYNC_ENGINE` from then on. Choosing what already reads costs no cut. `rust`
+  where the extension is not installed, or was built with other constants, stays `numpy`, with the
+  reason and no cut. The reply is `state.engine`.
+- **A Rust failure** (a panic, caught by the extension and raised as `RuntimeError`): Rust is
+  disabled and the output is silence on every speaker from the failing block until the bottom of
+  the cut the service asks for (about 160 ms); numpy reads from that bottom. During the silence
+  `state.engine.active` is `numpy` and `reason` says why. The session keeps playing; the log
+  (`part` `engine`) and `state.engine.reason` say why. Rust stays disabled until `engine_set {"engine": "rust"}` again or a restart.
+
+`state.engine`:
+
+```json
+{"wanted": "rust", "active": "numpy", "available": false,
+ "reason": "the Rust extension is not installed (No module named 'aurasync_engine'); build it with `hatch run engine-build` in host/ (needs cargo, see engine/README.md)"}
+```
+
+`wanted` is what was asked (the setting, `AURASYNC_ENGINE` or `engine_set`), `active` the engine
+reading now, `available` whether the extension can be used on this machine, and `reason` why
+`active` differs from `wanted`. While a switch waits for its cut, `active` is still the old one and
+`reason` is `null`.
+
 ## Remote clients: the PWA, HTTPS, pairing (d-7c8794-37f9bc)
 
 The panel can run as a PWA served from GitHub Pages and talk to the service of each machine

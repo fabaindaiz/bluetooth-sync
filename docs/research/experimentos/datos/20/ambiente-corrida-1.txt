@@ -1,0 +1,13 @@
+uptime antes: 17:21:53 up  7:25,  1 user,  load average: 2,82, 4,74, 4,00
+load1 antes: 2.82
+energía antes: red 1, gobernador powersave, perfil performance, no_turbo 0
+python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras a 48 kHz = 85.3 ms; 500 bloques
+parlantes  numpy med  numpy p95  rust med  rust p95      x
+        1      0.984      1.395     0.499     0.741    2.0
+        3      1.028      1.506     0.645     0.905    1.6
+        8      0.972      1.556     0.542     0.840    1.8
+solo rust (el objeto de la extensión, sin motor): mediana 0.490
+uptime despues: 17:22:05 up  7:25,  1 user,  load average: 3,45, 4,78, 4,02
+load1 despues: 3.45
+energía después: red 1, gobernador powersave, perfil performance, no_turbo 0

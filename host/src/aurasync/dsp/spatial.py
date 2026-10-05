@@ -28,15 +28,24 @@ Per frame of a streaming STFT (as `ambience.Extractor`: 2048 points, hop 512, ro
 
 The ambience is then delayed by `haas_ms` (research/09 §3: at 10-25 ms a speaker can be up to 10
 dB louder without taking the localisation). Fixed-length work per block (d-7c8794-589dec).
+
+**Engine** (spec rust-engine §5, `dsp/backend.py`): with `engine=rust` the stage hands its work to
+`aurasync_engine.SpatialUpmix` (engine/crates/aurasync-dsp/src/spatial.rs), within 1e-9 of this
+code, which stays the oracle (tests/test_spatial_rust.py). The stage owns the Rust object and
+moves its whole state into it, or back, when the engine switches at a cut's bottom
+(`on_engine_switch`): the move is exact, so the sound goes on as if nothing had switched. After a
+Rust failure the stage gives silence until the cut's bottom, then starts afresh in numpy (the Rust
+state may be torn): latency and fade-in, as a new renderer does.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Any
 
 import numpy as np
 
-from aurasync.dsp import ambience
+from aurasync.dsp import ambience, backend
 
 N_FFT = 2048
 HOP = N_FFT // 4
@@ -119,6 +128,11 @@ class SpatialUpmix:
         hop: int = HOP,
         classic: dict[str, tuple[float, float]] | None = None,
     ) -> None:
+        self._rust: Any = None
+        """The Rust stage while the engine is Rust; the numpy state below is then stale until the
+        switch back moves Rust's state into it."""
+        self._rust_broken = False
+        """A Rust call failed: its state may be torn, so the next switch restarts in numpy."""
         self.names = list(names)
         self.sr = sr
         self.n_fft, self.hop = n_fft, hop
@@ -134,6 +148,8 @@ class SpatialUpmix:
         self._haas_len = round(MAX_HAAS_MS * sr / 1000)
         self.set_layout(angles, ambient, classic)
         self._reset_state()
+        backend.register(self)
+        self._follow(rust=backend.rust_active())
 
     # -- configuration -------------------------------------------------------------------
 
@@ -141,6 +157,8 @@ class SpatialUpmix:
         self.params = replace(params, haas_ms=min(max(params.haas_ms, 0.0), MAX_HAAS_MS))
         self._curve = ambience.Parametros(umbral=self.params.threshold)
         """The ambience curve, built once per change, not per frame."""
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.set_params(*self._rust_params()))
 
     def set_layout(
         self,
@@ -155,6 +173,7 @@ class SpatialUpmix:
         `classic`: each speaker's (pan, ambience). The output is then scaled, bin by bin, to the
         energy the classic mix of these speakers would have, so switching the render does not change
         the loudness (spec §6); without it, to the input's energy."""
+        self._layout_args = (dict(angles), set(ambient), dict(classic) if classic else None)
         self.ambient = [n for n in self.names if n in ambient]
         principal = [n for n in self.names if n not in ambient and n in angles]
         principal.sort(key=lambda n: angles[n])
@@ -168,6 +187,18 @@ class SpatialUpmix:
             cr = np.array([(1 + pan) / 2 * (1 - a) for pan, a in classic.values()])
             amb = np.array([a for _, a in classic.values()])
             self._classic = (float(cl @ cl), float(cr @ cr), float(cl @ cr), float(amb @ amb))
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.set_layout(*self._rust_layout()))
+
+    def _restart(self) -> None:
+        """Every buffer and smoothing as a new stage has them (after a Rust failure)."""
+        bins = self.n_fft // 2 + 1
+        self._acc12 = np.zeros(bins, dtype=complex)
+        self._acc11 = np.zeros(bins)
+        self._acc22 = np.zeros(bins)
+        self._pending_l = np.zeros(0)
+        self._pending_r = np.zeros(0)
+        self._reset_state()
 
     def _reset_state(self) -> None:
         n = self.n_fft
@@ -314,10 +345,135 @@ class SpatialUpmix:
                 ambs[name] = amb_r / np.sqrt(len(rights))
         return {front_left: fl, front_right: fr}, ambs
 
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
+
+    def on_engine_switch(self, _active: str) -> None:
+        """`backend.use` at a cut's bottom: move the state to the engine that runs now."""
+        self._follow(rust=backend.rust_active())
+
+    def _follow(self, *, rust: bool) -> None:
+        """Run on Rust (`rust`) or numpy from now on, moving the state across; after a failure,
+        restart in numpy first."""
+        if self._rust_broken:
+            self._rust, self._rust_broken = None, False
+            self._restart()
+        if rust and self._rust is None:
+            self._rust = backend.guarded(self._build_rust, lambda: None)
+        elif not rust and self._rust is not None:
+            state = backend.guarded(self._rust.state, lambda: None)
+            self._rust = None
+            if state is None:
+                self._restart()
+            else:
+                self._load_state(state)
+
+    def _build_rust(self) -> Any:
+        rust = backend.module().SpatialUpmix(len(self.names), self.sr, self.n_fft, self.hop)
+        rust.set_params(*self._rust_params())
+        rust.set_layout(*self._rust_layout())
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _rust_call(self, call: Any) -> Any:
+        rust = self._rust
+        return backend.guarded(lambda: call(rust), self._broke)
+
+    def _broke(self) -> None:
+        self._rust_broken = True
+
+    def _rust_params(self) -> tuple:
+        p = self.params
+        return (p.arc_deg, p.ambience, p.ambient_level_db, p.haas_ms, p.threshold, p.lam, bool(p.front_intact))
+
+    def _rust_layout(self) -> tuple:
+        angles, ambient, classic = self._layout_args
+        return (
+            [float(angles[n]) if n in angles else None for n in self.names],
+            [n in ambient for n in self.names],
+            [(float(pan), float(a)) for pan, a in classic.values()] if classic else None,
+        )
+
+    def _numpy_state(self) -> dict[str, Any]:
+        """The numpy stage's state in the Rust stage's terms (speakers as rows, in `names` order)."""
+        names = self.names
+
+        def rows(buffers: dict[str, np.ndarray], width: int) -> np.ndarray:
+            out = np.zeros((len(names), width))
+            for i, name in enumerate(names):
+                out[i] = buffers[name]
+            return out
+
+        ready = len(self._ready_direct[names[0]]) if names else 0
+        return {
+            "acc12_re": np.ascontiguousarray(self._acc12.real),
+            "acc12_im": np.ascontiguousarray(self._acc12.imag),
+            "acc11": np.ascontiguousarray(self._acc11, dtype=np.float64),
+            "acc22": np.ascontiguousarray(self._acc22, dtype=np.float64),
+            "pending_left": np.ascontiguousarray(self._pending_l, dtype=np.float64),
+            "pending_right": np.ascontiguousarray(self._pending_r, dtype=np.float64),
+            "ola_direct": rows(self._ola_direct, self.n_fft),
+            "ola_ambience": rows(self._ola_amb, self.n_fft),
+            "norm": np.ascontiguousarray(self._norm, dtype=np.float64),
+            "ready_direct": rows(self._ready_direct, ready),
+            "ready_ambience": rows(self._ready_amb, ready),
+            "haas": rows(self._haas, self._haas_len),
+            "haas_read": [int(self._haas_read[name]) for name in names],
+            "emitted": int(self._emitted),
+        }
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        """The Rust stage's state (`state()`) as this stage's own."""
+        self._acc12 = np.empty(len(state["acc12_re"]), dtype=complex)
+        self._acc12.real = state["acc12_re"]
+        self._acc12.imag = state["acc12_im"]
+        self._acc11 = np.array(state["acc11"])
+        self._acc22 = np.array(state["acc22"])
+        self._pending_l = np.array(state["pending_left"])
+        self._pending_r = np.array(state["pending_right"])
+        self._norm = np.array(state["norm"])
+        for i, name in enumerate(self.names):
+            self._ola_direct[name] = np.array(state["ola_direct"][i])
+            self._ola_amb[name] = np.array(state["ola_ambience"][i])
+            self._ready_direct[name] = np.array(state["ready_direct"][i])
+            self._ready_amb[name] = np.array(state["ready_ambience"][i])
+            self._haas[name] = np.array(state["haas"][i])
+            self._haas_read[name] = int(state["haas_read"][i])
+        self._emitted = int(state["emitted"])
+
+    # -- the block ----------------------------------------------------------------------------
+
     def process(self, left: np.ndarray, right: np.ndarray) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         if len(left) != len(right):
             msg = f"the channels have different lengths: {len(left)} and {len(right)}"
             raise ValueError(msg)
+        n = len(left)
+        if backend.silent() is None:
+            self._follow(rust=backend.rust_active())
+        if backend.silent() is not None:
+            # A Rust failure, until the cut's bottom: silence on every speaker.
+            return {name: (np.zeros(n), np.zeros(n)) for name in self.names}
+        if self._rust is not None:
+            return self._process_rust(left, right)
+        return self._process_numpy(left, right)
+
+    def _process_rust(self, left: np.ndarray, right: np.ndarray) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        n = len(left)
+        # Rust takes float64 C-contiguous only: converted here (no copy when it already is).
+        left = np.ascontiguousarray(left, dtype=np.float64)
+        right = np.ascontiguousarray(right, dtype=np.float64)
+
+        def call(rust: Any) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+            direct, amb = rust.process(left, right)
+            return {name: (direct[i], amb[i]) for i, name in enumerate(self.names)}
+
+        def silence() -> dict[str, tuple[np.ndarray, np.ndarray]]:
+            self._broke()
+            return {name: (np.zeros(n), np.zeros(n)) for name in self.names}
+
+        rust = self._rust
+        return backend.guarded(lambda: call(rust), silence)
+
+    def _process_numpy(self, left: np.ndarray, right: np.ndarray) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         n = len(left)
         self._pending_l = np.concatenate([self._pending_l, left])
         self._pending_r = np.concatenate([self._pending_r, right])

@@ -233,6 +233,18 @@ export interface VolumeAvrcp {
   error: string | null;
 }
 
+/** `state.engine`: who runs the stages ported to Rust (`dsp/backend.py`). `wanted` is the
+ * setting (or `AURASYNC_ENGINE`), `active` the engine reading now; `reason` says why they differ
+ * (the extension missing, a Rust failure), and is null while they agree or a switch waits for
+ * its cut.
+ */
+export interface EngineView {
+  wanted: string;
+  active: "numpy" | "rust";
+  available: boolean;
+  reason: string | null;
+}
+
 export interface StateView {
   sequence: number;
   session: SessionView;
@@ -248,6 +260,7 @@ export interface StateView {
   volume_avrcp: VolumeAvrcp;
   ab: AbView | null;
   sync: SyncView;
+  engine: EngineView;
 }
 
 /** The stream's `chain` event: each stage's live numbers, by stage id. */

@@ -116,6 +116,19 @@ un relleno falso en cada apertura y un id mal formado; se corrigieron. `check.sh
   - decidir `pair_window_s: 0` en la red del cowork;
   - el experimento 18 con música.
 
+**Cierre (2026-10-05, noche).** A pedido del usuario se integró todo en `main` y se empujó:
+- el worktree del motor Rust se integró sobre la fase 2 y el monitor. Tres choques, en `decisions.md`,
+  el inventario y `Service.__init__`; la revisión confirmó que los dos lados quedaron completos;
+- `check.sh`: ok con 1477 tests, más cargo fmt, clippy y test; 106 de navegador;
+- se dejó en commits por tema, armados desde las instantáneas ya verificadas de cada etapa.
+
+**Pendiente con nombre:** si una etapa de Rust falla *al construirse* (`_build_rust` levanta
+`ValueError`, `TypeError` o `AttributeError` por un desajuste entre Python y Rust, no por un pánico), la
+sesión falla en vez de volver a numpy. `backend.guarded` solo atrapa `RuntimeError`, y `process()` vuelve
+a llamar `_follow` fuera de la guarda. El motor por defecto es numpy, así que no afecta el uso normal.
+Arreglo propuesto: que la construcción falle blando (cualquier excepción → `backend._fail`), con un test
+de un `set_state` que levanta `ValueError`.
+
 ---
 
 ## 2026-10-04 · s-7c8794-a1da58 — Los pendientes sin parlantes y las pruebas de usabilidad por flujos

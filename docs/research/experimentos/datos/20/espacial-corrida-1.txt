@@ -1,0 +1,14 @@
+uptime antes: 16:46:08 up  6:50,  1 user,  load average: 1,49, 1,36, 2,61
+load1 antes: 1.49
+energía antes: red 1, gobernador powersave, perfil performance, no_turbo 0
+python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras a 48 kHz = 85.3 ms; 500 bloques
+parlantes   render  numpy med  numpy p95  rust med  rust p95      x  solo rust
+        1 espacial      1.524      1.833     0.451     0.485    3.4      0.449
+        3 espacial      2.984      3.443     0.848     0.893    3.5      0.889
+        3   frente      1.278      1.524     0.499     2.059    2.6      0.502
+        8 espacial      5.071      5.874     1.317     1.613    3.8      1.299
+        8   frente      2.504      3.965     0.749     1.018    3.3      0.746
+uptime despues: 16:46:21 up  6:50,  1 user,  load average: 1,50, 1,36, 2,60
+load1 despues: 1.50
+energía después: red 1, gobernador powersave, perfil performance, no_turbo 0

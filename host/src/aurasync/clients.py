@@ -108,6 +108,7 @@ CONTROL_OPS = frozenset(
         "chain_set",
         "chain_reset",
         "monitor_set",
+        "engine_set",
     }
 )
 

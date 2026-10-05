@@ -20,11 +20,19 @@ things make it cheap without changing what it computes:
 - **A moving delay** (a recalibration ramp) gets the kernel from a table sampled every
   1/`_STEPS` of a sample, read with 4-point Lagrange interpolation: within 1e-10 of the formula
   (`tests/test_interpolation.py`).
+
+**Engine.** `read` dispatches through `dsp/backend.py`: this module's `read_numpy`, or the same
+read in Rust (`aurasync_engine`, engine/crates/aurasync-engine), within 1e-9 of it
+(`tests/test_engine_rust.py`). numpy is the default and the oracle.
 """
 
 from __future__ import annotations
 
 import numpy as np
+
+# Imported both ways (backend reads this module's constants and `read_numpy`); each uses the
+# other only inside functions, so either can be imported first.
+from aurasync.dsp import backend
 
 HALF = 16
 BETA = 8.0
@@ -68,10 +76,16 @@ def _kernel_from_table(frac: np.ndarray) -> np.ndarray:
 
 
 def read(data: np.ndarray, position: np.ndarray) -> np.ndarray:
-    """`data` evaluated at each (fractional) `position`, band-limited.
+    """`data` evaluated at each (fractional) `position`, band-limited, by the active engine
+    (`backend.read`: numpy's `read_numpy` or Rust's).
 
     Every position must have `HALF - 1` samples before and `HALF` after it in `data`.
     """
+    return backend.read(data, position)
+
+
+def read_numpy(data: np.ndarray, position: np.ndarray) -> np.ndarray:
+    """`read` in numpy: the oracle the Rust port is held to."""
     i0 = np.floor(position).astype(int)
     frac = position - i0
     distinct, which = np.unique(frac, return_inverse=True)

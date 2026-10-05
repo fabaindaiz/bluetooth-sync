@@ -1,0 +1,607 @@
+//! `aurasync_engine`: the Rust DSP of `aurasync-dsp` as a Python module.
+//!
+//! - `read(data, position)`: `aurasync.dsp.interpolation.read`, the band-limited read, within
+//!   1e-9 of numpy (host/tests/test_engine_rust.py). Both arguments must be 1-D float64 numpy
+//!   arrays; a strided view is copied first, any other dtype is a `TypeError` (never converted
+//!   silently). A position without `HALF - 1` samples before it and `HALF` after it is a
+//!   `ValueError`.
+//! - `SpatialUpmix`: `aurasync.dsp.spatial.SpatialUpmix`'s work in Rust (the spatial and "frente
+//!   intacto" renders), within 1e-9 of numpy (host/tests/test_spatial_rust.py). The numpy stage
+//!   owns one when the engine is Rust, and moves its state in and out (`state`, `set_state`) at a
+//!   cut's bottom. Inputs are 1-D float64 arrays (a strided view is copied); `process` gives two
+//!   new `(speakers, block)` float64 arrays, the direct and the ambience blocks.
+//! - `AmbienceExtractor`: `aurasync.dsp.ambience.Extractor`'s work in Rust (the mono ambience of
+//!   a stereo stream), within 1e-9 of numpy (host/tests/test_ambience_rust.py). The numpy
+//!   extractor owns one when the engine is Rust, and moves its state in and out (`state`,
+//!   `set_state`) at a cut's bottom. Inputs are 1-D float64 arrays (a strided view is copied);
+//!   `process` gives a new 1-D float64 array as long as the block.
+//! - `capabilities()`: the constants each stage was built with, for the host to check against its
+//!   own.
+//!
+//! A panic never reaches Python as PyO3's `PanicException`, which derives from `BaseException`
+//! and that the service's loop would not catch: the whole body of every exported function (the
+//! argument checks, the read and building the result) runs inside [`guard`], which catches it and
+//! raises `RuntimeError`. The host's dispatcher (`aurasync/dsp/backend.py`) takes a
+//! `RuntimeError` as the engine failing: that block is silence and numpy reads from the next cut.
+#![forbid(unsafe_code)]
+
+use std::borrow::Cow;
+use std::panic::{self, AssertUnwindSafe};
+use std::sync::{Mutex, MutexGuard};
+
+use aurasync_dsp::ambience::{self, AmbienceError};
+use aurasync_dsp::interpolation::{self, ReadError, Reader};
+use aurasync_dsp::spatial::{self, Params, SpatialError, State};
+use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+
+/// The block the first reader is built for: twice the service's 4096 samples. A larger block
+/// replaces the reader with one that fits (rebuilding its table, a few milliseconds, once).
+const FIRST_MAX_BLOCK: usize = 8192;
+
+/// The reader, built on the first call: its table costs about 70 000 kernel evaluations, too
+/// many to repeat per block. Every call holds the GIL, so the lock is never contended.
+static READER: Mutex<Option<Reader>> = Mutex::new(None);
+
+/// The reader's lock. After a panic while it was held the lock is poisoned and the scratch
+/// buffers may be half-written: the reader is dropped and the next call builds a new one.
+fn lock_reader() -> MutexGuard<'static, Option<Reader>> {
+    READER.lock().unwrap_or_else(|poisoned| {
+        READER.clear_poison();
+        let mut guard = poisoned.into_inner();
+        *guard = None;
+        guard
+    })
+}
+
+/// Runs `body`, turning a panic anywhere inside it into `RuntimeError`. Every exported function
+/// is one call to this, so nothing it does can unwind into PyO3 (whose `PanicException` is a
+/// `BaseException`).
+fn guard<T>(body: impl FnOnce() -> PyResult<T>) -> PyResult<T> {
+    panic::catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|payload| {
+        let message = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("(no message)");
+        Err(PyRuntimeError::new_err(format!(
+            "aurasync_engine panicked: {message}"
+        )))
+    })
+}
+
+/// Runs `f` with a reader for blocks of `block` positions. Called inside [`guard`]: a panic in
+/// `f` poisons the lock, and [`lock_reader`] drops that reader on the next call.
+fn with_reader<T>(block: usize, f: impl FnOnce(&mut Reader) -> T) -> T {
+    let mut slot = lock_reader();
+    let reader = match slot.take() {
+        Some(reader) if reader.max_block() >= block => reader,
+        _ => Reader::new(
+            block
+                .checked_next_power_of_two()
+                .unwrap_or(block)
+                .max(FIRST_MAX_BLOCK),
+        ),
+    };
+    f(slot.insert(reader))
+}
+
+fn read_error(error: ReadError) -> PyErr {
+    match error {
+        ReadError::OutOfRange { .. } | ReadError::LengthMismatch => {
+            PyValueError::new_err(error.to_string())
+        }
+        // `with_reader` sizes the reader for the block, so this is a bug here, not the caller's.
+        ReadError::BlockTooLarge => PyRuntimeError::new_err(error.to_string()),
+    }
+}
+
+/// `value` as a 1-D float64 numpy array, or a `TypeError` that says what it is instead (the
+/// automatic one reads "'ndarray' object is not an instance of 'ndarray'"). Nothing is converted:
+/// float32, integers, another byte order or a list are refused.
+fn float64_vector<'py>(
+    name: &str,
+    value: &Bound<'py, PyAny>,
+) -> PyResult<PyReadonlyArray1<'py, f64>> {
+    let Ok(array) = value.cast::<PyArray1<f64>>() else {
+        let what = match (value.getattr("dtype"), value.getattr("ndim")) {
+            (Ok(dtype), Ok(ndim)) => {
+                format!("an array of {} with {ndim} dimension(s)", dtype.str()?)
+            }
+            _ => format!("{}", value.get_type().name()?),
+        };
+        return Err(PyTypeError::new_err(format!(
+            "{name} must be a 1-D float64 numpy array in native byte order, not {what}"
+        )));
+    };
+    array
+        .try_readonly()
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+}
+
+/// The array's samples in order: borrowed when contiguous, copied from a strided view.
+fn samples<'a>(array: &'a PyReadonlyArray1<'_, f64>) -> Cow<'a, [f64]> {
+    match array.as_slice() {
+        Ok(slice) => Cow::Borrowed(slice),
+        Err(_) => Cow::Owned(array.as_array().iter().copied().collect()),
+    }
+}
+
+/// `data` evaluated at each (fractional) `position`, band-limited: a new float64 array.
+#[pyfunction]
+fn read<'py>(
+    py: Python<'py>,
+    data: &Bound<'py, PyAny>,
+    position: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    guard(|| {
+        let data = float64_vector("data", data)?;
+        let position = float64_vector("position", position)?;
+        let data = samples(&data);
+        let position = samples(&position);
+        let mut out = vec![0.0; position.len()];
+        with_reader(position.len(), |reader| {
+            reader.read(&data, &position, &mut out)
+        })
+        .map_err(read_error)?;
+        Ok(PyArray1::from_vec(py, out))
+    })
+}
+
+/// The constants each stage was built with: `{"interpolation": {"half": 16, "beta": 8.0,
+/// "steps": 2048}, "spatial": {...}, "ambience": {"floor": 1e-8}}`.
+#[pyfunction]
+fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    guard(|| {
+        let read = PyDict::new(py);
+        read.set_item("half", interpolation::HALF)?;
+        read.set_item("beta", interpolation::BETA)?;
+        read.set_item("steps", interpolation::STEPS)?;
+        let upmix = PyDict::new(py);
+        upmix.set_item("max_haas_ms", spatial::MAX_HAAS_MS)?;
+        upmix.set_item("fade_in", spatial::FADE_IN)?;
+        upmix.set_item("floor", spatial::FLOOR)?;
+        upmix.set_item("silent", spatial::SILENT)?;
+        upmix.set_item("front_boost_db", spatial::FRONT_BOOST_DB)?;
+        upmix.set_item("min_energy_ratio", spatial::MIN_ENERGY_RATIO)?;
+        upmix.set_item("mu0", spatial::MU0)?;
+        upmix.set_item("mu1", spatial::MU1)?;
+        upmix.set_item("sigma", spatial::SIGMA)?;
+        let extractor = PyDict::new(py);
+        extractor.set_item("floor", ambience::FLOOR)?;
+        let all = PyDict::new(py);
+        all.set_item("interpolation", read)?;
+        all.set_item("spatial", upmix)?;
+        all.set_item("ambience", extractor)?;
+        Ok(all)
+    })
+}
+
+/// Panics inside the read's guard, with the reader locked: the test that a panic arrives as
+/// `RuntimeError` and that reading goes on afterwards. Only in builds with `test-panic`.
+#[cfg(feature = "test-panic")]
+#[pyfunction]
+fn _panic() -> PyResult<()> {
+    guard(|| with_reader(0, |_| panic!("planted panic (feature test-panic)")))
+}
+
+/// Panics before any argument is looked at: the test that the guard covers the whole body, not
+/// only the read. Only in builds with `test-panic`.
+#[cfg(feature = "test-panic")]
+#[pyfunction]
+fn _panic_outside_the_read(value: &Bound<'_, PyAny>) -> PyResult<()> {
+    guard(|| {
+        panic!(
+            "planted panic before the arguments ({})",
+            value.get_type().name()?
+        )
+    })
+}
+
+fn spatial_error(error: SpatialError) -> PyErr {
+    PyValueError::new_err(error.to_string())
+}
+
+/// `value` as a 2-D float64 numpy array's rows, or a `TypeError` (as [`float64_vector`]).
+fn float64_rows(name: &str, value: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<f64>>> {
+    let Ok(array) = value.cast::<PyArray2<f64>>() else {
+        return Err(PyTypeError::new_err(format!(
+            "{name} must be a 2-D float64 numpy array in native byte order"
+        )));
+    };
+    let array = array
+        .try_readonly()
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Ok(array
+        .as_array()
+        .rows()
+        .into_iter()
+        .map(|row| row.to_vec())
+        .collect())
+}
+
+/// `state[name]`, or a `ValueError` naming the missing key.
+fn item<'py>(state: &Bound<'py, PyDict>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    state
+        .get_item(name)?
+        .ok_or_else(|| PyValueError::new_err(format!("state: {name} is missing")))
+}
+
+fn vector(state: &Bound<'_, PyDict>, name: &str) -> PyResult<Vec<f64>> {
+    let array = float64_vector(name, &item(state, name)?)?;
+    Ok(samples(&array).into_owned())
+}
+
+/// `rows` as a new `(rows, columns)` float64 array (`columns` is needed when there are none).
+fn matrix<'py>(
+    py: Python<'py>,
+    rows: &[Vec<f64>],
+    columns: usize,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let flat: Vec<f64> = rows.iter().flatten().copied().collect();
+    PyArray1::from_vec(py, flat).reshape([rows.len(), columns])
+}
+
+/// The direct and the ambience blocks of every speaker, `(speakers, block)` each.
+type Blocks<'py> = (Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>);
+
+/// `aurasync.dsp.spatial.SpatialUpmix`'s work: the numpy stage owns one when the engine is Rust.
+/// Speakers are indices, in the numpy stage's `names` order. Every method's whole body runs
+/// inside [`guard`]: a panic is a `RuntimeError`, after which the host never calls this object
+/// again (its state may be half-written).
+#[pyclass(name = "SpatialUpmix", module = "aurasync_engine")]
+struct SpatialUpmix {
+    inner: spatial::SpatialUpmix,
+    /// `_panic_next()` was called: the next `process` panics. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    panic_next: bool,
+}
+
+#[pymethods]
+impl SpatialUpmix {
+    /// A stage for `speakers` outputs at `sr` Hz, with an STFT of `n_fft` points and hop `hop`,
+    /// its buffers sized for blocks of `max_block` (larger blocks grow them, once).
+    #[new]
+    #[pyo3(signature = (speakers, sr, n_fft, hop, max_block = 8192))]
+    fn new(speakers: usize, sr: u32, n_fft: usize, hop: usize, max_block: usize) -> PyResult<Self> {
+        guard(|| {
+            if n_fft < 2 || hop == 0 || hop > n_fft || sr == 0 {
+                return Err(PyValueError::new_err(format!(
+                    "SpatialUpmix needs n_fft >= 2, 0 < hop <= n_fft and sr > 0 (n_fft {n_fft}, hop {hop}, sr {sr})"
+                )));
+            }
+            Ok(Self {
+                inner: spatial::SpatialUpmix::new(speakers, sr, n_fft, hop, max_block),
+                #[cfg(feature = "test-panic")]
+                panic_next: false,
+            })
+        })
+    }
+
+    /// The knobs, live (`SpatialParams`'s fields, in its order).
+    #[allow(clippy::too_many_arguments)]
+    fn set_params(
+        &mut self,
+        arc_deg: f64,
+        ambience: f64,
+        ambient_level_db: f64,
+        haas_ms: f64,
+        threshold: f64,
+        lam: f64,
+        front_intact: bool,
+    ) -> PyResult<()> {
+        guard(|| {
+            self.inner.set_params(Params {
+                arc_deg,
+                ambience,
+                ambient_level_db,
+                haas_ms,
+                threshold,
+                lam,
+                front_intact,
+            });
+            Ok(())
+        })
+    }
+
+    /// The layout, live: each speaker's angle (`None` without one), whether it is ambient, and
+    /// the classic mix's `(pan, ambience)` pairs or `None`.
+    #[pyo3(signature = (angles, ambient, classic = None))]
+    fn set_layout(
+        &mut self,
+        angles: Vec<Option<f64>>,
+        ambient: Vec<bool>,
+        classic: Option<Vec<(f64, f64)>>,
+    ) -> PyResult<()> {
+        guard(|| {
+            self.inner
+                .set_layout(&angles, &ambient, classic.as_deref())
+                .map_err(spatial_error)
+        })
+    }
+
+    /// One stereo block: `(direct, ambience)`, each a new `(speakers, len(left))` float64 array.
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        left: &Bound<'py, PyAny>,
+        right: &Bound<'py, PyAny>,
+    ) -> PyResult<Blocks<'py>> {
+        guard(|| {
+            #[cfg(feature = "test-panic")]
+            if std::mem::take(&mut self.panic_next) {
+                panic!("planted panic in SpatialUpmix.process (feature test-panic)");
+            }
+            let left = float64_vector("left", left)?;
+            let right = float64_vector("right", right)?;
+            let (left, right) = (samples(&left), samples(&right));
+            let n = left.len();
+            let shape = [self.inner.speakers(), n];
+            let direct = PyArray2::<f64>::zeros(py, shape, false);
+            let ambience = PyArray2::<f64>::zeros(py, shape, false);
+            {
+                let mut direct_out = direct
+                    .try_readwrite()
+                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+                let mut ambience_out = ambience
+                    .try_readwrite()
+                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+                let direct_out = direct_out
+                    .as_slice_mut()
+                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+                let ambience_out = ambience_out
+                    .as_slice_mut()
+                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+                self.inner
+                    .process(&left, &right, direct_out, ambience_out)
+                    .map_err(spatial_error)?;
+            }
+            Ok((direct, ambience))
+        })
+    }
+
+    /// The whole state, as numpy's stage keeps it: a dict of float64 arrays (2-D per speaker),
+    /// `haas_read` a list of ints and `emitted` an int.
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        guard(|| {
+            let state = self.inner.state();
+            let ready = state.ready_direct.first().map_or(0, Vec::len);
+            let n_fft = self.inner.n_fft();
+            let out = PyDict::new(py);
+            let re: Vec<f64> = state.acc12.iter().map(|z| z.re).collect();
+            let im: Vec<f64> = state.acc12.iter().map(|z| z.im).collect();
+            out.set_item("acc12_re", PyArray1::from_vec(py, re))?;
+            out.set_item("acc12_im", PyArray1::from_vec(py, im))?;
+            out.set_item("acc11", PyArray1::from_vec(py, state.acc11))?;
+            out.set_item("acc22", PyArray1::from_vec(py, state.acc22))?;
+            out.set_item("pending_left", PyArray1::from_vec(py, state.pending_left))?;
+            out.set_item("pending_right", PyArray1::from_vec(py, state.pending_right))?;
+            out.set_item("ola_direct", matrix(py, &state.ola_direct, n_fft)?)?;
+            out.set_item("ola_ambience", matrix(py, &state.ola_ambience, n_fft)?)?;
+            out.set_item("norm", PyArray1::from_vec(py, state.norm))?;
+            out.set_item("ready_direct", matrix(py, &state.ready_direct, ready)?)?;
+            out.set_item("ready_ambience", matrix(py, &state.ready_ambience, ready)?)?;
+            out.set_item("haas", matrix(py, &state.haas, self.inner.haas_len())?)?;
+            out.set_item("haas_read", state.haas_read)?;
+            out.set_item("emitted", state.emitted)?;
+            Ok(out)
+        })
+    }
+
+    /// Takes a state from numpy's stage (the keys of `state()`). Every size is checked first;
+    /// a `ValueError` changes nothing.
+    fn set_state(&mut self, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        guard(|| {
+            let re = vector(state, "acc12_re")?;
+            let im = vector(state, "acc12_im")?;
+            if re.len() != im.len() {
+                return Err(PyValueError::new_err(format!(
+                    "state: acc12_re has length {} and acc12_im {}",
+                    re.len(),
+                    im.len()
+                )));
+            }
+            let state = State {
+                acc12: re
+                    .iter()
+                    .zip(&im)
+                    .map(|(&re, &im)| spatial::Complex::new(re, im))
+                    .collect(),
+                acc11: vector(state, "acc11")?,
+                acc22: vector(state, "acc22")?,
+                pending_left: vector(state, "pending_left")?,
+                pending_right: vector(state, "pending_right")?,
+                ola_direct: float64_rows("ola_direct", &item(state, "ola_direct")?)?,
+                ola_ambience: float64_rows("ola_ambience", &item(state, "ola_ambience")?)?,
+                norm: vector(state, "norm")?,
+                ready_direct: float64_rows("ready_direct", &item(state, "ready_direct")?)?,
+                ready_ambience: float64_rows("ready_ambience", &item(state, "ready_ambience")?)?,
+                haas: float64_rows("haas", &item(state, "haas")?)?,
+                haas_read: item(state, "haas_read")?.extract()?,
+                emitted: item(state, "emitted")?.extract()?,
+            };
+            self.inner.set_state(&state).map_err(spatial_error)
+        })
+    }
+
+    /// Makes the next `process` panic inside its guard: the tests of the stage's failure path.
+    /// Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    fn _panic_next(&mut self) {
+        self.panic_next = true;
+    }
+}
+
+fn ambience_error(error: AmbienceError) -> PyErr {
+    PyValueError::new_err(error.to_string())
+}
+
+/// `aurasync.dsp.ambience.Extractor`'s work: the numpy extractor owns one when the engine is
+/// Rust. Every method's whole body runs inside [`guard`]: a panic is a `RuntimeError`, after
+/// which the host never calls this object again (its state may be half-written).
+#[pyclass(name = "AmbienceExtractor", module = "aurasync_engine")]
+struct AmbienceExtractor {
+    inner: ambience::Extractor,
+    /// `_panic_next()` was called: the next call panics. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    panic_next: bool,
+}
+
+impl AmbienceExtractor {
+    /// Panics if `_panic_next()` was called (builds with `test-panic`); nothing otherwise.
+    fn planted_panic(&mut self, _call: &str) {
+        #[cfg(feature = "test-panic")]
+        if std::mem::take(&mut self.panic_next) {
+            panic!("planted panic in AmbienceExtractor.{_call} (feature test-panic)");
+        }
+    }
+}
+
+#[pymethods]
+impl AmbienceExtractor {
+    /// An extractor with an STFT of `n_fft` points and hop `hop`, its buffers sized for blocks of
+    /// `max_block` (larger blocks grow them, once).
+    #[new]
+    #[pyo3(signature = (n_fft, hop, max_block = 8192))]
+    fn new(n_fft: usize, hop: usize, max_block: usize) -> PyResult<Self> {
+        guard(|| {
+            if n_fft < 2 || hop == 0 || hop > n_fft {
+                return Err(PyValueError::new_err(format!(
+                    "AmbienceExtractor needs n_fft >= 2 and 0 < hop <= n_fft (n_fft {n_fft}, hop {hop})"
+                )));
+            }
+            Ok(Self {
+                inner: ambience::Extractor::new(n_fft, hop, max_block),
+                #[cfg(feature = "test-panic")]
+                panic_next: false,
+            })
+        })
+    }
+
+    /// The knobs (`Parametros`'s `lam`, `umbral`, `mu0`, `mu1`, `sigma`, `energia_minima`).
+    fn set_params(
+        &mut self,
+        lam: f64,
+        threshold: f64,
+        mu0: f64,
+        mu1: f64,
+        sigma: f64,
+        min_energy: f64,
+    ) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("set_params");
+            self.inner.set_params(ambience::Params {
+                lam,
+                threshold,
+                mu0,
+                mu1,
+                sigma,
+                min_energy,
+            });
+            Ok(())
+        })
+    }
+
+    /// Back to a new extractor's state (numpy's `reiniciar`); the params stay.
+    fn reset(&mut self) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("reset");
+            self.inner.reset();
+            Ok(())
+        })
+    }
+
+    /// One stereo block: its mono ambience, a new float64 array of `len(left)` samples.
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        left: &Bound<'py, PyAny>,
+        right: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        guard(|| {
+            self.planted_panic("process");
+            let left = float64_vector("left", left)?;
+            let right = float64_vector("right", right)?;
+            let (left, right) = (samples(&left), samples(&right));
+            let mut out = vec![0.0; left.len()];
+            self.inner
+                .process(&left, &right, &mut out)
+                .map_err(ambience_error)?;
+            Ok(PyArray1::from_vec(py, out))
+        })
+    }
+
+    /// The whole state, as numpy's extractor keeps it: a dict of 1-D float64 arrays.
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        guard(|| {
+            let state = self.inner.state();
+            let out = PyDict::new(py);
+            let re: Vec<f64> = state.acc12.iter().map(|z| z.re).collect();
+            let im: Vec<f64> = state.acc12.iter().map(|z| z.im).collect();
+            out.set_item("acc12_re", PyArray1::from_vec(py, re))?;
+            out.set_item("acc12_im", PyArray1::from_vec(py, im))?;
+            out.set_item("acc11", PyArray1::from_vec(py, state.acc11))?;
+            out.set_item("acc22", PyArray1::from_vec(py, state.acc22))?;
+            out.set_item("pending_left", PyArray1::from_vec(py, state.pending_left))?;
+            out.set_item("pending_right", PyArray1::from_vec(py, state.pending_right))?;
+            out.set_item("ola", PyArray1::from_vec(py, state.ola))?;
+            out.set_item("norm", PyArray1::from_vec(py, state.norm))?;
+            out.set_item("ready", PyArray1::from_vec(py, state.ready))?;
+            Ok(out)
+        })
+    }
+
+    /// Takes a state from numpy's extractor (the keys of `state()`). Every size is checked first;
+    /// a `ValueError` changes nothing.
+    fn set_state(&mut self, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("set_state");
+            let re = vector(state, "acc12_re")?;
+            let im = vector(state, "acc12_im")?;
+            if re.len() != im.len() {
+                return Err(PyValueError::new_err(format!(
+                    "state: acc12_re has length {} and acc12_im {}",
+                    re.len(),
+                    im.len()
+                )));
+            }
+            let state = ambience::State {
+                acc12: re
+                    .iter()
+                    .zip(&im)
+                    .map(|(&re, &im)| ambience::Complex::new(re, im))
+                    .collect(),
+                acc11: vector(state, "acc11")?,
+                acc22: vector(state, "acc22")?,
+                pending_left: vector(state, "pending_left")?,
+                pending_right: vector(state, "pending_right")?,
+                ola: vector(state, "ola")?,
+                norm: vector(state, "norm")?,
+                ready: vector(state, "ready")?,
+            };
+            self.inner.set_state(&state).map_err(ambience_error)
+        })
+    }
+
+    /// Makes the next `process`, `set_params`, `reset` or `set_state` panic inside its guard:
+    /// the tests of the extractor's failure path. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    fn _panic_next(&mut self) {
+        self.panic_next = true;
+    }
+}
+
+#[pymodule]
+fn aurasync_engine(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(read, module)?)?;
+    module.add_function(wrap_pyfunction!(capabilities, module)?)?;
+    module.add_class::<SpatialUpmix>()?;
+    module.add_class::<AmbienceExtractor>()?;
+    #[cfg(feature = "test-panic")]
+    module.add_function(wrap_pyfunction!(_panic, module)?)?;
+    #[cfg(feature = "test-panic")]
+    module.add_function(wrap_pyfunction!(_panic_outside_the_read, module)?)?;
+    Ok(())
+}

@@ -542,6 +542,7 @@ function render(s) {
   window.aurasyncLastSpeakers = s.speakers.map((sp) => sp.name);
   renderSpatial(s);
   renderMonitor(s);
+  renderEngine(s);
   renderPresets(s);
   share("state", s);
 }
@@ -2531,6 +2532,7 @@ function setup() {
   setupEstimator();
   setupSpatial();
   setupMonitor();
+  setupEngine();
   $("now-calibrate").addEventListener("click", () => gateCalibration($("now-gate"), calibrateAndApply));
   $("chip-quality").addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
   $("now-identify").addEventListener("click", identifySpeakers);
@@ -3016,6 +3018,37 @@ function setupMonitor() {
     const level = Number($("monitor-gain").value);
     sendMonitor(monitorSliderIsDevice() ? { device_volume_pct: level } : { gain_db: level });
   });
+}
+
+// -- el motor del DSP: numpy o Rust (dsp/backend.py, spec rust-engine §2) -------------------
+// `wanted` es lo elegido, `active` el que lee ahora; `reason` dice por qué difieren (la extensión
+// no está, o Rust falló y numpy siguió). Mientras un cambio espera su corte, no hay `reason`.
+
+function engineState(e) {
+  if (e.reason) return `Lee con ${e.active}, no con ${e.wanted}: ${e.reason}`;
+  if (e.wanted !== e.active) return `Cambia a ${e.wanted} en el próximo corte.`;
+  return `Lee con ${e.active}.${e.available ? "" : " Rust no está compilado en este equipo."}`;
+}
+
+function renderEngine(s) {
+  const e = s.engine;
+  if (!e) return;
+  syncValue($("engine-select"), e.wanted);
+  const state = $("engine-state");
+  state.textContent = engineState(e);
+  state.classList.toggle("warn", Boolean(e.reason));
+  const tile = $("t-engine");
+  tile.textContent = e.active;
+  tile.dataset.engine = e.active;
+  tile.classList.toggle("warn", Boolean(e.reason));
+  $("t-engine-sub").textContent = e.reason
+    ? `se pidió ${e.wanted}: ${e.reason}`
+    : e.wanted !== e.active ? `cambia a ${e.wanted} en el próximo corte` : "la lectura del retardo de cada parlante";
+}
+
+function setupEngine() {
+  const select = editable($("engine-select"));
+  select.addEventListener("change", () => sendFrom(select, "engine_set", { engine: select.value }));
 }
 
 document.addEventListener("DOMContentLoaded", setup);

@@ -1,4 +1,7 @@
-"""The band-limited read: same output as the direct formula, at a fraction of the cost."""
+"""The band-limited read: same output as the direct formula, at a fraction of the cost.
+
+The accuracy tests run once per engine (`engine` in conftest.py): numpy, and the Rust port when
+the extension is built."""
 
 from __future__ import annotations
 
@@ -27,26 +30,35 @@ def data() -> np.ndarray:
     return np.random.default_rng(3).standard_normal(8192)
 
 
-def test_a_still_delay_reads_exactly_what_the_formula_gives(data):
+def test_a_still_delay_reads_exactly_what_the_formula_gives(data, engine):
     position = np.arange(4096) + 40 + 0.37
-    assert np.array_equal(interpolation.read(data, position), reference(data, position))
+    got = interpolation.read(data, position)
+    if engine.name == "numpy":
+        assert np.array_equal(got, reference(data, position))
+    else:
+        # The same formula, summed in another order: rounding apart.
+        assert np.max(np.abs(got - reference(data, position))) < 1e-12
+        assert engine.rust_calls == [4096]
 
 
-def test_a_moving_delay_stays_within_1e_10_of_the_formula(data):
+def test_a_moving_delay_stays_within_1e_10_of_the_formula(data, engine):
     # A recalibration ramp: the fraction sweeps more than one sample inside the block.
     position = np.arange(4096) + 40 + 0.37 + np.linspace(0.0, 1.7, 4096)
     got = interpolation.read(data, position)
     assert np.max(np.abs(got - reference(data, position))) < 1e-10
+    assert len(engine.rust_calls) == (engine.name == "rust")
 
 
-def test_random_positions_stay_within_1e_10(data):
+def test_random_positions_stay_within_1e_10(data, engine):
     position = np.sort(np.random.default_rng(5).uniform(40, 8000, 4096))
     assert np.max(np.abs(interpolation.read(data, position) - reference(data, position))) < 1e-10
+    assert len(engine.rust_calls) == (engine.name == "rust")
 
 
-def test_integer_positions_are_the_samples_themselves(data):
+def test_integer_positions_are_the_samples_themselves(data, engine):
     position = np.arange(100, 4196).astype(float)
     assert np.allclose(interpolation.read(data, position), data[100:4196], atol=1e-12)
+    assert len(engine.rust_calls) == (engine.name == "rust")
 
 
 def test_it_costs_far_less_than_the_formula(data):

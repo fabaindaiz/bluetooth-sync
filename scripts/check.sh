@@ -24,5 +24,10 @@ if [ -n "$(git ls-files host/web/dist-pwa)" ]; then
   exit 1
 fi
 [ -f .github/workflows/pages.yml ] || { echo "check: falta .github/workflows/pages.yml" >&2; exit 1; }
+# El motor en Rust (engine/, d-7c8794-196e0c): sin cargo el chequeo falla en vez de saltarse esta
+# parte. La toolchain la fija engine/rust-toolchain.toml (rustup la baja sola la primera vez).
+command -v cargo >/dev/null || { echo "check: falta cargo: instala rustup (ver engine/README.md)" >&2; exit 1; }
+(cd engine && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)
+# `hatch test` compila la extensión en su entorno antes de cada corrida (host/pyproject.toml).
 (cd host && hatch fmt --check && hatch test)
 echo "check: ok"

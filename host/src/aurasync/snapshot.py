@@ -223,6 +223,8 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
         "quality": svc.quality,
         "radio": svc.radio_view(),
         "radio_log": _radio_log(svc),
+        # Who runs the stages ported to Rust (dsp/backend.py): asked, reading, and why they differ.
+        "engine": svc.engine_view(),
         "volume_avrcp": svc.bt_volume.status(),
         "ab": ab,
         "pairing": svc.pairing,

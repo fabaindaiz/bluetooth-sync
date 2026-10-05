@@ -32,6 +32,12 @@ reverts at start whatever a killed run left behind (card *kill-switch-reaches-ev
 quality summary (`quality.py`) at 2 Hz and the stages' metrics at 5 Hz into fields the stream
 threads read; `volume.avrcp` is `bt_volume.py`, whose worker never blocks this thread. A blind
 A/B measures the loudness of A and B and can match them with a compensating gain.
+
+**The engine** (spec rust-engine §2, `dsp/backend.py`). `"engine"` in `service.json` (numpy by
+default, `AURASYNC_ENGINE` overrides it) chooses who runs the ported stages; `engine_set` changes
+it live, at the bottom of a cut. A Rust failure is silence on every speaker from the failing block
+until the cut's bottom (about 160 ms), then numpy, with the reason in the log and in
+`state.engine`; the session goes on.
 """
 
 from __future__ import annotations
@@ -71,7 +77,7 @@ from aurasync.chain import ChainValues
 from aurasync.config import Instalacion, Parlante, ruta_por_defecto
 from aurasync.control import ContractError
 from aurasync.cut_report import CutReporter
-from aurasync.dsp import eq, profiles
+from aurasync.dsp import backend, eq, profiles
 from aurasync.logbuffer import LogBuffer
 from aurasync.monitor import LoopError, MonitorError, MonitorOutput, MonitorSettings
 from aurasync.monitor_control import MonitorController
@@ -100,7 +106,17 @@ SERVER_POSITION = "server"
 TICK_S = 0.05
 REPLY_TIMEOUT_S = 30.0
 """`start` blocks the engine for about two seconds (the routing check); this is far above."""
-CONFIG_KEYS = {"bind", "port", "token", "installation", "microphone", "measurements", "monitor", *remote.REMOTE_KEYS}
+CONFIG_KEYS = {
+    "bind",
+    "port",
+    "token",
+    "installation",
+    "microphone",
+    "measurements",
+    "monitor",
+    "engine",
+    *remote.REMOTE_KEYS,
+}
 PARTS = {
     "ruteo": ("routing", logging.WARNING),
     "salida": ("output", logging.WARNING),
@@ -141,6 +157,9 @@ class ServiceConfig:
     running experiments from the repository."""
     monitor: dict | None = None
     """The headphone monitor's choice (`monitor_set`), kept between runs."""
+    engine: str = backend.NUMPY
+    """Who runs the stages ported to Rust (`engine_set`, `dsp/backend.py`): `numpy` or `rust`.
+    `AURASYNC_ENGINE` overrides it."""
     # Reaching the service from other devices (`remote.py`, d-7c8794-37f9bc):
     tls: bool = False
     """False in a file written before HTTPS existed; a new file gets true."""
@@ -193,6 +212,9 @@ def load_config(path: Path) -> ServiceConfig:
         raise ConfigError(msg)
     if config.microphone is not None and not isinstance(config.microphone, str):
         msg = f"{path}: microphone must be a PipeWire node name or null"
+        raise ConfigError(msg)
+    if config.engine not in backend.ENGINES:
+        msg = f"{path}: engine must be one of {list(backend.ENGINES)}; got {config.engine!r}"
         raise ConfigError(msg)
     problems = remote.check_config(config, path)
     if problems:
@@ -357,6 +379,7 @@ class Service:
         monitor_factory: Callable[..., Any] | None = None,
         monitor: dict | None = None,
         monitor_volume: Any = None,
+        engine: str | None = None,
     ) -> None:
         self.installation_path = installation_path
         self.config_path = config_path
@@ -452,6 +475,11 @@ class Service:
             # digital volume is then 0 dB). The monitor follows it in both (monitor.Levels).
             volume=lambda: self.settings.volume_db,
         )
+        self.engine_wanted = backend.wanted(engine)
+        """The engine asked for (`service.json`, `AURASYNC_ENGINE`, `engine_set`); `state.engine`
+        says which one reads and why it differs."""
+        self._apply_engine(announce=True)
+        backend.on_failure = self._on_engine_failure
         self._publish()
 
     def close(self) -> None:
@@ -461,6 +489,8 @@ class Service:
         self.monitor.close()
         self._spatial_closed.set()
         self._spatial_pool.shutdown(wait=False, cancel_futures=True)
+        if backend.on_failure == self._on_engine_failure:
+            backend.on_failure = None
 
     # -- transport side (any thread) -------------------------------------------------
 
@@ -748,6 +778,8 @@ class Service:
         except ValueError as exc:
             raise ContractError("conflict", str(exc)) from exc
         motor.silenciados = s.muted
+        # No audio flows yet: the engine is chosen here, not at a cut.
+        self._apply_engine()
         if self.bt_volume.active and hasattr(motor, "saltar_volumen"):
             # The speakers carry the volume: the digital one starts at 0 dB.
             motor.saltar_volumen(0.0)
@@ -2019,6 +2051,78 @@ class Service:
             return
         config = json.loads(self.config_path.read_text())
         config["monitor"] = data
+        write_atomic(self.config_path, json.dumps(config, indent=2) + "\n", mode=0o600)
+
+    # -- the engine: numpy or Rust (dsp/backend.py, spec rust-engine §2) --------------------
+
+    def engine_set(self, engine: str) -> dict:
+        """Choose who runs the stages ported to Rust. While a session plays the switch happens
+        at the bottom of a cut (80 + 80 ms of fade); with none, at once (no audio flows). Rust
+        that cannot run stays numpy, with the reason and no cut. Choosing Rust again lets it be
+        tried after a failure. The choice is kept in `service.json` (a simulation keeps nothing);
+        it wins over `AURASYNC_ENGINE` from now on."""
+        self.engine_wanted = engine
+        self._save_engine(engine)
+        if engine == backend.RUST:
+            backend.clear_failure()
+        resolved = backend.resolve(engine)
+        if resolved.reason is not None:
+            self.log(f"engine {engine}: numpy reads ({resolved.reason})", level=logging.WARNING, part="engine")
+        motor = self.motor
+        if resolved.active != backend.active():
+            if motor is not None and hasattr(motor, "cortar"):
+                motor.cortar(self._apply_engine)
+            else:
+                self._apply_engine()
+        return self.engine_view()
+
+    def engine_view(self) -> dict:
+        """`state.engine`: what was asked, what reads, whether Rust can run here, and why the two
+        differ (None while they agree, or while a switch waits for its cut)."""
+        resolved = backend.resolve(self.engine_wanted)
+        return {
+            "wanted": self.engine_wanted,
+            "active": backend.active(),
+            "available": resolved.available,
+            # Silence after a failure is reported with its reason, even if the user chose Rust
+            # again meanwhile: it lasts until the cut's bottom.
+            "reason": resolved.reason or backend.silent(),
+        }
+
+    def _apply_engine(self, *, announce: bool = False) -> None:
+        """Switch to what the wish resolves to now: at a cut's bottom, a session's start, or with
+        no session. Resolved here and not when asked, so a failure in between is seen."""
+        resolved = backend.resolve(self.engine_wanted)
+        if announce and resolved.reason is not None:
+            self.log(
+                f"engine {self.engine_wanted}: numpy reads ({resolved.reason})", level=logging.WARNING, part="engine"
+            )
+        before, silent = backend.active(), backend.silent()
+        # Always: `use` is idempotent and ends a silence that a failure left, whatever the state
+        # says is reading (a stop or a new wish may have come before the cut's bottom).
+        backend.use(resolved.active)
+        if before != resolved.active or silent is not None or (announce and resolved.active != backend.NUMPY):
+            self.log(f"engine: {resolved.active} reads", part="engine")
+
+    def _on_engine_failure(self, reason: str) -> None:
+        """Rust failed inside a block (`backend._fail`, on this thread): the cut is asked between
+        blocks, and numpy reads from its bottom."""
+        self.on_engine(lambda: self._engine_failed(reason))
+
+    def _engine_failed(self, reason: str) -> None:
+        self.log(f"engine: {reason}", level=logging.ERROR, part="engine")
+        motor = self.motor
+        if motor is not None and hasattr(motor, "cortar"):
+            motor.cortar(self._apply_engine)
+        else:
+            self._apply_engine()
+
+    def _save_engine(self, engine: str) -> None:
+        """Into `service.json`, as `microphone_set` does. A simulation has no file: nothing kept."""
+        if self.config_path is None or not self.config_path.exists():
+            return
+        config = json.loads(self.config_path.read_text())
+        config["engine"] = engine
         write_atomic(self.config_path, json.dumps(config, indent=2) + "\n", mode=0o600)
 
     # -- the radio (spec 2026-10-02 §3) -----------------------------------------------------

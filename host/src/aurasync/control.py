@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from aurasync import chain
+from aurasync.dsp.backend import ENGINES
 from aurasync.dsp.eq import MAX_BOOST_DB
 from aurasync.dsp.profiles import PROFILES
 from aurasync.dsp.response import THIRDS
@@ -416,6 +417,8 @@ OPS: dict[str, Op] = {
             "device_volume_pct": Field(float, 0.0, 100.0),
         },
     ),
+    # The engine of the stages ported to Rust (spec rust-engine §2): switched at a cut's bottom.
+    "engine_set": Op(required={"engine": Field(str, choices=ENGINES)}),
     # The radio (spec 2026-10-02 §3.2): raise the bluez5 log level so the radio monitor sees drops.
     "radio_log": Op(required={"active": Field(bool)}, optional={"mode": Field(str, choices=("light", "heavy"))}),
     # Clients and pairing (d-7c8794-37f9bc, `access.py`): they never touch the engine.

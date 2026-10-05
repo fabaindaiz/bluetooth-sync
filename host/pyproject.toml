@@ -52,12 +52,45 @@ python = "3.12"
 # `hatch run gen-types` escribe web/src/contract.gen.ts; con `--check` solo comprueba.
 [tool.hatch.envs.default.scripts]
 gen-types = "python -m aurasync.contract_types {args}"
+# El motor en Rust para el servicio (`"engine": "rust"` en service.json, engine/README.md): sin la
+# feature `test-panic`, y comprobado después de instalarlo. No va en `post-install-commands`: el
+# servicio corre igual sin cargo, con numpy (d-7c8794-196e0c). Después de cambiar el Rust, otra vez.
+engine-build = [
+  "command -v cargo >/dev/null || (echo 'falta cargo: instalá rustup, ver engine/README.md' >&2; exit 1)",
+  "{env:HATCH_UV} pip install --quiet maturin==1.15.0",
+  'PATH="$PATH:$(dirname "{env:HATCH_UV}")" maturin develop --uv --release -m ../engine/crates/aurasync-engine/Cargo.toml',
+  "python -m aurasync.dsp.backend --check-production",
+]
 
+# El motor en Rust (engine/crates/aurasync-engine, PyO3 + maturin) se compila dentro del entorno
+# de tests: tests/test_engine_rust.py falla, no se salta, si `aurasync_engine` no está.
+# Un miembro de workspace de hatch no sirve: hatch 1.16.2 busca los miembros solo debajo de
+# host/ y `../engine/...` da "No members could be derived". `post-install-commands` corre antes
+# de instalar las `extra-dependencies`, así que el script trae maturin él mismo; y el venv de uv
+# no tiene pip, por eso `maturin develop --uv` con el uv de hatch (`HATCH_UV`) al final del PATH.
+# `run` y `run-cov` (lo que corre `hatch test`) compilan antes de pytest: con cargo es
+# incremental (un par de segundos sin cambios), y así un cambio en el Rust nunca se prueba contra
+# un `.so` viejo. Sin cargo, falla con un mensaje que dice qué instalar.
+# La compilación de tests lleva la feature `test-panic` (`_panic`, `_panic_outside_the_read`).
 [tool.hatch.envs.hatch-test]
 installer = "uv"
+post-install-commands = ["engine-build"]
 
 [[tool.hatch.envs.hatch-test.matrix]]
 python = ["3.12"]
+
+# Declarar `scripts` reemplaza los de hatch: `cov-combine` y `cov-report` se repiten tal cual, y
+# `run` y `run-cov` con la compilación delante (hatch 1.16.2, hatch/env/internal/test.py).
+[tool.hatch.envs.hatch-test.scripts]
+run = ["engine-build", "pytest{env:HATCH_TEST_ARGS:} {args}"]
+run-cov = ["engine-build", "coverage run -m pytest{env:HATCH_TEST_ARGS:} {args}"]
+cov-combine = "coverage combine"
+cov-report = "coverage report"
+engine-build = [
+  "command -v cargo >/dev/null || (echo 'falta cargo: instalá rustup, ver engine/README.md' >&2; exit 1)",
+  "{env:HATCH_UV} pip install --quiet maturin==1.15.0",
+  'PATH="$PATH:$(dirname "{env:HATCH_UV}")" maturin develop --uv --release --features test-panic -m ../engine/crates/aurasync-engine/Cargo.toml',
+]
 
 # El panel en navegadores reales (Playwright 1.60.0, como en la rama panel-demo). Usa el
 # caché de navegadores de Playwright (`hatch run browser:install`). Va fuera de

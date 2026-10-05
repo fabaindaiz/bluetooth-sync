@@ -1392,7 +1392,24 @@ tiempo-frecuencia, lo directo paneado a las cuatro esquinas y lo difuso decorrel
 de medir lo de arriba.
 
 ### Motor de audio en Rust para el camino crítico, con Python para el resto · i-7c8794-fd9732
-**Estado: A medias (2026-10-02): la prueba de concepto de E/S nativa está en preparación**
+**Estado: A medias (2026-10-05): pasos 1 y 2 empezados** (d-7c8794-dc712e, d-7c8794-196e0c,
+d-7c8794-0d2a1e): el andamio (`engine/`, maturin, `check.sh`) y la lectura sinc en Rust están
+construidos, solo con tests y el costo medido en `HP-O16` (8,3–10,5× numpy,
+[experimentos/20](research/experimentos/20-costo-de-la-lectura-sinc-en-rust.md)); nada se ha
+oído ni probado con parlantes. **Segunda etapa portada (2026-10-05): el upmix espacial / frente
+intacto**, golden ≤ 2,2e-15, 3,2–3,8× numpy (experimentos/20 §2). **Tercera (2026-10-05): el
+extractor de ambiente**, golden ≤ 5,4e-14, 1,4–2,0× numpy, una vez por entrada y no por
+parlante (experimentos/20 §3). **Pendiente
+aparte:** la fuente de fase del upmix espacial tiene **dos** discontinuidades en el propio numpy,
+las dos superficies donde `_frame` cambia de qué toma la fase del directo: el desempate `el >= er`
+(en antifase a igual nivel, 1 ulp de entrada cambia 0,349 su salida: MEDIDO, experimentos/20 §2.3,
+y lo fija `tests/test_spatial_rust.py`) y el umbral `et > 0.01 * energy` (donde L + R deja de
+usarse y la fase salta a la del canal más fuerte; INFERIDO del código: mover el umbral a 0,011
+cambió la salida hasta 0,030 en el golden). Suavizar las dos (una fuente de fase continua)
+cambiaría el sonido numpy y pide su propio A/B. **`PC-Ryzen5` necesita rustup antes de su próximo `check.sh`**
+(`engine/README.md`). Un miembro de workspace de hatch con maturin no sirve (hatch 1.16.2); se usa
+un script de compilación. Antes de esto (2026-10-02): la prueba de concepto de E/S nativa estaba
+en preparación
 (`probes/17-e-s-nativa-rust/`, d-7c8794-36dde5). Lo pidió el usuario: explorar Rust para la parte
 crítica del audio y dejar el resto en Python; eligió empezar por la prueba de concepto. Investigación y plan:
 [research/12](research/12-motor-de-audio-en-rust.md). Reabre d-7c8794-c23c20 si se adopta.
@@ -1408,6 +1425,11 @@ nativa en PipeWire con A/B → la Pi, Auracast y macOS. Criterios en research/12
 en un workspace no está probado); con la E/S de PipeWire, que se compila en cada equipo.
 
 **Las dudas y sus respuestas:** research/12 §5.
+
+
+**Pendiente (2026-10-05):** una etapa Rust que falla *al construirse* (no por pánico) tumba la sesión en
+vez de volver a numpy. `backend.guarded` solo atrapa `RuntimeError`. Hay que hacer que la construcción
+falle blando, con su test. Las etapas 7 a 15 siguen pendientes.
 
 ### Panel como PWA en GitHub Pages conectado por red local con HTTPS y token por cliente · i-7c8794-b10884
 **Estado: A medias (2026-10-04): publicada; falta probarla en teléfonos.** El transporte con token y

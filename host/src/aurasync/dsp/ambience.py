@@ -26,13 +26,25 @@ El algoritmo:
 La cadena completa del surround, según la figura 9 del paper, es
 **ambiente → todo-paso decorrelador → retardo de 5 a 20 ms**. Este módulo hace el primer
 paso; los otros dos están en `decorrelate` y en el retardo por parlante.
+
+**Engine** (spec rust-engine §5, `dsp/backend.py`): with `engine=rust` the streaming `Extractor`
+hands its work to `aurasync_engine.AmbienceExtractor` (engine/crates/aurasync-dsp/src/ambience.rs),
+within 1e-9 of this code, which stays the oracle (tests/test_ambience_rust.py). The extractor owns
+the Rust object and moves its whole state into it, or back, when the engine switches at a cut's
+bottom (`on_engine_switch`): the move is exact, so the sound goes on as if nothing had switched.
+After a Rust failure the extractor gives silence until the cut's bottom, then starts afresh in
+numpy (the Rust state may be torn), as `reiniciar` leaves it. `extraer` and `indice_ambiente`
+(whole signals, for the tests and the probes) stay numpy only.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
+
+from aurasync.dsp import backend
 
 N_FFT = 2048
 """~43 ms a 48 kHz: suficiente resolución en frecuencia para separar fuentes, y corto
@@ -179,13 +191,37 @@ class Extractor:
     """
 
     def __init__(self, p: Parametros | None = None, n_fft: int = N_FFT, salto: int = SALTO) -> None:
-        self.p = p or Parametros()
+        self._rust: Any = None
+        """The Rust extractor while the engine is Rust; the numpy state below is then stale until
+        the switch back moves Rust's state into it."""
+        self._rust_broken = False
+        """A Rust call failed: its state may be torn, so the next switch restarts in numpy."""
+        self._p = p or Parametros()
         self.n_fft = n_fft
         self.salto = salto
         self.latencia = n_fft
         self.reiniciar()
+        backend.register(self)
+        self._follow(rust=backend.rust_active())
+
+    @property
+    def p(self) -> Parametros:
+        """The params; the motor replaces them at a cut's bottom, and they apply from the next
+        frame, in either engine."""
+        return self._p
+
+    @p.setter
+    def p(self, p: Parametros) -> None:
+        self._p = p
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.set_params(*self._rust_params()))
 
     def reiniciar(self) -> None:
+        self._reiniciar_numpy()
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.reset())
+
+    def _reiniciar_numpy(self) -> None:
         self._pendiente_izq = np.zeros(0)
         self._pendiente_der = np.zeros(0)
         self._ola = np.zeros(self.n_fft)
@@ -197,11 +233,106 @@ class Extractor:
         self._acc11 = np.zeros(self.n_fft // 2 + 1)
         self._acc22 = np.zeros(self.n_fft // 2 + 1)
 
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
+
+    def on_engine_switch(self, _active: str) -> None:
+        """`backend.use` at a cut's bottom: move the state to the engine that runs now."""
+        self._follow(rust=backend.rust_active())
+
+    def _follow(self, *, rust: bool) -> None:
+        """Run on Rust (`rust`) or numpy from now on, moving the state across; after a failure,
+        restart in numpy first."""
+        if self._rust_broken:
+            self._rust, self._rust_broken = None, False
+            self._reiniciar_numpy()
+        if rust and self._rust is None:
+            self._rust = backend.guarded(self._build_rust, lambda: None)
+        elif not rust and self._rust is not None:
+            state = backend.guarded(self._rust.state, lambda: None)
+            self._rust = None
+            if state is None:
+                self._reiniciar_numpy()
+            else:
+                self._load_state(state)
+
+    def _build_rust(self) -> Any:
+        rust = backend.module().AmbienceExtractor(self.n_fft, self.salto)
+        rust.set_params(*self._rust_params())
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _rust_call(self, call: Any) -> Any:
+        rust = self._rust
+        return backend.guarded(lambda: call(rust), self._broke)
+
+    def _broke(self) -> None:
+        self._rust_broken = True
+
+    def _rust_params(self) -> tuple[float, ...]:
+        p = self._p
+        return (p.lam, p.umbral, p.mu0, p.mu1, p.sigma, p.energia_minima)
+
+    def _numpy_state(self) -> dict[str, np.ndarray]:
+        """The numpy extractor's state in the Rust extractor's terms."""
+
+        def vector(x: np.ndarray) -> np.ndarray:
+            return np.ascontiguousarray(x, dtype=np.float64)
+
+        return {
+            "acc12_re": vector(self._acc12.real),
+            "acc12_im": vector(self._acc12.imag),
+            "acc11": vector(self._acc11),
+            "acc22": vector(self._acc22),
+            "pending_left": vector(self._pendiente_izq),
+            "pending_right": vector(self._pendiente_der),
+            "ola": vector(self._ola),
+            "norm": vector(self._norma),
+            "ready": vector(self._listo),
+        }
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        """The Rust extractor's state (`state()`) as this extractor's own."""
+        self._acc12 = np.empty(len(state["acc12_re"]), dtype=complex)
+        self._acc12.real = state["acc12_re"]
+        self._acc12.imag = state["acc12_im"]
+        self._acc11 = np.array(state["acc11"])
+        self._acc22 = np.array(state["acc22"])
+        self._pendiente_izq = np.array(state["pending_left"])
+        self._pendiente_der = np.array(state["pending_right"])
+        self._ola = np.array(state["ola"])
+        self._norma = np.array(state["norm"])
+        self._listo = np.array(state["ready"])
+
+    # -- el bloque ---------------------------------------------------------------------------
+
     def procesar(self, izq: np.ndarray, der: np.ndarray) -> np.ndarray:
         """Devuelve el ambiente en mono, tantas muestras como entraron."""
         if len(izq) != len(der):
             msg = f"los canales tienen largos distintos: {len(izq)} y {len(der)}"
             raise ValueError(msg)
+        if backend.silent() is None:
+            self._follow(rust=backend.rust_active())
+        if backend.silent() is not None:
+            # A Rust failure, until the cut's bottom: silence.
+            return np.zeros(len(izq))
+        if self._rust is not None:
+            return self._procesar_rust(izq, der)
+        return self._procesar_numpy(izq, der)
+
+    def _procesar_rust(self, izq: np.ndarray, der: np.ndarray) -> np.ndarray:
+        n = len(izq)
+        # Rust takes float64 C-contiguous only: converted here (no copy when it already is).
+        izq = np.ascontiguousarray(izq, dtype=np.float64)
+        der = np.ascontiguousarray(der, dtype=np.float64)
+
+        def silence() -> np.ndarray:
+            self._broke()
+            return np.zeros(n)
+
+        rust = self._rust
+        return backend.guarded(lambda: rust.process(izq, der), silence)
+
+    def _procesar_numpy(self, izq: np.ndarray, der: np.ndarray) -> np.ndarray:
         self._pendiente_izq = np.concatenate([self._pendiente_izq, izq])
         self._pendiente_der = np.concatenate([self._pendiente_der, der])
 

@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin==1.15.0"]
+build-backend = "maturin"
+
+[project]
+name = "aurasync-engine"
+version = "0.1.0"
+description = "The aurasync DSP in Rust: the band-limited delay read."
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.0"]
+
+[tool.maturin]
+module-name = "aurasync_engine"

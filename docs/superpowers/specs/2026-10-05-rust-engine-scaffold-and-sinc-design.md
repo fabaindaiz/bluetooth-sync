@@ -56,7 +56,7 @@ f32, the Raspberry Pi.
 
 **Switch and fallback.** Tests: `engine_set` while playing changes the engine only at the cut's
 bottom and the output stays continuous; a planted panic in a test build (a feature flag of
-`aurasync-engine`) produces one silent block, then numpy at the next cut, with the reason in the
+`aurasync-engine`) produces silence on every speaker from the failing block until the cut's bottom, then numpy, with the reason in the
 snapshot.
 
 **Golden.** With `engine=rust`, `interpolation.read` must agree with numpy within **1e-9** (absolute,

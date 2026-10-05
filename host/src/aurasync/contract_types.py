@@ -278,6 +278,18 @@ class VolumeAvrcp(TypedDict):
     error: str | None
 
 
+class EngineView(TypedDict):
+    """`state.engine`: who runs the stages ported to Rust (`dsp/backend.py`). `wanted` is the
+    setting (or `AURASYNC_ENGINE`), `active` the engine reading now; `reason` says why they differ
+    (the extension missing, a Rust failure), and is null while they agree or a switch waits for
+    its cut."""
+
+    wanted: str
+    active: Literal["numpy", "rust"]
+    available: bool
+    reason: str | None
+
+
 class StateView(TypedDict):
     sequence: int
     session: SessionView
@@ -293,6 +305,7 @@ class StateView(TypedDict):
     volume_avrcp: VolumeAvrcp
     ab: AbView | None
     sync: SyncView
+    engine: EngineView
 
 
 PARTIAL: frozenset[type] = frozenset(
@@ -335,6 +348,7 @@ SHAPES: list[type] = [
     LatencyView,
     HealthView,
     VolumeAvrcp,
+    EngineView,
     StateView,
 ]
 EVENTS: dict[str, str] = {

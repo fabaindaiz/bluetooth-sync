@@ -19,7 +19,7 @@
 - A Rust failure: that block is silence, Rust disabled, numpy from the next cut; music never stops.
 - `aurasync-dsp` has `#![forbid(unsafe_code)]`; versions of `pyo3`, `numpy` (crate) and `maturin` pinned exactly.
 - New code in English; `engine/README.md` and `docs/` in Spanish.
-- No commits unless the user asks (CLAUDE.md). Work in the worktree `../bluetooth-sync-rust` (detached at 63c6445); each task ends with `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` (Rust tasks) and `cd host && hatch test` + `hatch fmt --check` (Python tasks) green. Known flaky, pre-existing: `test_interpolation::test_it_costs_far_less_than_the_formula`, `test_service::test_a_speaker_missing_at_start_is_unavailable_and_nothing_plays`.
+- No commits unless the user asks (CLAUDE.md). Work in the worktree `../bluetooth-sync-rust` (detached at 63c6445); each task ends with `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` (Rust tasks) and `cd host && hatch test` + `hatch fmt --check` (Python tasks) green. Known flaky, pre-existing: `test_interpolation::test_it_costs_far_less_than_the_formula`, `test_service::test_a_speaker_missing_at_start_is_unavailable_and_nothing_plays`, `test_spatial::test_cost_per_block_is_flat`.
 
 ## Review Focus
 

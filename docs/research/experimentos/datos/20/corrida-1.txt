@@ -1,0 +1,13 @@
+uptime antes: 16:06:31 up  6:10,  1 user,  load average: 1,45, 2,60, 4,86
+load1 antes: 1.45
+python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras a 48 kHz = 85.3 ms; 500 bloques
+parlantes    retardo  numpy med  numpy p95  rust med  rust p95      x
+        1     quieto      1.045      1.228     0.105     0.111   10.0
+        1 movimiento      3.906      4.604     0.436     0.477    9.0
+        3     quieto      3.322      4.244     0.326     0.373   10.2
+        3 movimiento     12.048     14.710     1.343     1.538    9.0
+        8     quieto      8.812     11.145     0.939     1.225    9.4
+        8 movimiento     31.104     39.500     3.610     4.042    8.6
+uptime despues: 16:07:10 up  6:11,  1 user,  load average: 1,97, 2,57, 4,76
+load1 despues: 1.97
