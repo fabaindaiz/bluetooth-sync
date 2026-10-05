@@ -150,6 +150,7 @@ es lo único que avisa a la siguiente.
 | ¿Qué procesamiento mejoraría el sonido, cómo se mide su calidad, cuánta pierde la cadena de códecs y cómo se muestra en el panel? | `docs/research/11-procesamiento-calidad-canales-y-panel.md` |
 | ¿Conviene un motor de audio en Rust para el camino crítico, y cómo se haría? | `docs/research/12-motor-de-audio-en-rust.md` |
 | ¿Qué corre en una Pi Zero 2 W y en una Pico 2 W, cómo pasar de 3 parlantes, y cómo funciona el panel independiente? | `docs/research/13-dispositivos-pi-pico-y-panel-independiente.md` |
+| ¿Qué es este proyecto frente a lo que ya existe (consolas, motores DSP, multiroom, upmix), qué es propio y hacia dónde reenfocar? | `docs/research/14-el-proyecto-en-su-contexto.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |
