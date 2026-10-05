@@ -564,6 +564,126 @@ La regla que sí se respetó es la que importa: **`dsp/`, `motor.py`, `medicion.
 `sincronia.py` no hacen E/S**, y por eso los 139 tests corren en `check.sh` sin radio
 ni parlantes. La lista real de módulos está en `host/README.md`.
 
+### 6.2 ¿El software en un contenedor? Factibilidad (2026-10-04, `PC-Ryzen5`)
+
+**Pedido (usuario, 2026-10-04):** que la mayor parte del software, motor incluido, quede en una
+imagen para facilitar la portabilidad y desarrollar sin traer muchas dependencias. "Evalúa primero
+si es factible."
+
+**Lo que el código usa del sistema (VERIFICADO, `grep` en `host/src`):** `pactl` (11 usos),
+`bluetoothctl` (6), `systemctl` (2), `pw-play`, `pw-record`, `pw-cli`, `pw-dump`, `pw-top`, `wpctl`,
+`journalctl`, `avahi-publish-*`, `ip`. Todos son **clientes** que hablan por sockets con demonios del
+host: PipeWire/WirePlumber (`/run/user/1000/pipewire-0`, `pulse/`), BlueZ (D-Bus del sistema),
+systemd de usuario (D-Bus de sesión), el journal (archivos en `/var/log/journal`). Los demonios se
+quedan en el host —son los dueños del hardware—; los clientes pueden ir en la imagen.
+
+**Prueba (MEDIDO):** Podman 6.1.3 sin root, una imagen Arch mínima (`pipewire`, `pipewire-audio`,
+`wireplumber`, `libpulse`, `bluez-utils`, `python`, `numpy`; 738 MB), corrida con
+`--userns=keep-id --network host`, `/run/user/1000` y `/run/dbus/system_bus_socket` montados,
+`/var/log/journal` y `/etc/machine-id` de solo lectura:
+
+| Operación | Resultado |
+|---|---|
+| `pw-cli info`, `pw-dump` | OK: ve el grafo del host (87 objetos) |
+| `wpctl status` | OK: PipeWire 1.6.9 del host |
+| `pw-play` a la salida del PC (volumen 0) | OK |
+| `pw-record` del micrófono fifine, 1 s | OK (180 KB) |
+| `pactl list short sinks` | OK (aviso de cookie, inofensivo) |
+| `bluetoothctl devices Paired` | OK (9) por el D-Bus del sistema |
+| `journalctl --user` | OK |
+| `systemctl --user` | **Falla** (su socket privado no acepta la conexión desde el contenedor) |
+| `busctl --user get-property … pipewire.service … ActiveState` | OK (`active`): reemplaza a `systemctl` |
+
+**Veredicto: factible.** Lo que hace falta cambiar es chico: el observador consulta el estado de los
+servicios por D-Bus (`busctl`) en vez de `systemctl`. **Lo que queda por verificar antes de adoptarlo:**
+(1) que el contenedor no agregue jitter al motor —se mide con el experimento 12 (cortes), igual
+dentro y fuera—; (2) la prioridad de tiempo real de los `pw-play` (RTKit por el D-Bus del sistema, o
+`--cap-add SYS_NICE`/`--ulimit rtprio`); (3) `avahi-publish` por el D-Bus del sistema; (4) la imagen
+para la Raspberry Pi: la de Arch es solo x86_64, así que haría falta una base multi-arquitectura
+(Debian o Fedora) y comprobar que sus clientes de PipeWire hablen con un servidor de otra versión
+(INFERIDO que sí: el protocolo nativo es compatible hacia atrás).
+
+**Forma propuesta (INFERIDO):** una imagen `aurasync` (el servicio, el motor, el panel compilado);
+una de desarrollo que monta el código y trae hatch, Node y los navegadores de Playwright; y, aparte,
+una de aprendizaje automático (torch, Demucs) para el piloto de pistas, que suma varios GB y no debe
+pesar sobre la imagen principal. Los datos (`~/.config/aurasync`, las mediciones) van en volúmenes.
+
+#### 6.2.1 Construido (2026-10-04, `PC-Ryzen5`, d-7c8794-6b1a15)
+
+`host/container/Containerfile` (etapas `runtime`, `dev`, `ml` sobre una base Arch común con los
+clientes de PipeWire, `bluez-utils`, `avahi` y Python 3.12 por uv) y `host/container/aurasync-container`,
+que construye y lanza con los montajes de arriba. Uso:
+
+```bash
+host/container/aurasync-container build            # runtime; o: build dev, build ml
+host/container/aurasync-container run              # aurasync service (o cualquier subcomando)
+host/container/aurasync-container dev hatch test   # los tests con el repositorio montado
+```
+
+**Cambio en el código:** `system.system_unit` lee `ActiveState`, `MainPID` y
+`ActiveEnterTimestampMonotonic` con `busctl` (D-Bus de sesión o del sistema) en vez de `systemctl`.
+Al probarlo dentro apareció un error que en el host no se veía: las unidades se nombran sin sufijo
+(`pipewire`), `systemctl` agrega `.service` solo y la ruta de D-Bus no; quedó en un test.
+
+**Verificado dentro del contenedor (MEDIDO):**
+
+| Qué | Resultado |
+|---|---|
+| `aurasync doctor` | ve los dos micrófonos (elige el fifine), la instalación y los parlantes emparejados; "ninguno conectado", igual que en el host en ese momento |
+| Estado de `bluetooth`, `pipewire`, `wireplumber` | `active`, con el PID y el tiempo encendido del host |
+| `aurasync service --simular` en otro puerto | responde `/v1/hello` y `/v1/state`, lista las direcciones del host para el QR |
+| `avahi-publish-service` | `Established` por el D-Bus del sistema |
+| Prioridad de `pw-play` | TS, nice 6: **igual que el mismo `pw-play` corrido en el host** (el contenedor no la cambia) |
+| `hatch test` en `dev` | 977 pasan, 1 falla: `test_interpolation` (umbral de tiempo; falla igual en el host y en `main`) |
+| Tests de navegador en `dev` (Chromium y Firefox) | 180 pasan, 2 se saltan; fallan solo los que ya fallaban en `main`: `test_every_setting_explains_itself` (×2), `test_the_navigation_cost_of_the_tabs_does_not_grow` (32,x contra 31,4) y los de la PWA, que piden `npm run build:pwa` (11:38 min) |
+| Tamaño | `runtime` 964 MB, `dev` 3,96 GB |
+
+Dos trampas del entorno de desarrollo, ya resueltas en el script: el `$HOME` y el `XDG_CONFIG_HOME`
+del host existen adentro solo como padres de montajes, de solo lectura, y **Firefox se cuelga al
+arrancar** si no puede escribir ahí (hatch tampoco crea su configuración). `dev` y `ml` usan un
+`$HOME` propio en un volumen (`aurasync-hatch`), con los directorios de aurasync montados dentro.
+Y en un worktree de git, `.git` apunta fuera del repositorio: se monta también ese directorio.
+
+#### 6.2.2 ¿Y los demonios también? (2026-10-04, `PC-Ryzen5`)
+
+**Pregunta (usuario):** contenerizar todo el stack, incluido lo que hoy corre en el PC (PipeWire,
+WirePlumber, BlueZ, avahi).
+
+**MEDIDO:** la interfaz de gestión de Bluetooth del núcleo (`btmgmt info`, solo lectura) responde
+desde un contenedor sin root **con `--network host`** y falla con red propia (`Unable to open
+mgmt_socket`): los sockets `AF_BLUETOOTH` existen solo en el espacio de red inicial. Leer alcanza sin
+root; cambiar el controlador (encender, conectar, que es lo que hace `bluetoothd`) pide
+`CAP_NET_ADMIN` sobre ese espacio, o sea un contenedor **con root** (INFERIDO, por cómo el núcleo
+comprueba la capacidad; no se probó para no tocar la radio).
+
+**Lo que implicaría (INFERIDO):**
+
+- **Un solo dueño por pieza de hardware.** Dos `bluetoothd` sobre `hci0` se pisan; dos PipeWire sobre
+  la misma tarjeta, la segunda recibe "ocupado". Contenerizar los demonios es **reemplazar** los del
+  host: `systemctl disable --now bluetooth` y `systemctl --user mask pipewire pipewire-pulse
+  wireplumber` (cambios de sistema, se anotan con su reversa antes de hacerlos), y el contenedor con
+  root, `--network host`, `/dev/snd`, su propio D-Bus del sistema o el del host, y RTKit.
+- **El escritorio pasa a depender del contenedor.** Firefox, Spotify y el sonido del sistema hablan con
+  el PipeWire de la sesión: si vive en el contenedor, su socket se publica en `/run/user/1000` y, si el
+  contenedor cae, el PC queda mudo.
+- **Lo que se gana:** versiones fijas de BlueZ, PipeWire y WirePlumber iguales en cada equipo; probar
+  los modos experimentales de BlueZ o un `main.conf` distinto sin tocar el sistema; y la misma imagen
+  para un equipo dedicado.
+- **El costo para el proyecto:** el experimento 12 (los microcortes) tendría una variable más justo
+  donde se busca la causa (la radio).
+
+**Veredicto (INFERIDO): no se descarta, pero no en el PC de escritorio.** Tiene sentido como **modo
+equipo dedicado**: una máquina cuyo único trabajo es aurasync (la Raspberry Pi Zero 2 W de research/13,
+o `HP-O16`), donde la imagen trae y fija todo el stack y nadie más usa el audio. En `PC-Ryzen5` se
+queda como está (§6.2.1: la imagen trae los clientes, los demonios son del host). Cómo probarlo sin
+riesgo: en `HP-O16` o en una Pi, con la reversa anotada, medir lo mismo que el experimento 12 con el
+stack del sistema y con el del contenedor.
+
+**Lo que sigue abierto:** (1) que el contenedor no agregue cortes al motor: el experimento 12 se
+corre igual dentro y fuera, con los parlantes; hasta entonces el host nativo sigue siendo el camino
+de las pruebas con audio. (2) La imagen de la Raspberry Pi (base multi-arquitectura). (3) La imagen
+`ml`, que se construye cuando empiece el piloto de pistas.
+
 ## 7. Plan de investigación y desarrollo
 
 La Fase 1 del roadmap (E1–E7 y la decisión i-7c8794-0d129c) **no cambia**. Este

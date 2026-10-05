@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Runs aurasync in a container against the host's PipeWire, BlueZ and avahi
+# (docs/research/08-integracion-y-plan.md §6.2).
+#
+#   aurasync-container build [runtime|dev|ml]   build an image (runtime by default)
+#   aurasync-container run [aurasync args…]     aurasync in the runtime image (default: service)
+#   aurasync-container dev [command…]           the dev image with the repository mounted (default: bash)
+#   aurasync-container ml [command…]            the ml image with the repository mounted
+#
+# Rootless podman (`docker` is podman's shim on PC-Ryzen5). What each mount is for:
+#   $XDG_RUNTIME_DIR          PipeWire (pipewire-0), pipewire-pulse (pulse/) and the session
+#                             bus (bus). The whole directory and not the sockets: a socket
+#                             mounted alone goes stale when its server restarts.
+#   system_bus_socket         BlueZ, avahi-daemon, rtkit (real-time priority) and systemd.
+#   /var/log/journal, machine-id  the radio log (`journalctl`), read-only.
+#   ~/.config/aurasync, ~/.local/share/aurasync  installation, settings and sessions,
+#                             at the same paths as on the host.
+# --network host: the panel, the QR and mDNS see the host's addresses.
+# --userns=keep-id: inside, the same uid as outside, so the sockets let it in.
+set -euo pipefail
+
+here=$(cd "$(dirname "$0")" && pwd)
+host_dir=$(dirname "$here")
+repo_dir=$(dirname "$host_dir")
+engine=${CONTAINER_ENGINE:-podman}
+runtime_dir=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+config_dir=${XDG_CONFIG_HOME:-$HOME/.config}/aurasync
+data_dir=${XDG_DATA_HOME:-$HOME/.local/share}/aurasync
+
+image() { echo "localhost/aurasync-$1:latest"; }
+
+common=(
+  --rm --init
+  --userns=keep-id
+  --network host
+  --security-opt label=disable
+  -e HOME="$HOME"
+  -e XDG_RUNTIME_DIR="$runtime_dir"
+  -e DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus"
+  -e XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+  -e XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+  -v "$runtime_dir:$runtime_dir"
+  -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+  -v /var/log/journal:/var/log/journal:ro
+  -v /etc/machine-id:/etc/machine-id:ro
+  -v "$config_dir:$config_dir"
+  -v "$data_dir:$data_dir"
+)
+# Where service.json keeps the measurements, which can be outside the two directories.
+measurements=$(sed -n 's/.*"measurements": *"\([^"]*\)".*/\1/p' "$config_dir/service.json" 2>/dev/null || true)
+measurements=${measurements/#\~/$HOME}
+if [[ -n "$measurements" ]]; then
+  mkdir -p "$measurements"
+  common+=(-v "$measurements:$measurements")
+fi
+tty=()
+[[ -t 0 && -t 1 ]] && tty=(-it)
+
+cmd=${1:-run}
+shift || true
+mkdir -p "$config_dir" "$data_dir"
+
+case "$cmd" in
+  build)
+    target=${1:-runtime}
+    exec "$engine" build --target "$target" -t "$(image "$target")" -f "$here/Containerfile" "$host_dir"
+    ;;
+  run)
+    name=()
+    [[ "${1:-service}" == service ]] && name=(--name aurasync)
+    exec "$engine" run "${tty[@]}" "${common[@]}" "${name[@]}" "$(image runtime)" "${@:-service}"
+    ;;
+  dev | ml)
+    # The repository at its own path, and hatch's environments in a volume so they outlive
+    # the run. In a git worktree `.git` points outside it, to the main repository: that
+    # directory goes in too, or git does not work inside.
+    # A writable home of their own: hatch and Firefox write under $HOME and the XDG
+    # directories, and the host's exist inside only as read-only mount parents (Firefox
+    # hangs on launch there). aurasync's own directories are mounted into it.
+    dev_home=/opt/hatch/home
+    git_common=$(git -C "$repo_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+    git_mount=()
+    [[ -n "$git_common" && "$git_common" != "$repo_dir"/* ]] && git_mount=(-v "$git_common:$git_common")
+    exec "$engine" run "${tty[@]}" "${common[@]}" \
+      -v "$repo_dir:$repo_dir" "${git_mount[@]}" -v aurasync-hatch:/opt/hatch -w "$host_dir" \
+      --shm-size=2g \
+      -e HOME="$dev_home" -e XDG_CONFIG_HOME="$dev_home/.config" -e XDG_DATA_HOME="$dev_home/.local/share" \
+      -v "$config_dir:$dev_home/.config/aurasync" -v "$data_dir:$dev_home/.local/share/aurasync" \
+      "$(image "$cmd")" "${@:-bash}"
+    ;;
+  *)
+    sed -n '2,8p' "$0" >&2
+    exit 2
+    ;;
+esac

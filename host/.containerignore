@@ -1,0 +1,5 @@
+# Only pyproject.toml, README.md and src/ go into the images (container/Containerfile).
+web/node_modules
+web/dist-pwa
+.venv
+**/__pycache__

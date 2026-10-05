@@ -1,0 +1,64 @@
+# aurasync in a container (docs/research/08-integracion-y-plan.md §6.2).
+#
+# The servers stay on the host: PipeWire, WirePlumber, BlueZ and avahi-daemon own the
+# hardware. The container brings only their clients plus aurasync, and talks to them
+# through the host's sockets (`container/aurasync-container` mounts them).
+#
+# Arch, like the host (CachyOS): the PipeWire clients come in the same version as the
+# server they talk to.
+#
+#   runtime  the service and the engine, nothing to build them
+#   dev      runtime + hatch, Node and the Playwright browsers; the source is mounted
+#   ml       runtime + PyTorch (CPU) and Demucs, for the offline stems pilot
+#
+# Build with `container/aurasync-container build [runtime|dev|ml]` from host/.
+
+FROM docker.io/library/archlinux:latest AS base
+RUN pacman -Syu --noconfirm --needed \
+        pipewire pipewire-audio wireplumber libpulse \
+        bluez-utils avahi iproute2 systemd \
+        uv ca-certificates \
+    && pacman -Scc --noconfirm
+# Python 3.12, the same the tests run on (pyproject.toml); Arch ships a newer one.
+ENV UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+# The writable home of the dev and ml images (container/aurasync-container mounts a volume here).
+RUN uv python install 3.12 \
+    && mkdir -p /opt/hatch/home/.config /opt/hatch/home/.local/share && chmod -R 1777 /opt/hatch
+
+FROM base AS runtime
+COPY pyproject.toml README.md /src/
+COPY src /src/src
+RUN uv venv --python 3.12 /opt/aurasync \
+    && VIRTUAL_ENV=/opt/aurasync uv pip install /src \
+    && rm -rf /src
+ENV PATH=/opt/aurasync/bin:$PATH \
+    PYTHONUNBUFFERED=1
+ENTRYPOINT ["aurasync"]
+CMD ["service"]
+
+FROM base AS dev
+RUN pacman -Syu --noconfirm --needed \
+        git nodejs npm python-hatch \
+        nss atk at-spi2-core libcups libdrm libxkbcommon libxcomposite libxdamage \
+        libxrandr mesa pango cairo alsa-lib gtk3 dbus-glib libxt \
+    && pacman -Scc --noconfirm
+# The browsers live in the image, not in the hatch volume: they are rebuilt with it.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
+    HATCH_DATA_DIR=/opt/hatch/data \
+    HATCH_CACHE_DIR=/opt/hatch/cache
+RUN uv venv --python 3.12 /opt/playwright-venv \
+    && VIRTUAL_ENV=/opt/playwright-venv uv pip install playwright==1.60.0 \
+    && /opt/playwright-venv/bin/python -m playwright install chromium firefox \
+    && chmod -R a+rX /opt/playwright
+CMD ["bash"]
+
+FROM runtime AS ml
+# Demucs and probes/17-lineas-de-base read and resample audio with ffmpeg.
+RUN pacman -Syu --noconfirm --needed ffmpeg && pacman -Scc --noconfirm
+RUN VIRTUAL_ENV=/opt/aurasync uv pip install \
+        --index-url https://download.pytorch.org/whl/cpu torch torchaudio \
+    && VIRTUAL_ENV=/opt/aurasync uv pip install demucs soundfile
+ENTRYPOINT []
+CMD ["bash"]
