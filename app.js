@@ -542,6 +542,7 @@ function render(s) {
   window.aurasyncLastSpeakers = s.speakers.map((sp) => sp.name);
   renderSpatial(s);
   renderMonitor(s);
+  renderEngine(s);
   renderPresets(s);
   share("state", s);
 }
@@ -780,6 +781,13 @@ function speakerRow(speaker) {
   mute.addEventListener("click", () => { const sp = current(); if (sp) { markPending(mute); send("set", { speaker: name, changes: { muted: !sp.muted } }); } });
   const tone = el("button", { type: "button", class: "ghost small-btn", text: "Tono" });
   tone.addEventListener("click", () => send("tone", { speaker: name, seconds: 2 }));
+  // Entrar y salir de la sesión que suena (fase 2): cada botón se muestra solo cuando corresponde.
+  const join = el("button", { type: "button", class: "ghost small-btn", text: "Hacer entrar", hidden: "" });
+  const retry = el("button", { type: "button", class: "ghost small-btn", text: "Reintentar", hidden: "" });
+  const leave = el("button", { type: "button", class: "ghost small-btn", text: "Sacar", hidden: "" });
+  for (const [button, op] of [[join, "speaker_join"], [retry, "speaker_join"], [leave, "speaker_leave"]]) {
+    button.addEventListener("click", () => { markPending(button); send(op, { speaker: name }); });
+  }
   const remove = el("button", { type: "button", class: "ghost small-btn danger", text: "Quitar" });
   // Sin confirm(): se quita al instante y «Deshacer» lo vuelve a agregar con lo que tenía.
   remove.addEventListener("click", () => withUndo(`${name}: quitado de la instalación (se guarda con «Guardar instalación»)`,
@@ -788,7 +796,7 @@ function speakerRow(speaker) {
   const fold = el("button", { type: "button", class: "fold-btn", "aria-label": `Ajustes de ${name}`, "aria-expanded": "false" });
   const row = {
     tr: el("tr", { "data-speaker": name }), name: el("div", { class: "speaker-name" }), sub: el("div", { class: "speaker-sub" }),
-    status: el("span", { class: "status" }), role, kind, pan, ambience, gain, delay, delayNow, mute, tone, remove, fold,
+    status: el("span", { class: "status" }), role, kind, pan, ambience, gain, delay, delayNow, mute, tone, join, retry, leave, remove, fold,
   };
   fold.addEventListener("click", () => setFolded(row.tr, fold, !row.tr.hasAttribute("data-folded"), name));
   row.tr.append(
@@ -800,7 +808,7 @@ function speakerRow(speaker) {
     el("td", { class: "cell-ambience", "data-label": "Ambiente" }, ambience.cell),
     el("td", { class: "cell-volume", "data-label": "Volumen" }, gain.cell),
     el("td", { class: "num cell-delay", "data-label": "Retardo (ms)" }, delay, delayNow),
-    el("td", { class: "cell-actions" }, el("div", { class: "hstack" }, tone, mute, remove)),
+    el("td", { class: "cell-actions" }, el("div", { class: "hstack" }, join, retry, leave, tone, mute, remove)),
   );
   return row;
 }
@@ -829,7 +837,44 @@ function setStatus(node, table, state, extra = "") {
   node.replaceChildren(el("span", { class: "status-dot", "aria-hidden": "true" }), label + extra);
 }
 
+// Entrar y salir con la sesión sonando (spec 2026-10-05 §5): «Sacar» a quien suena, «Hacer entrar» a
+// quien no está (o lo perdimos y el servicio todavía lo reintenta), «Reintentar» cuando el servicio se rindió.
+function syncJoinButtons(row, s, sp) {
+  const playing = s.session.status === "playing";
+  const state = speakerState(s, sp);
+  const real = sp.output_kind !== "virtual";
+  const gaveUp = state === "lost" && sp.rejoin === "gave_up";
+  row.leave.hidden = !(playing && real && state === "playing");
+  row.retry.hidden = !(playing && real && gaveUp);
+  row.join.hidden = !(playing && real && (state === "absent" || (state === "lost" && !gaveUp)));
+  // Un Bluetooth sin enlace no puede entrar: primero se conecta (Dispositivos).
+  const offline = sp.output_kind === "bluetooth" && sp.connected === false;
+  for (const button of [row.join, row.retry]) {
+    button.disabled = offline;
+    button.title = offline ? "Conectalo primero (Dispositivos)" : "";
+  }
+}
+
+// Lo que entró con el lazo de recalibración apagado puede haber movido la alineación: avisa hasta
+// que se recalibre, se encienda el lazo o la sesión pare.
+let joinWarning = false;
+let lastOutputs = null;
+function trackJoins(s) {
+  const playing = s.session.status === "playing";
+  const outputs = new Map(s.speakers.map((sp) => [sp.name, sp.output]));
+  if (!playing || s.recalibration.active) joinWarning = false;
+  else if (lastOutputs && s.speakers.some((sp) => sp.output === "playing" && lastOutputs.has(sp.name) && lastOutputs.get(sp.name) !== "playing")) joinWarning = true;
+  lastOutputs = playing ? outputs : null;
+  const cal = s.calibration;
+  if (cal && cal.state === "done" && !cal.stale && cal.measured_at !== trackJoins.calAt) { trackJoins.calAt = cal.measured_at; if (trackJoins.seen) joinWarning = false; }
+  trackJoins.seen = true;
+  const box = $("join-warning");
+  box.hidden = !joinWarning;
+  box.textContent = joinWarning ? "Entró un parlante con el lazo de «Mantener sincronía» apagado: la alineación puede haber cambiado, recalibrá." : "";
+}
+
 function renderSpeakers(s) {
+  trackJoins(s);
   const body = $("speakers");
   const seen = new Set();
   const many = s.speakers.length >= FOLD_FROM;
@@ -849,6 +894,7 @@ function renderSpeakers(s) {
     row.sub.textContent = [sp.address, sp.codec, sp.modalias, sp.rssi_dbm != null ? `${sp.rssi_dbm} dBm` : null]
       .filter(Boolean).join(" · ");
     setStatus(row.status, SPEAKER_STATUS, speakerState(s, sp), sp.muted ? " · mudo" : "");
+    syncJoinButtons(row, s, sp);
     const roles = s.roles[s.global.layout];
     if (row.role.dataset.layout !== s.global.layout) {
       row.role.replaceChildren(el("option", { value: "", text: "personalizado", disabled: "" }),
@@ -1198,9 +1244,15 @@ function renderHealth(s) {
   const pipe = h.pipe_level_ms;
   $("t-pipe").textContent = pipe == null || !playing ? "—" : `${Math.round(pipe)} ms`;
   $("t-pipe").className = `tile-value ${pipe == null || !playing ? "" : pipe < 20 ? "bad" : pipe < 60 ? "warn" : "good"}`;
-  $("t-pipe-sub").textContent = h.bt_discovering
+  // El colchón de los parlantes: uno para todos, rellenado para todos en el fondo de un corte.
+  const cushion = h.output_cushion;
+  const refills = !cushion ? ""
+    : (cushion.refills ? ` · ${cushion.refills} relleno(s): la tubería se vaciaba y se rellenó para todos en un corte` : "")
+      + (cushion.gave_up ? " · el colchón dejó de rellenar: los rellenos no alcanzaban" : "")
+      + (cushion.reason ? ` · sin relleno (${cushion.reason})` : "");
+  $("t-pipe-sub").textContent = (h.bt_discovering
     ? "Bluetooth está buscando dispositivos: puede cortar el audio"
-    : "audio esperando en la tubería; bajo 20 ms el parlante se queda sin nada";
+    : "audio esperando en la tubería; bajo 20 ms el parlante se queda sin nada") + refills;
   // Calidad: cada xrun es un hueco o un salto en lo que suena. 0/min es lo esperado.
   const xr = Object.entries(h.xruns || {});
   const worst = xr.reduce((m, [, v]) => (v.per_min != null && v.per_min > m ? v.per_min : m), xr.length ? 0 : null);
@@ -1869,9 +1921,10 @@ function micReading(s) {
   };
   const mic = level("mic");
   if (!mic) {
-    return { state: "none", why: s.recalibration.active
+    const waiting = s.recalibration.active || s.recalibration.mic_check;
+    return { state: "none", why: waiting
       ? "Esperando la primera lectura del micrófono…"
-      : "El nivel lo mide el lazo: encendé «Mantener sincronía» para verlo antes de calibrar." };
+      : "El micrófono se abre solo unos segundos para medir su nivel: tocá «Medir el micrófono»." };
   }
   const input = Math.max(...["in L", "in R"].map((n) => (level(n) || { rms: SILENCE }).rms));
   const playing = input > MIC_PLAYING_DB;
@@ -1947,7 +2000,37 @@ function gateCalibration(box, go) {
 
 // -- calibración --------------------------------------------------------------------
 
+// Con el lazo apagado (por defecto) nadie lee el micrófono: al mirar esta verificación se pide
+// abrirlo unos segundos (`mic_check`), nunca de continuo: puede ser el micrófono del portátil.
+// Se pide al entrar (o cuando se puede: sesión sonando, sin lazo ni calibración) y con el botón.
+let micCheckEligible = false;
+
+function micCheckPossible(s) {
+  const cal = s.calibration;
+  // Solo para alguien que mira el panel: una pestaña en segundo plano no abre el micrófono.
+  return document.visibilityState === "visible"
+    && s.session.status === "playing" && !s.recalibration.active
+    && !(cal && ["running", "measuring"].includes(cal.state))
+    && s.recalibration.mic_check !== undefined; // un servicio anterior no tiene `mic_check`
+}
+
+function askMicCheck() {
+  if (api) api.raw({ op: "mic_check" });
+}
+
+function renderMicCheck(s) {
+  const visible = !$("mic-check").closest("[data-view]")?.hidden;
+  const possible = micCheckPossible(s);
+  const eligible = visible && possible;
+  if (eligible && !micCheckEligible) askMicCheck();
+  micCheckEligible = eligible;
+  const button = $("mic-recheck");
+  const show = possible && !s.recalibration.mic_check;
+  if (button.hidden === show) button.hidden = !show;
+}
+
 function renderCalibration(s) {
+  renderMicCheck(s);
   paintMicCheck();
   const cal = s.calibration;
   renderResponse(cal, s.speakers);
@@ -1975,6 +2058,11 @@ function renderCalibration(s) {
     }
   }
   $("cal-note").textContent = note;
+  // Quién queda fuera de la calibración: los que no suenan ahora (virtuales, sin conectar, perdidos).
+  const left = playing ? s.speakers.filter((sp) => sp.output && sp.output !== "playing") : [];
+  const leftBox = $("cal-left-out");
+  leftBox.hidden = left.length === 0;
+  leftBox.textContent = left.length ? `Fuera de la calibración (no suenan): ${left.map((sp) => `${sp.name} (${SPEAKER_STATUS[sp.output][1]})`).join(", ")}.` : "";
   const results = cal ? cal.results : [];
   $("cal-table").hidden = results.length === 0;
   $("cal-results").replaceChildren(...results.map((r) => el("tr", {},
@@ -2394,6 +2482,8 @@ function setup() {
   });
   editable($("cal-mic"));
   $("cal-mic").addEventListener("change", () => sendFrom($("cal-mic"), "microphone_set", { node: $("cal-mic").value || null }));
+  $("mic-recheck").addEventListener("click", askMicCheck);
+  document.addEventListener("visibilitychange", () => { if (latest) renderMicCheck(latest); });
   $("cal-run").addEventListener("click", () => {
     const cal = latest && latest.calibration;
     if (cal && ["running", "measuring"].includes(cal.state)) send("calibrate_cancel");
@@ -2442,6 +2532,7 @@ function setup() {
   setupEstimator();
   setupSpatial();
   setupMonitor();
+  setupEngine();
   $("now-calibrate").addEventListener("click", () => gateCalibration($("now-gate"), calibrateAndApply));
   $("chip-quality").addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
   $("now-identify").addEventListener("click", identifySpeakers);
@@ -2840,7 +2931,21 @@ function monitorStateText(m) {
   if (m.state === "failed") return `No se pudo: ${m.error}`;
   if (!m.reached) return `PipeWire lo mandó a ${m.routed_to ? name(m.routed_to) : "ninguna salida"}, no a ${name(m.target)}.`;
   const cushion = m.cushion_ms == null ? "" : ` Colchón ${Math.round(m.cushion_ms)} ms · rellenos ${m.refills || 0}${m.refills ? " (la salida se quedó sin audio y se rellenó)" : ""}${m.trims ? ` · recortes ${m.trims}` : ""}.`;
-  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}${cushion}`;
+  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}${cushion}${monitorMatchText(m)}`;
+}
+
+// Los modos se oyen al mismo volumen: la mezcla y el binaural se igualan a la entrada al volumen
+// elegido (loudness_match.py). Un servicio anterior no manda `match`: no se dice nada.
+function monitorMatchText(m) {
+  if (!m.match) return "";
+  if (m.match === "unmeasured") return " Compensación binaural sin medir para este HRTF.";
+  if (m.match === "measuring") return " Igualando…";
+  // `frozen`: una pausa, un corte, una calibración o todos los parlantes en silencio.
+  return ` Nivel igualado: ${nf(m.makeup_db, 1)} dB${m.match === "frozen" ? " (en espera)" : ""}.`;
+}
+
+function monitorLevelText(value, device) {
+  return `${Math.round(Number(value))} ${device ? "%" : "dB"}`;
 }
 
 function renderMonitor(s) {
@@ -2859,29 +2964,91 @@ function renderMonitor(s) {
     select.value = m.target || "";
   }
   if (!isEditing($("monitor-mode"))) $("monitor-mode").value = m.mode;
-  if (!isEditing($("monitor-gain"))) $("monitor-gain").value = String(m.gain_db);
-  $("monitor-gain-value").textContent = `${Math.round(Number($("monitor-gain").value))} dB`;
+  // Un servicio anterior no manda `volume_control`: es por software, como era.
+  const control = m.volume_control || "software";
+  if (!isEditing($("monitor-volume-control"))) $("monitor-volume-control").value = control;
+  const gain = $("monitor-gain");
+  // Del audífono: el nivel es el volumen real de la salida, en %, leído de vuelta (también lo
+  // que se cambió con los botones). Por software: la ganancia, en dB.
+  const device = control === "device";
+  if (gain.dataset.control !== control) {
+    gain.dataset.control = control;
+    gain.min = device ? "0" : "-40";
+    gain.max = device ? "100" : "0";
+  }
+  if (!isEditing(gain)) {
+    const real = device ? (m.device_volume_pct ?? m.device_volume_set_pct) : m.gain_db;
+    if (real != null) gain.value = String(real);
+  }
+  $("monitor-gain-value").textContent = monitorLevelText(gain.value, device);
   const state = $("monitor-state");
-  state.textContent = monitorStateText(m);
+  state.textContent = monitorStateText(m) + (device && m.device_volume_reason ? ` Volumen del audífono: ${m.device_volume_reason}.` : "");
   state.dataset.state = m.state === "on" && !m.reached ? "elsewhere" : m.state;
   state.classList.toggle("warn", state.dataset.state === "failed" || state.dataset.state === "elsewhere");
 }
 
-function sendMonitor() {
+// Solo el deslizador manda un nivel: cambiar el modo, la salida o quién controla el volumen
+// nunca lo lleva. Si lo llevara, el volumen leído de una salida (subido con sus botones) se
+// le pediría a la nueva, que subiría sola (revisión, 2026-10-05).
+function sendMonitor(extra = {}) {
   const mode = $("monitor-mode").value;
   const target = $("monitor-target").value || null;
   if (mode !== "off" && !target) {
     $("monitor-state").textContent = "Elegí una salida primero.";
     return;
   }
-  sendFrom($("monitor-state"), "monitor_set", { mode, target, gain_db: Number($("monitor-gain").value) });
+  sendFrom($("monitor-state"), "monitor_set", { mode, target, ...extra });
+}
+
+// La unidad que el deslizador muestra ahora (la del estado), no la del selector: recién cambiado
+// el selector, el deslizador sigue en la unidad anterior hasta el próximo estado.
+function monitorSliderIsDevice() {
+  return ($("monitor-gain").dataset.control || $("monitor-volume-control").value) === "device";
 }
 
 function setupMonitor() {
-  $("monitor-mode").addEventListener("change", sendMonitor);
+  $("monitor-mode").addEventListener("change", () => sendMonitor());
   $("monitor-target").addEventListener("change", () => { if ($("monitor-mode").value !== "off") sendMonitor(); });
-  $("monitor-gain").addEventListener("input", () => { $("monitor-gain-value").textContent = `${$("monitor-gain").value} dB`; });
-  $("monitor-gain").addEventListener("change", () => { if ($("monitor-mode").value !== "off") sendMonitor(); });
+  $("monitor-volume-control").addEventListener("change", () => sendMonitor({ volume_control: $("monitor-volume-control").value }));
+  $("monitor-gain").addEventListener("input", () => {
+    $("monitor-gain-value").textContent = monitorLevelText($("monitor-gain").value, monitorSliderIsDevice());
+  });
+  $("monitor-gain").addEventListener("change", () => {
+    if ($("monitor-mode").value === "off") return;
+    const level = Number($("monitor-gain").value);
+    sendMonitor(monitorSliderIsDevice() ? { device_volume_pct: level } : { gain_db: level });
+  });
+}
+
+// -- el motor del DSP: numpy o Rust (dsp/backend.py, spec rust-engine §2) -------------------
+// `wanted` es lo elegido, `active` el que lee ahora; `reason` dice por qué difieren (la extensión
+// no está, o Rust falló y numpy siguió). Mientras un cambio espera su corte, no hay `reason`.
+
+function engineState(e) {
+  if (e.reason) return `Lee con ${e.active}, no con ${e.wanted}: ${e.reason}`;
+  if (e.wanted !== e.active) return `Cambia a ${e.wanted} en el próximo corte.`;
+  return `Lee con ${e.active}.${e.available ? "" : " Rust no está compilado en este equipo."}`;
+}
+
+function renderEngine(s) {
+  const e = s.engine;
+  if (!e) return;
+  syncValue($("engine-select"), e.wanted);
+  const state = $("engine-state");
+  state.textContent = engineState(e);
+  state.classList.toggle("warn", Boolean(e.reason));
+  const tile = $("t-engine");
+  tile.textContent = e.active;
+  tile.dataset.engine = e.active;
+  tile.classList.toggle("warn", Boolean(e.reason));
+  $("t-engine-sub").textContent = e.reason
+    ? `se pidió ${e.wanted}: ${e.reason}`
+    : e.wanted !== e.active ? `cambia a ${e.wanted} en el próximo corte` : "la lectura del retardo de cada parlante";
+}
+
+function setupEngine() {
+  const select = editable($("engine-select"));
+  select.addEventListener("change", () => sendFrom(select, "engine_set", { engine: select.value }));
 }
 
 document.addEventListener("DOMContentLoaded", setup);
