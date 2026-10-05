@@ -6,3 +6,6 @@ aurasync service 0.0.0 listening on http://0.0.0.0:8731/
 [00:38:49] panel: set: ok {"changes": {"decorrelate": true}}
 [00:39:31] panel: set: ok {"changes": {"layout": "lcrs"}}
 [00:39:32] panel: set: ok {"changes": {"layout": "quad"}}
+[00:50:45] panel: start: rejected: unavailable: not connected: JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+[00:50:57] service: closing
+aurasync service stopped
