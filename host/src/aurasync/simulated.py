@@ -127,6 +127,9 @@ class Room:
 
 
 class SimulatedPlayer:
+    """The real part of a simulated session: only the playing speakers' sinks, so the room
+    never hears a virtual or absent one (spec 2026-10-05-virtual-speakers-and-hot-join §4)."""
+
     def __init__(self, sinks: dict[str, str], room: Room) -> None:
         self._by_sink = {sink: name for name, sink in sinks.items()}
         self._pids = {sink: next(_pids) for sink in sinks.values()}
@@ -151,6 +154,9 @@ class SimulatedPlayer:
 
     def soltar(self, sink: str) -> None:
         self._pids.pop(sink, None)
+
+    def cerrar(self) -> None:
+        pass
 
 
 class SimulatedInput:
@@ -249,10 +255,14 @@ class SimulatedSession(AudioSession):
         o = self.options
         time.sleep(0.3)
         volumes = self.bt_volumes if isinstance(self.bt_volumes, SimulatedVolumes) else None
+        # Every real speaker is connected in the simulation; a virtual one has no sink and is
+        # only computed: neither the room nor the player knows it.
+        playing = {n: sink for n, sink in self._sinks.items() if sink is not None}
         self.room = Room(
-            list(self._sinks), o.rate, (lambda name: volumes.gain(self._sinks[name])) if volumes is not None else None
+            list(playing), o.rate, (lambda name: volumes.gain(self._sinks[name])) if volumes is not None else None
         )
-        self._player = SimulatedPlayer(self._sinks, self.room)
+        self._stack.callback(self.outputs.close)
+        self.outputs.attach(SimulatedPlayer(playing, self.room) if playing else None, set(playing))
         self._input = SimulatedInput(o.rate, self)
         self._stack.callback(self._recal_stack.close)
         self.source = self._new_source()
@@ -296,7 +306,8 @@ class SimulatedObserver:
     """The system view of a machine with the installation's speakers connected, and one more nearby."""
 
     def __init__(self, installation: Instalacion | None) -> None:
-        speakers = installation.parlantes if installation is not None else []
+        # A virtual speaker has no device: nothing to pair, connect or list.
+        speakers = [p for p in (installation.parlantes if installation is not None else []) if p.sink is not None]
         self._devices = {
             p.sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":"): {
                 "name": p.nombre,

@@ -8,7 +8,7 @@ import pytest
 
 from aurasync.config import Instalacion, Parlante
 from aurasync.monitor import MonitorError, MonitorSettings
-from aurasync.monitor_control import MonitorController
+from aurasync.monitor_control import MonitorController, forbidden_targets
 
 INST = Instalacion(
     parlantes=[
@@ -144,3 +144,16 @@ def test_a_monitor_that_fails_to_open_says_why():
     assert view["state"] == "failed"
     assert "HRTF" in view["error"]
     assert session.monitor is None
+
+
+def test_forbidden_targets_ignore_virtual_and_name_both_combine_nodes():
+    inst = Instalacion(parlantes=[Parlante("A", "bluez_output.AA_BB_CC_DD_EE_01.1"), Parlante("V", None)])
+    targets = forbidden_targets(inst, "aurasync")
+    assert None not in targets
+    assert targets == {
+        "bluez_output.AA_BB_CC_DD_EE_01.1",
+        "aurasync",
+        "aurasync_salida",
+        "aurasync_salida_b",
+        "aurasync_monitor",
+    }

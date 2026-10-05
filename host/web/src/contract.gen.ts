@@ -201,9 +201,16 @@ export interface SyncView {
 
 export interface SpeakerView {
   name: string;
+  sink: string | null;
   muted: boolean;
   playing: boolean;
+  output: "virtual" | "absent" | "playing" | "lost" | null;
+  output_kind: "virtual" | "bluetooth" | "wired";
+  address: string | null;
   battery_pct: number | null;
+  codec: string | null;
+  rssi_dbm: number | null;
+  modalias: string | null;
 }
 
 export interface SessionView {

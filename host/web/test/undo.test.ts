@@ -39,6 +39,13 @@ describe("the restore plan", () => {
     ]);
   });
 
+  it("restores a virtual speaker by name, not by address", () => {
+    const virtual = speaker("Virtual 1", { address: null, sink: null });
+    const before = capture(state([virtual]), null);
+    const now = capture(state([]), null);
+    expect(restorePlan(before, now)[0]).toEqual({ op: "speaker_add_virtual", name: "Virtual 1" });
+  });
+
   it("is empty when nothing changed", () => {
     const s = capture(state([speaker("Red", {})]), { stages: [{ id: "eq", chosen: {} }] });
     expect(restorePlan(s, s)).toEqual([]);

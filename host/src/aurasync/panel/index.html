@@ -210,7 +210,10 @@
     <section data-card="devices" class="card" aria-labelledby="h-devices">
       <div class="card-head">
         <h2 id="h-devices" class="card-title">Dispositivos Bluetooth <span id="devices-count" class="muted small font-normal"></span></h2>
-        <button type="button" id="scan" class="btn small-btn" title="Busca 8 s dispositivos en modo emparejamiento. Mientras busca, el audio puede cortarse.">Buscar cerca</button>
+        <div class="hstack">
+          <button type="button" id="add-virtual" class="btn small-btn" title="Suma un parlante que no suena en ningún lado: una posición del arreglo para probar o para reservar el lugar. Con la sesión detenida.">Agregar parlante virtual</button>
+          <button type="button" id="scan" class="btn small-btn" title="Busca 8 s dispositivos en modo emparejamiento. Mientras busca, el audio puede cortarse.">Buscar cerca</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table class="table devices-table">

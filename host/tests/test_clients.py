@@ -358,3 +358,7 @@ def test_a_new_code_comes_with_its_connection_code(tmp_path):
     assert shown[-1] == (started["code"], 120.0, started["connection_code"])
     acc.where = lambda: "aurasync.local"  # not an IPv4: only the 6 digits
     assert run(op="pair_start")["connection_code"] is None
+
+
+def test_adding_a_virtual_speaker_needs_admin():
+    assert required_scope("speaker_add_virtual") == "admin"

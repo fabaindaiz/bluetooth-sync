@@ -37,6 +37,7 @@ from aurasync.dsp import probe as masked_probe
 from aurasync.dsp.input_analysis import InputAnalyzer
 from aurasync.dsp.retardo import LineaDeRetardo
 from aurasync.multichannel import MultichannelFile
+from aurasync.outputs import OutputSet, Pacer
 from aurasync.probe_ring import ProbeRing
 from aurasync.quality import QualityMeter
 from aurasync.sources import Source
@@ -123,8 +124,9 @@ class SessionOptions:
 
 
 def missing_speakers(installation: Instalacion) -> list[str]:
+    """The real speakers whose sink PipeWire does not list now. A virtual one is never missing."""
     nodes = {s.nodo for s in sonido.salidas_bluetooth()}
-    return [p.nombre for p in installation.parlantes if p.sink not in nodes]
+    return [p.nombre for p in installation.parlantes if p.sink is not None and p.sink not in nodes]
 
 
 def level_db(x: np.ndarray) -> tuple[float, float]:
@@ -358,7 +360,8 @@ class AudioSession:
         (the spread of the measured delays, the speakers heard), with its clock: the panel's
         "Sincronía" (spec 2026-10-02 §7.3.4). Only a reliable measurement without a cut."""
         self.lost: list[str] = []
-        """Speakers whose stream died. The rest keep playing, as `run` always did."""
+        """Speakers whose stream died (`output == "lost"`). The rest keep playing, as `run` always
+        did, and the session goes on even when every real one is lost (d-7c8794-05bdd6)."""
         self.routing_repairs = 0
         """How many times a stream was found on the wrong sink and moved back."""
         self.meters = Meters()
@@ -388,7 +391,8 @@ class AudioSession:
         self._recal_stack = contextlib.ExitStack()
         self._sinks = {p.nombre: p.sink for p in installation.parlantes}
         self._silence = np.zeros(options.block)
-        self._player: sonido.Reproductor | None = None
+        self.outputs = OutputSet(self._sinks, Pacer(options.rate, options.block))
+        """Who plays and who is only computed; the only way to the speakers (outputs.py)."""
         self._input: sonido.SinkVirtual | None = None
         self._mic: sonido.MicrofonoContinuo | None = None
         self._cal_mic: sonido.MicrofonoContinuo | None = None
@@ -415,9 +419,6 @@ class AudioSession:
 
     def open(self) -> None:
         o = self.options
-        missing = missing_speakers(self.installation)
-        if missing:
-            raise SessionError("unavailable", f"not connected: {', '.join(missing)}")
         if sonido.nodo_existe(o.sink_name):
             raise SessionError(
                 "conflict",
@@ -431,9 +432,25 @@ class AudioSession:
             self.close()
             raise
 
+    def _connected(self) -> set[str]:
+        """The real speakers whose sink PipeWire lists now: the ones that will play. A missing one
+        is `absent` and only computed (d-7c8794-05bdd6)."""
+        present = {s.nodo for s in sonido.salidas_bluetooth()}
+        return {n for n, sink in self._sinks.items() if sink is not None and sink in present}
+
     def _open_streams(self) -> None:
         o = self.options
-        nodes = list(self._sinks.values())
+        connected = self._connected()
+        # Installation order, as before: the combined stream's channels follow it.
+        nodes = [sink for n, sink in self._sinks.items() if n in connected and sink is not None]
+        # The output set closes the player, after the input sink (the reverse of opening).
+        self._stack.callback(self.outputs.close)
+        if not nodes:
+            # No real speaker: no `pw-play`, no combine module, nothing to route or check. Only
+            # the input sink; the `Pacer` keeps the time while nothing comes in (outputs.py).
+            self._input = self._stack.enter_context(sonido.SinkVirtual(o.sink_name, o.sink_description, o.rate))
+            self._after_streams()
+            return
         # **El orden importa, y el silencio también.** `pw-play` no se enlaza a su destino
         # hasta que recibe datos, y resuelve `--target` en ese momento. Si el sink virtual ya
         # existiera, WirePlumber puede tomarlo como salida por defecto y un target que no
@@ -453,23 +470,29 @@ class AudioSession:
             )
         else:
             player = sonido.Reproductor(nodes, o.rate, o.player_latency_ms, tuberia_ms=pipe_ms)
-        self._player = self._stack.enter_context(player)
+        with contextlib.ExitStack() as guard:
+            guard.enter_context(player)
+            self.outputs.attach(player, connected)
+            guard.pop_all()
         for _ in range(max(1, int(0.5 * o.rate / o.block))):
-            self._player.escribir(dict.fromkeys(nodes, self._silence))
+            player.escribir(dict.fromkeys(nodes, self._silence))
         self._input = self._stack.enter_context(sonido.SinkVirtual(o.sink_name, o.sink_description, o.rate))
 
         # **La comprobación va después de crear la entrada, y no antes.** Al aparecer,
         # WirePlumber toma el sink virtual como salida por defecto y mueve el stream que
         # apuntaba al default anterior. Comprobar antes no veía nada.
         time.sleep(1.0)
-        for asked, real in self._player.reparar_ruteo().items():
+        for asked, real in player.reparar_ruteo().items():
             self.log("ruteo", motivo=f"se desvió a {real or 'ningún destino'}: {asked} — devuelto")
         time.sleep(0.5)
-        lost = self._player.mal_ruteados()
+        lost = player.mal_ruteados()
         if lost:
             detail = "; ".join(f"{asked} → {real or 'ningún destino'}" for asked, real in lost.items())
             raise SessionError("unavailable", f"the streams did not reach their speakers: {detail}")
+        self._after_streams()
 
+    def _after_streams(self) -> None:
+        o = self.options
         self._stack.callback(self._recal_stack.close)
         if o.recalibrate:
             self.enable_recalibration(o.microphone)
@@ -487,13 +510,18 @@ class AudioSession:
         self._routing_future = None
         if self._cal_mic is not None:
             self._cal_mic.cerrar()
-        self._player = self._input = self._mic = self._cal_mic = None
+        self.outputs.close()
+        self._input = self._mic = self._cal_mic = None
         self.loop = None
 
     # -- one block ------------------------------------------------------------------
 
+    def output_states(self) -> dict[str, str]:
+        """Each speaker's `output`: `virtual`, `absent`, `playing` or `lost` (outputs.py)."""
+        return self.outputs.states()
+
     def step(self) -> None:
-        if self._player is None or self._input is None:
+        if self._input is None:
             msg = "the session is not open"
             raise RuntimeError(msg)
         o = self.options
@@ -516,7 +544,10 @@ class AudioSession:
         t0 = time.perf_counter()
         if self.calibration is not None and self.calibration.state == "running":
             # The calibration owns the speakers: its stimulus instead of the motor's output.
-            blocks = self.calibration.next_blocks(o.block)
+            # Only the playing ones take part; the others get silence, so every consumer (the
+            # monitor's per-speaker inputs above all) still receives every channel.
+            stimulus = self.calibration.next_blocks(o.block)
+            blocks = {n: stimulus.get(n, self._silence) for n in self._sinks}
         elif pair is None:
             # Con nada reproduciéndose se manda silencio igual, para que los streams A2DP no
             # se suspendan: al despertar traerían un desfase distinto. **Y el silencio pasa por
@@ -531,7 +562,9 @@ class AudioSession:
         self.block_ms = 0.9 * self.block_ms + 0.1 * (time.perf_counter() - t0) * 1000
         blocks = self._add_tones(blocks)
         self._watch_output(late_ms)
-        self._player.escribir({self._sinks[n]: x for n, x in blocks.items()})
+        # Only the playing speakers reach the player; with no real stream alive and nothing
+        # coming in, the output set's `Pacer` keeps the loop in real time.
+        self.outputs.write(blocks, input_paced=pair is not None)
         # The probe as it left the engine, at the time it left (silence while it is off).
         probe = getattr(self.motor, "sonda", None)
         self.probe_ring.write(time.monotonic(), probe.last if probe is not None and probe.active else {})
@@ -549,15 +582,15 @@ class AudioSession:
             self._telemetry_failures = getattr(self, "_telemetry_failures", 0) + 1
             if self._telemetry_failures == 1:
                 self.log("telemetría", motivo="falló el registro de métricas; el audio sigue")
-        alive = set(self._player.vivos)
-        if not alive:
-            raise SessionError("unavailable", "every speaker disconnected")
-        lost = [n for n, sink in self._sinks.items() if sink not in alive]
-        if lost != self.lost:
-            for name in set(lost) - set(self.lost):
-                self.cuts.add("lost", name, "el stream hacia el parlante murió")
-            self.log("parlante perdido", motivo=f"sin stream: {', '.join(lost)}; siguen los demás")
-            self.lost = lost
+        gone = self.outputs.refresh()
+        for name in gone:
+            self.cuts.add("lost", name, "el stream hacia el parlante murió")
+        if gone:
+            # Losing every real speaker no longer ends the session (d-7c8794-05bdd6): it goes on,
+            # heard on the monitor, until the user stops it.
+            rest = "siguen los demás" if self.outputs.playing() else "ninguno suena; la sesión sigue"
+            self.log("parlante perdido", motivo=f"sin stream: {', '.join(gone)}; {rest}")
+        self.lost = [n for n, state in self.outputs.states().items() if state == "lost"]
         self._check_routing()
         if self.motor.en_corte:
             self._last_fade = time.monotonic()
@@ -589,6 +622,10 @@ class AudioSession:
         monitor = self.monitor
         if monitor is None:
             return
+        # Every channel, virtual and absent ones included: the binaural filter has one input
+        # per speaker and none may go missing.
+        if blocks.keys() != self._sinks.keys():
+            blocks = {n: blocks.get(n, self._silence) for n in self._sinks}
         try:
             monitor.push(pair, blocks)
         except Exception as exc:  # noqa: BLE001 - the monitor is a side output: it never stops the audio
@@ -603,7 +640,7 @@ class AudioSession:
         """Before writing: how much audio was still waiting for the speakers."""
         measurer = getattr(self, "_measurer", None)
         self.cuts.context["loop_measuring"] = self.loop is not None and measurer is not None and measurer.ocupado
-        level = getattr(self._player, "nivel_ms", lambda: None)()
+        level = self.outputs.nivel_ms()
         self.pipe_ms = level
         if late_ms is not None and late_ms > LATE_MS:
             self.cuts.add("late", "motor", f"{late_ms:.0f} ms tarde", late_ms=round(late_ms))
@@ -659,31 +696,32 @@ class AudioSession:
             except Exception as exc:  # noqa: BLE001 - a failed check must not stop the audio
                 self.log("ruteo", motivo=f"no se pudo comprobar: {exc!r}")
                 wrong, existing = {}, set()
-            alive = set(self._player.vivos)
+            alive = set(self.outputs.vivos)
             wrong = {asked: real for asked, real in wrong.items() if asked in alive}
             # A stream whose speaker no longer exists cannot be moved back: the speaker was
             # turned off. Its stream is closed so that it cannot play anywhere else.
             gone = [asked for asked in wrong if asked not in existing]
             for asked in gone:
-                self._player.soltar(asked)
+                self.outputs.soltar(asked)
                 self.log(
                     "parlante perdido",
                     motivo=f"{asked} ya no existe; su stream iba a {wrong[asked] or 'ningún destino'}",
                 )
             movable = {asked: real for asked, real in wrong.items() if asked not in gone}
             if movable:
-                self._routing_pool.submit(self._player.reparar_ruteo)
+                self._routing_pool.submit(self.outputs.reparar_ruteo)
                 self.routing_repairs += 1
                 for asked, real in movable.items():
                     self.cuts.add("routing", asked, f"había ido a {real or 'ningún destino'}")
                     self.log("ruteo", motivo=f"se desvió a {real or 'ningún destino'}: {asked} — devuelto")
-            if not self._player.vivos:
-                raise SessionError("unavailable", "every speaker disconnected")
+            # A stream closed here is `lost` at the next step's `refresh`; the session goes on.
         now = time.monotonic()
         if now < self._next_routing_check or self._routing_future is not None:
             return
         self._next_routing_check = now + ROUTING_CHECK_S
-        self._routing_future = self._routing_pool.submit(self._read_routing, self._player)
+        if not self.outputs.vivos:
+            return  # no real stream: nothing PipeWire could have moved
+        self._routing_future = self._routing_pool.submit(self._read_routing, self.outputs)
 
     @staticmethod
     def _read_routing(player) -> tuple[dict[str, str | None], set[str]]:
@@ -742,7 +780,7 @@ class AudioSession:
         """What the probe added to each speaker in this block (zeros while it is off)."""
         probe = getattr(self.motor, "sonda", None)
         n = len(next(iter(blocks.values()), []))
-        if probe is None or not probe.active or set(probe.last) != set(blocks):
+        if probe is None or not probe.active or not set(blocks) <= set(probe.last):
             return {name: np.zeros(n) for name in blocks}
         return {name: probe.last[name] for name in blocks}
 
@@ -755,8 +793,20 @@ class AudioSession:
             raise SessionError("unavailable", "recalibration needs a microphone and none was found")
         o = self.options
         self.microphone = microphone
-        self._emission = sincronia.VentanaDeEmision(list(self._sinks), o.rate, segundos=o.measure_s + 2.0)
-        self._probe_emission = sincronia.VentanaDeEmision(list(self._sinks), o.rate, segundos=o.measure_s + 2.0)
+        # Only what sounds is measured: a virtual, absent or lost speaker never reaches the
+        # microphone, and measuring it would give false numbers (spec §3). The loop needs two.
+        measured = self.outputs.playing()
+        if len(measured) < 2:  # noqa: PLR2004 - an alignment needs two speakers
+            why = (
+                "no speaker is playing"
+                if not measured
+                else f"the recalibration loop needs two playing speakers; only {measured[0]} is playing"
+            )
+            self.log("lazo", motivo=f"{why}: the loop stays off")
+            return
+        self._measured = measured
+        self._emission = sincronia.VentanaDeEmision(measured, o.rate, segundos=o.measure_s + 2.0)
+        self._probe_emission = sincronia.VentanaDeEmision(measured, o.rate, segundos=o.measure_s + 2.0)
         self._measurer = sincronia.MedicionEnSegundoPlano(self._measure)
         self._mic = self._recal_stack.enter_context(self._microphone(microphone, o.measure_s + 4.0))
         self._recal_stack.callback(self._measurer.cerrar)
@@ -819,7 +869,9 @@ class AudioSession:
     def _recalibration_step(self, blocks: dict[str, np.ndarray]) -> None:
         o = self.options
         # Se guarda **exactamente lo que se mandó**, que es la referencia del lazo, y lo que la
-        # sonda sumó (ceros si está apagada), que es la referencia con la sonda.
+        # sonda sumó (ceros si está apagada), que es la referencia con la sonda. Solo de los
+        # parlantes que el lazo mide (los que sonaban al encenderlo).
+        blocks = {n: blocks[n] for n in self._measured}
         self._emission.agregar(blocks)
         self._probe_emission.agregar(self._probe_blocks(blocks))
         probe = getattr(self.motor, "sonda", None)
@@ -934,6 +986,12 @@ class AudioSession:
             raise SessionError("conflict", "a calibration is already running")
         if not microphone:
             raise SessionError("unavailable", "calibrating needs a microphone and none was found")
+        # Only the playing speakers take part: the others never reach the microphone (spec §3).
+        # Checked before pausing the loop, so a refusal leaves everything as it was.
+        participants = self.outputs.playing()
+        if not participants:
+            raise SessionError("conflict", "no speaker is playing: nothing would reach the microphone")
+        left_out = [n for n in self._sinks if n not in participants]
         # The loop is part of the protocol: a calibration pauses it (both need the microphone
         # and the loop would chase the calibration's own noise) and it comes back after.
         self._loop_paused_for_calibration = self.loop is not None
@@ -944,11 +1002,12 @@ class AudioSession:
         # The curve that plays (with the chain's max boost, treble cap and budget), not the stored one.
         sounding = getattr(self.motor, "curva_sonando", lambda p: p.ecualizacion_db)
         applied_eq = {p.nombre: (sounding(p) if eq_on else None) for p in self.installation.parlantes}
-        cal = Calibration(list(self._sinks), seconds, amplitude, self.options.rate, applied, applied_eq)
+        cal = Calibration(participants, seconds, amplitude, self.options.rate, applied, applied_eq)
         self._cal_mic = self._microphone(microphone, cal.total / self.options.rate + 3.0)
         self._cal_mic.__enter__()
         self.calibration = cal
-        self.log("calibración", motivo=f"{seconds:.0f} s a amplitud {amplitude}, con {microphone}")
+        outside = f"; quedan fuera (no suenan): {', '.join(left_out)}" if left_out else ""
+        self.log("calibración", motivo=f"{seconds:.0f} s a amplitud {amplitude}, con {microphone}{outside}")
 
     def cancel_calibration(self) -> None:
         if self.calibration is None or self.calibration.state not in {"running", "measuring"}:
@@ -1043,10 +1102,10 @@ class AudioSession:
     # -- for the panel --------------------------------------------------------------
 
     def pids(self) -> dict[str, Any]:
-        players = self._player.pids if self._player is not None else {}
+        players = self.outputs.pids
         return {
             "sink": self._input.pid if self._input is not None else None,
-            "players": {n: players.get(sink) for n, sink in self._sinks.items()},
+            "players": {n: players.get(sink) if sink is not None else None for n, sink in self._sinks.items()},
             "microphone": self._mic.pid if self._mic is not None else None,
             "source": self.source.pid if self.source is not None else None,
         }

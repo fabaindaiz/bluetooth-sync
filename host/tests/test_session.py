@@ -1,7 +1,6 @@
 """The parts of `session.py` that can be checked without PipeWire."""
 
 import numpy as np
-import pytest
 
 from aurasync import session as session_module
 from aurasync.config import Instalacion, Parlante
@@ -55,7 +54,7 @@ def _session(monkeypatch, existing=("sA", "sB", "aurasync")):
     inst = Instalacion(parlantes=[Parlante("A", "sA"), Parlante("B", "sB")])
     events = []
     s = AudioSession(inst, FakeMotor(), SessionOptions(block=64), lambda kind, **f: events.append((kind, f)))
-    s._player = FakePlayer(["sA", "sB"])  # noqa: SLF001
+    s.outputs.attach(FakePlayer(["sA", "sB"]), {"A", "B"})
     s._input = FakeInput()  # noqa: SLF001
     return s, clock, events
 
@@ -71,58 +70,65 @@ def _routing_round(s):
 
 def test_a_stream_moved_while_playing_is_moved_back(monkeypatch):
     s, clock, events = _session(monkeypatch)
-    s._player.wrong = {"sA": "aurasync"}  # noqa: SLF001
+    s.outputs._player.wrong = {"sA": "aurasync"}  # noqa: SLF001
     s.step()
-    assert s._player.repairs == 0, "not before the check is due"  # noqa: SLF001
+    assert s.outputs._player.repairs == 0, "not before the check is due"  # noqa: SLF001
     clock[0] += session_module.ROUTING_CHECK_S + 0.1
     _routing_round(s)
-    assert s._player.repairs == 1  # noqa: SLF001
+    assert s.outputs._player.repairs == 1  # noqa: SLF001
     assert s.routing_repairs == 1
     assert any(kind == "ruteo" and "aurasync" in f["motivo"] for kind, f in events)
 
 
 def test_a_dead_stream_is_reported_and_the_others_keep_playing(monkeypatch):
     s, _, events = _session(monkeypatch)
-    s._player.alive = ["sA"]  # noqa: SLF001
+    s.outputs._player.alive = ["sA"]  # noqa: SLF001
     s.step()
     assert s.lost == ["B"]
     assert any(kind == "parlante perdido" for kind, _ in events)
 
 
-def test_every_stream_dead_ends_the_session(monkeypatch):
-    s, _, _ = _session(monkeypatch)
-    s._player.alive = []  # noqa: SLF001
-    with pytest.raises(session_module.SessionError) as info:
-        s.step()
-    assert info.value.code == "unavailable"
+def test_every_stream_dead_does_not_end_the_session(monkeypatch):
+    """Until 2026-10-05 it raised "every speaker disconnected" (d-7c8794-05bdd6): now they are lost
+    and the session goes on, heard on the monitor."""
+    s, _, events = _session(monkeypatch)
+    s.outputs._player.alive = []  # noqa: SLF001
+    s.step()
+    s.step()
+    assert s.lost == ["A", "B"]
+    assert s.output_states() == {"A": "lost", "B": "lost"}
+    assert any(kind == "parlante perdido" for kind, _ in events)
 
 
 def test_a_speaker_turned_off_has_its_stream_closed_instead_of_moved(monkeypatch):
     """Its orphan stream went elsewhere (here, the virtual sink): close it, never move it."""
     s, clock, events = _session(monkeypatch, existing=("sA", "aurasync"))
-    s._player.wrong = {"sB": "aurasync"}  # noqa: SLF001
+    s.outputs._player.wrong = {"sB": "aurasync"}  # noqa: SLF001
     clock[0] += session_module.ROUTING_CHECK_S + 0.1
     _routing_round(s)
-    assert s._player.alive == ["sA"]  # noqa: SLF001
-    assert s._player.repairs == 0  # noqa: SLF001
+    assert s.outputs._player.alive == ["sA"]  # noqa: SLF001
+    assert s.outputs._player.repairs == 0  # noqa: SLF001
     assert any(kind == "parlante perdido" for kind, _ in events)
     s.step()
     assert s.lost == ["B"]
 
 
-def test_every_speaker_turned_off_ends_the_session(monkeypatch):
+def test_every_speaker_turned_off_does_not_end_the_session(monkeypatch):
     s, clock, _ = _session(monkeypatch, existing=("aurasync",))
-    s._player.wrong = {"sA": "alsa_output.pc", "sB": "aurasync"}  # noqa: SLF001
+    s.outputs._player.wrong = {"sA": "alsa_output.pc", "sB": "aurasync"}  # noqa: SLF001
     clock[0] += session_module.ROUTING_CHECK_S + 0.1
-    with pytest.raises(session_module.SessionError):
-        _routing_round(s)
+    _routing_round(s)
+    assert s.outputs._player.alive == []  # noqa: SLF001 - both orphan streams closed, none moved
+    assert s.outputs._player.repairs == 0  # noqa: SLF001
+    s.step()
+    assert s.lost == ["A", "B"]
 
 
 def test_an_empty_pipe_and_a_late_engine_are_recorded_as_cuts(monkeypatch):
     s, clock, _ = _session(monkeypatch)
     for _ in range(4):
         s.step()
-    s._player.nivel_ms = lambda: 0.0  # noqa: SLF001
+    s.outputs._player.nivel_ms = lambda: 0.0  # noqa: SLF001
     s.cuts.context["slow_order"] = "preset_load, 180 ms"
     clock[0] += 0.5  # half a second without a step
     s.step()

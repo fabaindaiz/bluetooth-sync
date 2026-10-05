@@ -15,6 +15,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from aurasync import __version__, chain, control
+from aurasync import outputs as outputs_module
 from aurasync.dsp import profiles
 from aurasync.session import pipe_size_ms
 
@@ -43,6 +44,7 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
     lost = list(getattr(session, "lost", []) or [])
     pids = session.pids() if session is not None and hasattr(session, "pids") else {}
     outputs = {s["sink"]: s for s in observer.get("outputs", [])}
+    states = session.output_states() if session is not None and hasattr(session, "output_states") else None
     devices = {d["address"]: d for d in observer.get("devices", [])}
     layout = svc.settings.layout
     principals = sum(1 for p in installation.parlantes if p.role_kind == "principal") if installation else 0
@@ -50,9 +52,17 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
     speakers = []
     if installation is not None:
         for p in installation.parlantes:
-            address = p.sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":")
-            device = devices.get(address, {})
-            output = outputs.get(p.sink)
+            kind = outputs_module.output_kind(p.sink)
+            bluetooth = kind == "bluetooth"
+            address = p.sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":") if bluetooth else None
+            device = devices.get(address, {}) if bluetooth else {}
+            output = outputs.get(p.sink) if p.sink is not None else None
+            if session is None:
+                state = None
+            elif states is not None:
+                state = states.get(p.nombre)
+            else:
+                state = "virtual" if p.virtual else ("lost" if p.nombre in lost else "playing")
             speakers.append(
                 {
                     "name": p.nombre,
@@ -66,8 +76,11 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
                     "role": control.role_of(p.pan, p.ambiente, layout, principals),
                     "role_kind": p.role_kind,
                     "muted": p.nombre in svc.settings.muted,
-                    "playing": session is not None and p.nombre not in lost,
-                    "connected": (output is not None) if observer.get("at") else None,
+                    "output": state,
+                    "output_kind": kind,
+                    "playing": state == "playing",
+                    # Only a Bluetooth link is observed: a virtual or wired output has no "connected".
+                    "connected": (output is not None) if observer.get("at") and bluetooth else None,
                     "codec": output.get("codec") if output else None,
                     "rssi_dbm": device.get("rssi_dbm"),
                     "battery_pct": device.get("battery_pct"),

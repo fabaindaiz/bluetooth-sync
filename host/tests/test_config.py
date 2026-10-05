@@ -86,3 +86,27 @@ def test_ida_y_vuelta_a_disco(tmp_path):
 
     leida = Instalacion.cargar(ruta)
     assert leida == inst
+
+
+def test_virtual_speaker_survives_save_and_load(tmp_path):
+    inst = Instalacion(parlantes=[Parlante("Virtual 1", None, pan=-0.7), Parlante("Virtual 2", None, pan=0.7)])
+    inst.guardar(tmp_path / "i.json")
+    back = Instalacion.cargar(tmp_path / "i.json")
+    assert [p.sink for p in back.parlantes] == [None, None]
+    assert all(p.virtual for p in back.parlantes)
+    assert '"sink": null' in (tmp_path / "i.json").read_text()
+
+
+def test_missing_sink_key_is_still_an_error(tmp_path):
+    (tmp_path / "i.json").write_text('{"parlantes": [{"nombre": "X"}]}')
+    with pytest.raises(TypeError):
+        Instalacion.cargar(tmp_path / "i.json")
+
+
+def test_two_virtual_speakers_are_not_duplicate_sinks():
+    Instalacion(parlantes=[Parlante("A", None), Parlante("B", None)])
+
+
+def test_real_duplicate_sinks_are_still_an_error():
+    with pytest.raises(ValueError, match="sinks repetidos"):
+        Instalacion(parlantes=[Parlante("A", "s"), Parlante("B", "s")])

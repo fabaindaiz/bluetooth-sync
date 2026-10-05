@@ -55,6 +55,7 @@ ADMIN_OPS = frozenset(
         "shutdown",
         "forget",
         "speaker_add",
+        "speaker_add_virtual",
         "speaker_remove",
         "microphone_set",
         "service_start",

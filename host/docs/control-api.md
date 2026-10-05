@@ -45,7 +45,7 @@ clear text: fine for a home network, not for a shared one; HTTPS is on port 8443
 
 Each operation needs a **scope**: `read` (`state`, `logs`, `presets`, `chain`, the stream),
 `control` (everything about listening: sessions, `set`, presets, calibration, A/B, the chain,
-connecting speakers) or `admin` (`shutdown`, `forget`, `speaker_add`/`speaker_remove`,
+connecting speakers) or `admin` (`shutdown`, `forget`, `speaker_add`/`speaker_add_virtual`/`speaker_remove`,
 `microphone_set`, `service_*`, `radio_log`, `calibration_dump`, pairing and clients). An
 operation not in the table needs `admin`. Too little scope: 403 `forbidden`.
 
@@ -218,6 +218,7 @@ Sent as raw messages to `POST /v1/command`. All additive to version 1.
 | `scan` · `connect` · `disconnect` · `forget` | `address` (`AA:BB:…`, upper case) | `bluetoothctl`, on a worker thread; `forget` removes the pairing and is refused for a speaker of the installation |
 | `microphone_set` | `node` (or `null`) | the microphone for calibration and the loop; kept in `service.json`; a running loop restarts with it |
 | `speaker_add` (`address`) · `speaker_remove` (`speaker`) | | session stopped; `save` writes it |
+| `speaker_add_virtual` (`name`?) | `name` 1–64 characters | scope `admin`, session stopped; adds a speaker with no sink (`sink: null`) that is only computed, never played in the room. Without a name it is "Virtual 1", "Virtual 2"… (the first free); it takes the next free role of the layout, as `speaker_add` does. A name already taken is `conflict`. Remove it with `speaker_remove`; `save` writes it |
 | `logs` | `since`, `limit` | the process's log lines after `since`; `gap` says some were lost |
 | `service_start` · `service_stop` · `service_restart` | `name` | `session`, `recalibration`, `source`; the rest are only observed |
 | `ab_start` (`a`, `b`, `match_loudness`?) · `ab_play` (`which`: `a`, `b`, `x`) · `ab_answer` (`x_is`) · `ab_stop` | | blind A/B; X is drawn again after each answer and never shown. Its loudness is measured (see *The A/B and loudness* below) |
@@ -235,6 +236,19 @@ The state also carries `speakers[].role/muted/connected/codec/pid`, `services`, 
 `latency`, `meters`, `config`, `calibration`, `source`, `apps`, `devices`, `presets`, `ab`,
 `dirty` and `logs_last`.
 
+- `speakers[].sink` is `null` for a virtual speaker. `speakers[].output_kind` (`virtual` | `bluetooth` |
+  `wired`) is derived from the sink: no sink, a `bluez_output.*` node, or any other node.
+  `speakers[].output` says what the session does with the speaker: `virtual` (no sink, by design),
+  `absent` (real, not connected when the session opened), `playing` (its stream is alive) or `lost`
+  (it was playing in this session and its stream died); `null` without a session. `playing` stays
+  and equals `output == "playing"`. `address`, `battery_pct`, `codec`, `rssi_dbm` and `modalias`
+  apply only to Bluetooth: they are `null` unless `output_kind == "bluetooth"`, and `connected` is
+  `null` for a non-Bluetooth speaker. The AVRCP volume (see below) reaches only the `bluetooth` speakers.
+  Calibration and the recalibration loop use only the `playing` speakers: `calibrate` with none
+  playing is `conflict` ("no speaker is playing"). The headphone monitor still receives every channel.
+  Version mix (contract version 1, additions only): a panel older than the service reads a virtual
+  speaker as "sin observar" while stopped and "perdido" while playing and does not break on `sink: null`; a panel newer than the
+  service derives `output` from `playing` when the field is missing.
 - `speakers[].battery_pct`: the speaker's battery in percent, as BlueZ reports it (`org.bluez.Battery1`
   `Percentage`, read by the observer), or `null` when BlueZ has none for it.
 - `sync`: the residual misalignment the recalibration loop measured last, through the

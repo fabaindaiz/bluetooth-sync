@@ -85,7 +85,10 @@ export function restorePlan(before: Snapshot, now: Snapshot): Command[] {
   const plan: Command[] = [];
   const present = new Set(now.speakers.map((s) => s.name));
   for (const sp of before.speakers) {
-    if (!present.has(sp.name) && sp.address) plan.push({ op: "speaker_add", address: sp.address });
+    if (present.has(sp.name)) continue;
+    // A virtual speaker has no address: it comes back by name.
+    if (sp.address) plan.push({ op: "speaker_add", address: sp.address });
+    else plan.push({ op: "speaker_add_virtual", name: sp.name });
   }
   if (before.chain && now.chain) {
     const stages = new Set([...Object.keys(before.chain), ...Object.keys(now.chain)]);

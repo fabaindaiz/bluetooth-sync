@@ -373,6 +373,7 @@ OPS: dict[str, Op] = {
     "disconnect": Op(required={"address": ADDRESS}),
     "forget": Op(required={"address": ADDRESS}),
     "speaker_add": Op(required={"address": ADDRESS}),
+    "speaker_add_virtual": Op(optional={"name": SPEAKER}),
     "speaker_remove": Op(required={"speaker": SPEAKER}),
     "logs": Op(optional={"since": Field(int, 0, 2**62), "limit": Field(int, 1, 2000)}),
     "service_start": Op(required={"name": SERVICE}),

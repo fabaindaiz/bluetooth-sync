@@ -178,6 +178,26 @@ desaparece al cerrarlo.
 único que tiene sentido ajustar a mano en `instalacion.json` es `pan` y `ambiente` de cada
 parlante: qué reproduce cada uno, que es una decisión artística y no algo medible.
 
+## Parlantes virtuales y sesión sin parlantes reales
+
+(2026-10-05, fase 1, `HP-O16`, **solo con tests: todavía no se escuchó nada**.) Un parlante
+**virtual** es uno con `sink: null` (d-7c8794-0e5063): el motor le calcula su señal completa
+—retardo, ganancia, EQ, cadena—, pero no sale por ningún dispositivo. Sirve para probar la cadena
+y el sonido envolvente sin los parlantes, y para escucharlos por el monitor de audífonos.
+
+- **Agregar uno:** el botón «Agregar parlante virtual» de la tarjeta de dispositivos del panel, o la
+  op `speaker_add_virtual` (con la sesión parada; [`docs/control-api.md`](docs/control-api.md)).
+- **Sesión sin parlantes reales** (d-7c8794-05bdd6): una sesión arranca con los parlantes reales
+  ausentes y sigue viva si se pierden todos. El snapshot dice qué hace cada salida (`output`:
+  `virtual`, `absent`, `playing`, `lost`; `output_kind`: `virtual`, `bluetooth`, `wired`). Con todo
+  virtual, `outputs.py` (`Pacer`) lleva el reloj de los bloques.
+- **Cómo escucharlos:** agregar los parlantes virtuales, arrancar la sesión y elegir los audífonos
+  en la tarjeta «Monitor (audífonos)» con el modo `mix` o `binaural` (el monitor recibe todos los
+  canales). `stereo` sale **antes** de la cadena, así que no lleva ningún efecto. Unos audífonos
+  inalámbricos en **HFP** (una llamada) suenan mono a 16 kHz: hay que pasarlos antes a **A2DP**.
+- **Falta (fase 2, d-7c8794-618666):** entrar y salir en caliente y el regreso automático de un
+  parlante real. Se mide en [experimentos/18](../docs/research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md).
+
 ## La aplicación web (`host/web/`)
 
 El panel se escribe en dos partes que conviven (d-7c8794-6da524): `src/aurasync/panel/app.js`, a

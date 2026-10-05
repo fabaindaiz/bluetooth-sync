@@ -178,7 +178,9 @@ def served(tmp_path):
     made = []
 
     def make(fake):
-        Instalacion(parlantes=[Parlante("Red", "s0"), Parlante("Blue", "s1")]).guardar(tmp_path / "inst.json")
+        Instalacion(parlantes=[Parlante("Red", "bluez_output.s0"), Parlante("Blue", "bluez_output.s1")]).guardar(
+            tmp_path / "inst.json"
+        )
         svc = Service(
             tmp_path / "inst.json",
             tmp_path / "presets.json",
@@ -205,14 +207,14 @@ def _settled(svc):
 
 
 def test_the_service_switches_to_the_speakers_volume_and_back_without_a_jump(served):
-    fake = FakePactl({"s0": 80.0, "s1": 100.0})
+    fake = FakePactl({"bluez_output.s0": 80.0, "bluez_output.s1": 100.0})
     svc = served(fake)
     _ok(svc, op="start")
     motor = FakeSession.instances[0].motor
     assert motor.volumen_db == -20.0
 
     def heard():
-        return {s: motor.volumen_db + db_of(fake.volumes[s]) for s in ("s0", "s1")}
+        return {s: motor.volumen_db + db_of(fake.volumes[s]) for s in ("bluez_output.s0", "bluez_output.s1")}
 
     before = heard()
     reply = _ok(svc, op="chain_set", stage="volume", algorithm="avrcp")
@@ -227,7 +229,7 @@ def test_the_service_switches_to_the_speakers_volume_and_back_without_a_jump(ser
     _ok(svc, op="set", changes={"volume_db": -30.0})
     _settled(svc)
     assert motor.volumen_db == 0.0
-    assert db_of(fake.volumes["s1"]) == pytest.approx(-30.0, abs=0.01)
+    assert db_of(fake.volumes["bluez_output.s1"]) == pytest.approx(-30.0, abs=0.01)
     assert _ok(svc, op="state")["volume_avrcp"]["speakers"]["Blue"]["ok"]
     # Back to digital: the speakers go back to where they were, and the level heard stays.
     before = heard()
@@ -235,13 +237,13 @@ def test_the_service_switches_to_the_speakers_volume_and_back_without_a_jump(ser
     _settled(svc)
     _wait(lambda: _ok(svc, op="state")["volume_avrcp"]["state"] == "off")
     assert motor.volumen_db == pytest.approx(-30.0)
-    assert fake.volumes["s1"] == pytest.approx(100.0)
+    assert fake.volumes["bluez_output.s1"] == pytest.approx(100.0)
     assert heard() == pytest.approx(before, abs=0.01)
 
 
 def test_the_service_does_not_pretend_when_a_speaker_does_not_take_it(served):
-    fake = FakePactl({"s0": 80.0, "s1": 100.0})
-    fake.deaf.add("s0")
+    fake = FakePactl({"bluez_output.s0": 80.0, "bluez_output.s1": 100.0})
+    fake.deaf.add("bluez_output.s0")
     svc = served(fake)
     _ok(svc, op="start")
     motor = FakeSession.instances[0].motor

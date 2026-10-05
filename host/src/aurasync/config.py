@@ -39,8 +39,9 @@ class Parlante:
 
     nombre: str
     """Cómo lo llama la persona: "Go 4 Black". Es lo que se muestra al calibrar."""
-    sink: str
-    """El nodo de PipeWire, p. ej. `bluez_output.90_F2_60_DA_66_6D.1`."""
+    sink: str | None
+    """El nodo de PipeWire, p. ej. `bluez_output.90_F2_60_DA_66_6D.1`. `None`: parlante
+    **virtual** (d-7c8794-0e5063), la cadena calcula su canal pero nada lo reproduce."""
     x: float | None = None
     """Metros, eje izquierda-derecha. **Opcional**: la calibración con micrófono no las
     necesita, porque mide el retardo total de cada parlante y eso ya incluye la distancia.
@@ -78,6 +79,11 @@ class Parlante:
     role_kind: str = "principal"
     """`principal` (the direct sound, placed by its angle) or `ambient` (full-spectrum ambience, no
     direction): spec 2026-10-04, d-7c8794-48ae2c. Only the principals make the `auto` ring."""
+
+    @property
+    def virtual(self) -> bool:
+        """Whether this speaker has no sink: its channel is computed but not played."""
+        return self.sink is None
 
     @property
     def ubicado(self) -> bool:
@@ -119,7 +125,7 @@ class Instalacion:
         if len(set(nombres)) != len(nombres):
             msg = f"hay nombres de parlante repetidos: {nombres}"
             raise ValueError(msg)
-        sinks = [p.sink for p in self.parlantes]
+        sinks = [p.sink for p in self.parlantes if p.sink is not None]
         if len(set(sinks)) != len(sinks):
             msg = f"hay sinks repetidos: {sinks}"
             raise ValueError(msg)

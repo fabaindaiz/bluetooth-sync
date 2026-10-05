@@ -94,7 +94,7 @@ def cmd_doctor(args) -> int:
         if inst is not None:
             nodos = {s.nodo for s in salidas}
             for p in inst.parlantes:
-                estado = "conectado" if p.sink in nodos else "NO conectado"
+                estado = "virtual" if p.virtual else ("conectado" if p.sink in nodos else "NO conectado")
                 print(
                     f"  {p.nombre:<16} pan {p.pan:>+5.2f}  ambiente {p.ambiente:>4.2f}  "
                     f"retardo {p.retardo_ms:>+7.2f} ms  ganancia {p.ganancia_db:>+6.2f} dB  {estado}"
@@ -173,8 +173,13 @@ def cmd_calibrate(args) -> int:
     if inst is None:
         return 1
 
+    # A virtual speaker (sink null) never reaches the microphone: it is not measured.
+    reales = [p for p in inst.parlantes if p.sink is not None]
+    if not reales:
+        print("no hay parlantes reales: los virtuales no se pueden medir", file=sys.stderr)
+        return 1
     nodos = {s.nodo for s in sonido.salidas_bluetooth()}
-    faltan = [p.nombre for p in inst.parlantes if p.sink not in nodos]
+    faltan = [p.nombre for p in reales if p.sink not in nodos]
     if faltan:
         print(f"no están conectados: {faltan}", file=sys.stderr)
         return 1
@@ -184,14 +189,14 @@ def cmd_calibrate(args) -> int:
         print("no hay micrófono: pasá --microfono (aurasync doctor lista los que hay)", file=sys.stderr)
         return 1
 
-    pistas = estimulos.calibracion(len(inst.parlantes), args.segundos, semilla=0)
+    pistas = estimulos.calibracion(len(reales), args.segundos, semilla=0)
     pistas = [args.amplitud * p for p in pistas]
-    referencias = dict(zip((p.nombre for p in inst.parlantes), pistas, strict=True))
-    por_nodo = {p.sink: referencias[p.nombre] for p in inst.parlantes}
+    referencias = dict(zip((p.nombre for p in reales), pistas, strict=True))
+    por_nodo = {p.sink: referencias[p.nombre] for p in reales}
 
     tmp = Path(tempfile.mkdtemp())
     grabacion = tmp / "calibracion.wav"
-    print(f"midiendo {args.segundos:.0f} s con {len(inst.parlantes)} parlantes…")
+    print(f"midiendo {args.segundos:.0f} s con {len(reales)} parlantes…")
     rec = sonido.grabar(grabacion, microfono)
     time.sleep(0.7)
     try:
@@ -213,7 +218,7 @@ def cmd_calibrate(args) -> int:
     # alinear, marcaba "no suena" a parlantes que sonaban bien.
     mudos = resultado.sin_sonar()
     print(f"\n{'parlante':<24} {'retardo':>10} {'ganancia':>10} {'estabilidad':>12}")
-    for p in inst.parlantes:
+    for p in reales:
         nombre = p.nombre
         marca = "  ← no suena" if nombre in mudos else ""
         print(
@@ -227,7 +232,7 @@ def cmd_calibrate(args) -> int:
             "Se guarda igual, pero conviene repetirla con menos ruido en la sala.",
             file=sys.stderr,
         )
-    for p in inst.parlantes:
+    for p in reales:
         if np.isfinite(resultado.retardos_ms[p.nombre]):
             p.retardo_ms = resultado.retardos_ms[p.nombre]
             p.ganancia_db = resultado.ganancias_db[p.nombre]
@@ -247,9 +252,13 @@ def cmd_play(args) -> int:
 
     izq, der, sr = sonido.leer_wav_estereo(Path(args.archivo))
     motor = Motor(inst, sr, extraer_ambiente=not args.sin_ambiente, decorrelar=not args.sin_decorrelar)
-    por_nombre = {p.nombre: p.sink for p in inst.parlantes}
+    # Un parlante virtual no tiene salida: se calcula, pero nunca llega al `Reproductor`.
+    por_nombre = {p.nombre: p.sink for p in inst.parlantes if p.sink is not None}
+    if not por_nombre:
+        print("no hay parlantes reales: los virtuales no suenan", file=sys.stderr)
+        return 1
 
-    print(f"{Path(args.archivo).name}: {len(izq) / sr:.0f} s por {len(inst.parlantes)} parlantes")
+    print(f"{Path(args.archivo).name}: {len(izq) / sr:.0f} s por {len(por_nombre)} parlantes")
     print(
         f"  ambiente: {'no' if args.sin_ambiente else 'sí'}   "
         f"decorrelación: {'no' if args.sin_decorrelar else 'sí'}   "
@@ -259,7 +268,7 @@ def cmd_play(args) -> int:
     with sonido.Reproductor(list(por_nombre.values())) as rep:
         for i in range(0, len(izq), BLOQUE):
             bloques = motor.procesar(izq[i : i + BLOQUE], der[i : i + BLOQUE])
-            rep.escribir({por_nombre[n]: x for n, x in bloques.items()})
+            rep.escribir({por_nombre[n]: x for n, x in bloques.items() if n in por_nombre})
     return 0
 
 

@@ -237,3 +237,90 @@ def test_la_fuente_por_defecto_no_vale_si_es_un_monitor(monkeypatch):
     assert sonido.microfono_por_defecto() is None
     monkeypatch.setattr(subprocess, "run", falso("alsa_input.usb-fifine.analog-stereo\n"))
     assert sonido.microfono_por_defecto() == "alsa_input.usb-fifine.analog-stereo"
+
+
+# -- parlantes virtuales (sink null) ----------------------------------------------------
+
+
+def _con_virtual(tmp_path):
+    from aurasync.config import Instalacion, Parlante
+
+    destino = tmp_path / "i.json"
+    Instalacion(parlantes=[Parlante("A", "bluez_output.A.1"), Parlante("V", None, pan=0.7)]).guardar(destino)
+    return destino
+
+
+def test_doctor_etiqueta_el_virtual(tmp_path, monkeypatch, capsys):
+    from aurasync import sonido
+
+    _sin_pipewire(monkeypatch, tmp_path)
+    monkeypatch.setattr(sonido, "salidas_bluetooth", list)
+    main(["--config", str(_con_virtual(tmp_path)), "doctor"])
+    filas = {
+        fila.split()[0]: fila for fila in capsys.readouterr().out.splitlines() if fila.startswith(("  A ", "  V "))
+    }
+    assert filas["A"].rstrip().endswith("NO conectado")
+    assert filas["V"].rstrip().endswith("virtual")
+    assert "NO conectado" not in filas["V"]
+
+
+def test_play_no_manda_el_virtual_al_reproductor(tmp_path, monkeypatch):
+    import numpy as np
+
+    from aurasync import sonido
+
+    abiertos = []
+
+    class Rep:
+        def __init__(self, nodos):
+            abiertos.append(list(nodos))
+            self.escritos = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def escribir(self, bloques):
+            assert None not in bloques
+            self.escritos.append(set(bloques))
+
+    monkeypatch.setattr(sonido, "leer_wav_estereo", lambda _p: (np.zeros(8192), np.zeros(8192), 48000))
+    monkeypatch.setattr(sonido, "Reproductor", Rep)
+    destino = _con_virtual(tmp_path)
+    assert main(["--config", str(destino), "play", "x.wav"]) == 0
+    assert abiertos == [["bluez_output.A.1"]]
+
+
+def test_run_no_pide_conectar_un_parlante_virtual(tmp_path, monkeypatch, capsys):
+    from aurasync import session as session_module
+    from aurasync import sonido
+
+    monkeypatch.setattr(sonido, "salidas_bluetooth", lambda: _salidas(1))
+    from aurasync.config import Instalacion, Parlante
+
+    destino = tmp_path / "i.json"
+    Instalacion(parlantes=[Parlante("V1", None), Parlante("V2", None, pan=0.7)]).guardar(destino)
+    pasos = []
+
+    class Sesion:
+        loop = None
+
+        def __init__(self, inst, *_a):
+            self.inst = inst
+
+        def open(self):
+            pass
+
+        def step(self):
+            pasos.append(1)
+            raise KeyboardInterrupt
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(session_module, "AudioSession", Sesion)
+    assert main(["--config", str(destino), "run"]) == 0
+    assert pasos == [1]
+    assert "no están conectados" not in capsys.readouterr().err

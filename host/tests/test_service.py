@@ -23,6 +23,7 @@ class FakeSession:
 
     def __init__(self, _installation, motor, options, _log):
         self.motor = motor
+        self.installation = _installation
         self.options = options
         self.steps = 0
         self.closed = 0
@@ -44,6 +45,13 @@ class FakeSession:
 
     def close(self):
         self.closed += 1
+
+    def output_states(self):
+        lost = getattr(self, "lost", [])
+        return {
+            p.nombre: "virtual" if p.virtual else ("lost" if p.nombre in lost else "playing")
+            for p in self.installation.parlantes
+        }
 
     def set_probe(self, active, margin_db=None):
         self.probe_calls = [*getattr(self, "probe_calls", []), (active, margin_db)]

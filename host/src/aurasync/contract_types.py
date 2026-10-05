@@ -242,9 +242,19 @@ class SyncView(TypedDict):
 
 class SpeakerView(TypedDict):
     name: str
+    # `null` for a virtual speaker (no sink); a wired output has a sink but no Bluetooth fields.
+    sink: str | None
     muted: bool
     playing: bool
+    # What the session does with it: `null` without a session (`playing` equals `output == "playing"`).
+    output: Literal["virtual", "absent", "playing", "lost"] | None
+    output_kind: Literal["virtual", "bluetooth", "wired"]
+    # Bluetooth only: `null` unless `output_kind == "bluetooth"` (and the link reports it).
+    address: str | None
     battery_pct: float | None
+    codec: str | None
+    rssi_dbm: float | None
+    modalias: str | None
 
 
 class SessionView(TypedDict):

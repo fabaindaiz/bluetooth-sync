@@ -7,6 +7,64 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-05 · s-7c8794-dac510 — Parlantes virtuales y sesión sin parlantes reales (fase 1), en HP-O16
+**Qué.** La sesión empezó corriendo el servicio en `--simular` en `HP-O16`; el usuario quería uso real
+y probar solo con audífonos, y de ahí salió el diseño (spec
+`docs/superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md`, plan
+`docs/superpowers/plans/2026-10-05-virtual-speakers-and-hot-join.md`). Se construyó la fase 1:
+parlantes virtuales `sink: null` (d-7c8794-0e5063); sesiones con los parlantes reales ausentes que
+sobreviven a perderlos todos (d-7c8794-05bdd6); `outputs.py` (`output_kind`, `Pacer`, `OutputSet`); la
+op `speaker_add_virtual`; `output` y `output_kind` en el snapshot; el botón «Agregar parlante virtual»
+y sus estados en el panel; el monitor recibe todos los canales. Falta la fase 2 (entrar y salir en
+caliente, regreso automático, d-7c8794-618666). Documentos: README del host, roadmap
+(i-7c8794-757041) y el protocolo del experimento 18.
+**Archivos.** `host/src/aurasync/{outputs,config,session,service,snapshot,control,clients,cli,monitor_control,simulated,contract_types}.py`,
+`host/src/aurasync/panel/{app.js,index.html,cadena.js,cadena.build.json}`, `host/web/src/{contract.gen.ts,undo.ts}`,
+tests (`test_outputs`, `test_virtual_speakers`, `test_config`, `test_control`, `test_clients`,
+`test_service`, `test_cli`, `test_monitor_control`, `test_bt_volume`, `tests_browser/test_panel_virtual`,
+`tests_browser/test_panel_quality`, `web/test/undo.test.ts`), `host/docs/control-api.md`,
+`host/README.md`, `docs/{decisions,roadmap}.md`,
+`docs/research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md`, `docs/superpowers/{specs,plans}/2026-10-05-*`.
+**Por qué.** El usuario quería usar `aurasync` en `HP-O16` de verdad y probar solo con audífonos, sin
+los parlantes reales.
+**Arquitectura.** ✅ Cumple: el contrato sigue en la versión 1 (solo adiciones), el motor no se ató
+a A2DP, y el código nuevo va en inglés.
+**Qué salió mal en el camino.**
+1. El servicio se arrancó primero en `--simular` por una nota vieja que decía que `HP-O16` era solo de
+   desarrollo; el usuario quería uso real.
+2. La primera captura del panel usó `?token=` en vez de `?t=` y cargó sin cookie (sin estilos).
+3. Podman no funciona en `HP-O16`: `overlay` no se soporta sobre btrfs en
+   `~/.local/share/containers/storage`. No se arregló (el usuario dijo que ahora no).
+4. `tests/test_interpolation.py::test_it_costs_far_less_than_the_formula` falla de forma intermitente
+   (entre 6,3× y 7,6× contra el 8× que pide), **también sobre `main` sin cambios** (pasó 1 de 5 veces
+   con otros tests corriendo en paralelo). Primero lo atribuí a la batería: era falso, porque el
+   adaptador estaba conectado (leí el estado del puerto USB-C en vez del de la batería). Es un test
+   de tiempo frágil que ya existía; originó el item i-7c8794-be46cb del roadmap.
+5. El refactor de la tarea 4 rompió `tests_browser/test_panel_quality.py` (leía `session._player`), y
+   `alertsOf` del panel mostraba un parlante virtual como «perdido». Los dos los detectó la revisión de
+   cada tarea y quedaron corregidos.
+**Qué quedó pendiente.**
+- La fase 2 (tareas 8 a 10).
+- El experimento 18 (necesita los audífonos en A2DP) y el 19 en `PC-Ryzen5`.
+- `tests/test_service.py::test_a_speaker_missing_at_start_is_unavailable_and_nothing_plays` falló una
+  vez en `check.sh` y pasa 6 de 6 aislado, también en `main`: `start` deja el estado en `error` pero el
+  snapshot se publica en el ciclo siguiente, y un `state` que llega antes ve `starting`. Carrera previa.
+- El lazo de recalibración sigue midiendo un parlante que pasa a `lost` (se arregla en la fase 2).
+- Podman sobre btrfs.
+- Menores diferidos: `speaker_add_virtual` repite la elección de rol de `speaker_add`; los colores del
+  punto de estado de `virtual` y `absent`.
+**Desvío del plan.** Sin worktree, y sin commits mientras se implementaba (regla del repositorio); el
+diff de cada tarea se revisó desde instantáneas del árbol de git. La fase 1 se commiteó cuando el
+usuario pidió publicarla en gh-pages, armada desde su instantánea y no desde el árbol de trabajo (ahí
+ya estaba la fase 2 a medio hacer); las tareas 1 a 3 se implementaron en un solo lote; se
+agregaron a las tareas 5 y 6 la regeneración de los tipos del contrato y la reconstrucción del panel.
+**No verificado.** Nada se escuchó todavía: no hubo ninguna prueba de audio en `HP-O16`. La fase 1 se
+validó solo con tests (`hatch test`, vitest, Playwright contra `--simular`). El INFERIDO de que el
+Dummy-Driver de PipeWire lleva el reloj con todo virtual sigue sin comprobar (experimento 18).
+**Medido.** Nada con parlantes ni con audífonos.
+
+---
+
 ## 2026-10-04 · s-7c8794-a1da58 — Los pendientes sin parlantes y las pruebas de usabilidad por flujos
 
 **Qué.** El usuario: "corrige todos los pendientes que no requieran parlantes, luego pruebas de

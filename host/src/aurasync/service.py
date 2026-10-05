@@ -76,6 +76,7 @@ from aurasync.logbuffer import LogBuffer
 from aurasync.monitor import LoopError, MonitorError, MonitorOutput, MonitorSettings
 from aurasync.monitor_control import MonitorController
 from aurasync.motor import Motor
+from aurasync.outputs import output_kind
 from aurasync.presets import PresetChainStore, PresetStore, read_lenient, write_atomic
 from aurasync.probe_ring import RingError as ProbeRingError
 from aurasync.session import AudioSession, SessionError, SessionOptions
@@ -643,7 +644,9 @@ class Service:
         if view.get("at") == self._xruns_seen_at:
             return
         self._xruns_seen_at = view.get("at")
-        names = {p.sink: p.nombre for p in (self.installation.parlantes if self.installation else [])}
+        names = {
+            p.sink: p.nombre for p in (self.installation.parlantes if self.installation else []) if p.sink is not None
+        }
         for key, entry in (view.get("xruns") or {}).items():
             total = entry.get("total") if isinstance(entry, dict) else None
             before = self._xrun_totals.get(key)
@@ -1096,7 +1099,12 @@ class Service:
     # -- the volume in the speakers (`bt_volume.py`) --------------------------------------
 
     def _sinks(self) -> dict[str, str]:
-        return {p.nombre: p.sink for p in (self.installation.parlantes if self.installation else [])}
+        """The Bluetooth speakers' sinks: AVRCP volume exists only on them."""
+        return {
+            p.nombre: p.sink
+            for p in (self.installation.parlantes if self.installation else [])
+            if output_kind(p.sink) == "bluetooth"
+        }
 
     def _volume_changed(self, value: float) -> None:
         """The panel's volume: the speakers' while `avrcp` is in effect, else the digital one."""
@@ -1131,7 +1139,7 @@ class Service:
 
     def _enter_avrcp(self) -> bool:
         bv = self.bt_volume
-        if self.installation is None or not self.installation.parlantes or bv.state in {"entering", "on", "leaving"}:
+        if not self._sinks() or bv.state in {"entering", "on", "leaving"}:
             return False
         digital = self.settings.volume_db
         bv.enter(self._sinks(), digital, done=lambda volume: self.on_engine(lambda: self._avrcp_entered(volume)))
@@ -1615,6 +1623,7 @@ class Service:
         sinks = {
             p.sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":"): p.nombre
             for p in (self.installation.parlantes if self.installation else [])
+            if output_kind(p.sink) == "bluetooth"
         }
         if address in sinks:
             raise ContractError("conflict", f"{sinks[address]} is in the installation; remove it from there first")
@@ -1645,6 +1654,29 @@ class Service:
         pan, ambience = roles[free] if free else (0.0, 0.3)
         self.installation.parlantes.append(Parlante(output.descripcion, output.nodo, pan=pan, ambiente=ambience))
         self.log(f"added {output.descripcion} as {free or 'custom'}", part="session")
+        return self._changed()
+
+    def speaker_add_virtual(self, name: str | None = None) -> dict:
+        """A speaker that is only computed: no sink, nothing played in the room."""
+        self._need_no_session("adding a speaker")
+        if self.installation is None:
+            self.installation = Instalacion(parlantes=[])
+        taken_names = {p.nombre for p in self.installation.parlantes}
+        if name is None:
+            number = 1
+            while f"Virtual {number}" in taken_names:
+                number += 1
+            name = f"Virtual {number}"
+        elif name in taken_names:
+            raise ContractError("conflict", f"there is already a speaker named {name!r}")
+        layout = self.settings.layout
+        count = self._principals() + 1
+        roles = control.layout_roles(layout, count)
+        taken = {control.role_of(p.pan, p.ambiente, layout, count) for p in self.installation.parlantes}
+        free = next((r for r in roles if r not in taken), None)
+        pan, ambience = roles[free] if free else (0.0, 0.3)
+        self.installation.parlantes.append(Parlante(name, None, pan=pan, ambiente=ambience))
+        self.log(f"added virtual speaker {name} as {free or 'custom'}", part="session")
         return self._changed()
 
     def speaker_remove(self, speaker: str) -> dict:
@@ -1911,7 +1943,10 @@ class Service:
         """`AA:BB:…` → the installation's speaker name (any thread: it only reads)."""
         installation = self.installation
         for p in installation.parlantes if installation is not None else []:
-            if p.sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":").upper() == address.upper():
+            if (
+                output_kind(p.sink) == "bluetooth"
+                and p.sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":").upper() == address.upper()
+            ):
                 return p.nombre
         return None
 

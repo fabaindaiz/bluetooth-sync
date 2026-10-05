@@ -155,3 +155,11 @@ def test_roles_are_recognised_from_their_values():
 def test_delay_ms_parses_and_the_service_decides():
     """By hand it is allowed by the contract; the service refuses it while the loop runs."""
     assert control.parse(_set({"delay_ms": 3.0}, speaker="A")).args["changes"] == {"delay_ms": 3.0}
+
+
+def test_speaker_add_virtual_parses_an_optional_name():
+    assert control.parse({"v": 1, "op": "speaker_add_virtual"}).args == {}
+    assert control.parse({"v": 1, "op": "speaker_add_virtual", "name": "Sala"}).args == {"name": "Sala"}
+    for bad in ("", "x" * 65, 3):
+        with pytest.raises(ContractError):
+            control.parse({"v": 1, "op": "speaker_add_virtual", "name": bad})

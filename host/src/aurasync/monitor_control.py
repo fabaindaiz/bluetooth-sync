@@ -25,8 +25,9 @@ log = logging.getLogger("aurasync.monitor")
 
 def forbidden_targets(installation: Instalacion | None, sink_name: str) -> set[str]:
     """The speakers' sinks and aurasync's own nodes: a monitor there would loop back."""
-    speakers = {p.sink for p in (installation.parlantes if installation else [])}
-    return speakers | {sink_name, f"{sink_name}_salida", f"{sink_name}_monitor"}
+    # A virtual speaker has no sink: there is nothing of it to loop back into.
+    speakers = {p.sink for p in (installation.parlantes if installation else []) if p.sink is not None}
+    return speakers | {sink_name, f"{sink_name}_salida", f"{sink_name}_salida_b", f"{sink_name}_monitor"}
 
 
 class MonitorController:

@@ -1514,9 +1514,38 @@ servicios por D-Bus en vez de `systemctl`.
 **Lo que falta:** correr el experimento 12 (cortes) con el servicio en el contenedor y en el host,
 con los parlantes; hasta entonces las pruebas con audio siguen en el host. La imagen para la Pi.
 
+### Parlantes virtuales, sesión sin parlantes reales y entrada en caliente · i-7c8794-757041
+**Estado: A medias (2026-10-05). La fase 1 está construida y probada solo con tests; la fase 2 está
+pendiente.** Spec: [superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md](superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md);
+plan: `superpowers/plans/2026-10-05-virtual-speakers-and-hot-join.md`. Decisiones: d-7c8794-0e5063
+(el parlante virtual es `sink: null`), d-7c8794-05bdd6 (la sesión vive sin parlantes reales),
+d-7c8794-618666 (el regreso automático).
+
+**Qué es:** poder usar y probar la cadena sin los parlantes reales (en `HP-O16`, solo con audífonos),
+y que un parlante real entre y salga con la sesión en marcha.
+
+**Lo hecho (fase 1, en `HP-O16`, sin parlantes ni audífonos todavía):** parlantes virtuales
+(`sink: null`); sesiones con los parlantes reales ausentes que sobreviven a perderlos todos;
+`outputs.py` (`output_kind`, `Pacer`, `OutputSet`); la op `speaker_add_virtual`; `output` y
+`output_kind` en el snapshot; el botón «Agregar parlante virtual» y sus estados en el panel; el
+monitor recibe todos los canales. Se validó con `hatch test`, vitest y Playwright contra `--simular`.
+
+**Lo que falta:**
+1. **Fase 2** (tareas 8 a 10 del plan): entrar y salir en caliente y el regreso automático (un
+   intento cada 10 s por parlante; 3 caídas en 5 minutos y se deja de intentar).
+2. **Experimento 18** ([experimentos/18](research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md)),
+   en `HP-O16`: bloques en tiempo real con todo virtual, cortes del monitor por minuto y ningún
+   `pw-play` hacia un parlante. Necesita que el usuario permita los audífonos WH-CH520 en A2DP.
+3. **Experimento 19**, en `PC-Ryzen5` con los Go 4: apagar y encender un parlante, entrar y salir,
+   y el desfase antes y después medido con micrófono.
+4. Pendientes menores: la PWA publicada rotula un parlante virtual «sin observar» o «perdido» hasta
+   reconstruirla; el lazo de recalibración sigue midiendo un parlante que pasa a `lost` (se arregla
+   en la fase 2); `speaker_add_virtual` repite la elección de rol de `speaker_add`; los colores del
+   punto de estado de `virtual` y `absent`.
+
 ### Rendimiento del motor medido, con su informe en el panel junto a los demás datos · i-7c8794-be46cb
 **Estado: Planificado.** Pedido del usuario el 2026-10-05, mientras se construían los parlantes
-virtuales.
+virtuales (i-7c8794-757041).
 
 **Qué es:** medir cuánto le cuesta al motor cada bloque, de forma que el número se pueda repetir.
 Incluye:

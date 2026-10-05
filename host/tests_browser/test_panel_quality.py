@@ -138,8 +138,8 @@ def test_low_battery_and_a_lost_speaker_show_in_now_and_the_header(page: Page, s
     observer = svc.service.observer
     observer._devices[RED_ADDRESS]["battery_pct"] = 15  # noqa: SLF001 - the simulation has no battery knob
     observer.refresh()
-    sinks = svc.service.session._player._pids  # noqa: SLF001 - a stream dies, as a speaker lost
-    sinks.pop(next(s for s in sinks if "75_4A_83" in s))
+    outputs = svc.service.session.outputs  # a stream dies, as a speaker lost
+    outputs.soltar(next(s for s in outputs.pids if "75_4A_83" in s))
     go(page, "Escuchar")
     alerts = page.locator("#now-alerts")
     expect(alerts).to_be_visible(timeout=5000)
@@ -440,14 +440,17 @@ _SPATIAL_STAGE = 0.4
 # 2026-10-04): the A/B says why it cannot start, and Sala says a speaker has no place and offers
 # «Automático». Both are text that pushes what follows a little.
 _USABILITY_HINTS = 0.3
+# The devices card's «Agregar parlante virtual» (virtual speakers, phase 1): on a phone the card head
+# wraps to a second row.
+_VIRTUAL_BUTTON = 0.2
 MAX_COST_BY_PLATFORM = {
     "Darwin": (
-        {"teléfono": 31.4 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 13.7 + _SPATIAL_STAGE},
-        {"teléfono": 26.1 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 10.0 + _SPATIAL_STAGE},
+        {"teléfono": 31.4 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 13.7 + _SPATIAL_STAGE},
+        {"teléfono": 26.1 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 10.0 + _SPATIAL_STAGE},
     ),
     "Linux": (
-        {"teléfono": 32.0 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 13.6 + _SPATIAL_STAGE},
-        {"teléfono": 26.7 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 10.0 + _SPATIAL_STAGE},
+        {"teléfono": 32.0 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 13.6 + _SPATIAL_STAGE},
+        {"teléfono": 26.7 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 10.0 + _SPATIAL_STAGE},
     ),
 }
 MAX_COST, MAX_COST_SIX = MAX_COST_BY_PLATFORM.get(platform.system(), MAX_COST_BY_PLATFORM["Darwin"])
