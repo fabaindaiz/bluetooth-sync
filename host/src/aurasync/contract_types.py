@@ -467,7 +467,14 @@ def ts(tp: Any, *, top: bool = False) -> str:
         return f"Record<string, {ts(get_args(tp)[1])}>"
     if typing.is_typeddict(tp):
         return tp.__name__
-    return {bool: "boolean", int: "number", float: "number", str: "string", dict: "Record<string, unknown>"}[tp]
+    return {
+        bool: "boolean",
+        int: "number",
+        float: "number",
+        str: "string",
+        dict: "Record<string, unknown>",
+        list: "number[]",
+    }[tp]
 
 
 def _doc(text: str | None, indent: str = "") -> list[str]:

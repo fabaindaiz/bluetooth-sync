@@ -36,6 +36,8 @@ from aurasync.dsp import eq, response
 from aurasync.dsp import probe as masked_probe
 from aurasync.dsp.input_analysis import InputAnalyzer
 from aurasync.dsp.retardo import LineaDeRetardo
+from aurasync.multichannel import MultichannelFile
+from aurasync.probe_ring import ProbeRing
 from aurasync.quality import QualityMeter
 from aurasync.sources import Source
 from aurasync.telemetry import Telemetry
@@ -390,6 +392,12 @@ class AudioSession:
         self._input: sonido.SinkVirtual | None = None
         self._mic: sonido.MicrofonoContinuo | None = None
         self._cal_mic: sonido.MicrofonoContinuo | None = None
+        self.monitor = None
+        """The headphone monitor (monitor.MonitorOutput), not synchronised with the speakers."""
+        self.multichannel: MultichannelFile | None = None
+        """The multichannel render the engine plays while the source is `multichannel`."""
+        self.probe_ring = ProbeRing([p.nombre for p in installation.parlantes], options.rate)
+        """The probe each speaker carried, with its server time: a phone measures against it."""
         self._next_measure = 0.0
         self._started = time.monotonic()
         self._last_fade = -1e9
@@ -471,6 +479,7 @@ class AudioSession:
 
     def close(self) -> None:
         """Closes everything in reverse order. Safe to call twice."""
+        self.attach_monitor(None)
         self._stack.close()
         self.quality.close()
         self.cuts.close()
@@ -495,6 +504,13 @@ class AudioSession:
             late_ms = (started - self._last_step_at - seconds) * 1000
         self._last_step_at = started
         pair = self._input.leer(o.block)
+        channels = None
+        reader = self.multichannel
+        if reader is not None and self.source is not None and self.source.kind == "multichannel":
+            # The virtual input is still read (so it does not back up) and set aside: the engine
+            # plays the render, one channel per speaker (multichannel.py).
+            channels = reader.read(o.block)
+            pair = MultichannelFile.downmix(channels)
         self._watch_input(pair)
         self.input_active = pair is not None
         t0 = time.perf_counter()
@@ -508,12 +524,18 @@ class AudioSession:
             # avanza cuando el motor procesa. Sin esto, con la música en pausa, "Aplicar"
             # quedaba esperando para siempre (2026-10-01, campaña de experimentos/10).
             blocks = self.motor.procesar(self._silence, self._silence)
+        elif channels is not None:
+            blocks = self.motor.procesar(*pair, canales=channels)
         else:
             blocks = self.motor.procesar(*pair)
         self.block_ms = 0.9 * self.block_ms + 0.1 * (time.perf_counter() - t0) * 1000
         blocks = self._add_tones(blocks)
         self._watch_output(late_ms)
         self._player.escribir({self._sinks[n]: x for n, x in blocks.items()})
+        # The probe as it left the engine, at the time it left (silence while it is off).
+        probe = getattr(self.motor, "sonda", None)
+        self.probe_ring.write(time.monotonic(), probe.last if probe is not None and probe.active else {})
+        self._feed_monitor(pair, blocks)
         self.blocks += 1
         self._update_meters(pair, blocks, seconds)
         try:
@@ -552,6 +574,28 @@ class AudioSession:
             self.enable_recalibration(self.microphone)
         if self.loop is not None and (self.calibration is None or self.calibration.state != "running"):
             self._recalibration_step(blocks)
+
+    # -- the headphone monitor (monitor.py) ----------------------------------------------
+
+    def attach_monitor(self, monitor) -> None:
+        """Replace the monitor (None: none). The previous one is closed."""
+        previous, self.monitor = self.monitor, monitor
+        if previous is not None and previous is not monitor:
+            previous.close()
+
+    def _feed_monitor(self, pair, blocks: dict[str, np.ndarray]) -> None:
+        """After the speakers, never before: the monitor must not delay them. It does not wait
+        (its writer drops blocks), and if it fails it is dropped and the speakers go on."""
+        monitor = self.monitor
+        if monitor is None:
+            return
+        try:
+            monitor.push(pair, blocks)
+        except Exception as exc:  # noqa: BLE001 - the monitor is a side output: it never stops the audio
+            self.monitor = None
+            with contextlib.suppress(Exception):
+                monitor.close()
+            self.log("monitor", motivo=f"se cerró: {exc!r}; los parlantes siguen")
 
     # -- cuts: what the engine sees of each interruption (cuts.py) --------------------
 
@@ -970,7 +1014,15 @@ class AudioSession:
         def run() -> None:
             error = None
             try:
+                # A multichannel render is read by the engine itself (multichannel.py): opened and
+                # checked here, off the engine thread; nothing changes if it is not usable.
+                reader = (
+                    MultichannelFile(str(name), [p.nombre for p in self.installation.parlantes], self.options.rate)
+                    if kind == "multichannel"
+                    else None
+                )
                 source.set(kind, name)
+                self.multichannel = reader
             except ValueError as exc:
                 error = str(exc)
                 source.error = error

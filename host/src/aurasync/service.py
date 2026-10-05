@@ -36,6 +36,7 @@ A/B measures the loudness of A and B and can match them with a compensating gain
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import math
@@ -51,14 +52,17 @@ import sys
 import threading
 import time
 import traceback
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
-from aurasync import __version__, control, remote, sync_docs
+import numpy as np
+
+from aurasync import __version__, control, remote, spatial_docs, sync_docs
 from aurasync import chain as chain_model
 from aurasync import radio as radio_module
 from aurasync.access import ACCESS_OPS
@@ -69,12 +73,15 @@ from aurasync.control import ContractError
 from aurasync.cut_report import CutReporter
 from aurasync.dsp import eq, profiles
 from aurasync.logbuffer import LogBuffer
+from aurasync.monitor import LoopError, MonitorError, MonitorOutput, MonitorSettings
+from aurasync.monitor_control import MonitorController
 from aurasync.motor import Motor
 from aurasync.presets import PresetChainStore, PresetStore, read_lenient, write_atomic
+from aurasync.probe_ring import RingError as ProbeRingError
 from aurasync.session import AudioSession, SessionError, SessionOptions
 from aurasync.snapshot import build_snapshot
 from aurasync.sync_estimator import SyncEstimator
-from aurasync.sync_measurement import Measurement
+from aurasync.sync_measurement import Measurement, MeasurementError
 from aurasync.sync_methods import SyncSettings
 from aurasync.system import Observer
 
@@ -91,7 +98,7 @@ SERVER_POSITION = "server"
 TICK_S = 0.05
 REPLY_TIMEOUT_S = 30.0
 """`start` blocks the engine for about two seconds (the routing check); this is far above."""
-CONFIG_KEYS = {"bind", "port", "token", "installation", "microphone", "measurements", *remote.REMOTE_KEYS}
+CONFIG_KEYS = {"bind", "port", "token", "installation", "microphone", "measurements", "monitor", *remote.REMOTE_KEYS}
 PARTS = {
     "ruteo": ("routing", logging.WARNING),
     "parlante perdido": ("session", logging.WARNING),
@@ -129,6 +136,8 @@ class ServiceConfig:
     measurements: str = field(default_factory=lambda: str(data_dir() / "mediciones"))
     """Where `measurement_save` writes. Point it at `docs/research/experimentos/datos/` while
     running experiments from the repository."""
+    monitor: dict | None = None
+    """The headphone monitor's choice (`monitor_set`), kept between runs."""
     # Reaching the service from other devices (`remote.py`, d-7c8794-37f9bc):
     tls: bool = False
     """False in a file written before HTTPS existed; a new file gets true."""
@@ -342,6 +351,8 @@ class Service:
         radio: RadioMonitor | None = None,
         log_level: LogLevel | None = None,
         bt_volume: BluetoothVolume | None = None,
+        monitor_factory: Callable[..., Any] | None = None,
+        monitor: dict | None = None,
     ) -> None:
         self.installation_path = installation_path
         self.config_path = config_path
@@ -416,12 +427,30 @@ class Service:
         self.sync_estimator = SyncEstimator(self._load_sync(), self._current_delays, SERVER_POSITION)
         self.sync_estimator.explainer = sync_docs.explain
         self._sync_applied_id: int | None = None
+        self._spatial_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-spatial-explain")
+        self._spatial_explain: tuple[str, dict] | None = None
+        self._spatial_future: Future | None = None
+        self._spatial_closed = threading.Event()
+        try:
+            monitor_settings = MonitorSettings.from_json(monitor or {})
+        except MonitorError as exc:
+            self.log(f"service.json: monitor ignored ({exc})", level=logging.WARNING, part="monitor")
+            monitor_settings = MonitorSettings()
+        self.monitor = MonitorController(
+            monitor_settings,
+            monitor_factory or self._default_monitor_factory(),
+            on_engine=self.on_engine,
+            save=self._save_monitor,
+        )
         self._publish()
 
     def close(self) -> None:
         """Detach the log buffer and stop the sync estimator (tests create many services in one process)."""
         self._logger.removeHandler(self.logs)
         self.sync_estimator.close()
+        self.monitor.close()
+        self._spatial_closed.set()
+        self._spatial_pool.shutdown(wait=False, cancel_futures=True)
 
     # -- transport side (any thread) -------------------------------------------------
 
@@ -734,6 +763,7 @@ class Service:
         self._sync_reset()
         cuts = getattr(session, "cuts", None)
         self._cut_reporter = CutReporter(cuts) if cuts is not None else None
+        self.monitor.session_opened(session, installation, sink_name=options.sink_name, rate=options.rate)
         self.status.move("playing")
         self.log(
             f"session open: {len(installation.parlantes)} speakers, block {options.block}, "
@@ -765,10 +795,16 @@ class Service:
                 self.settings.muted.add(speaker)
             else:
                 self.settings.muted.discard(speaker)
+        before = self._principals()
         for name, value in changes.items():
             attr = control.SPEAKER_FIELDS[name].attr
             if attr is not None:
                 setattr(target, attr, value)
+        if "role_kind" in changes and self.settings.layout == control.AUTO and self._principals() != before:
+            self._replace_auto(before)
+        if "eq_db" in changes and self.motor is not None:
+            # A new filter goes in at the bottom of a cut (motor.actualizar_ecualizacion).
+            self.motor.actualizar_ecualizacion()
         if "kind" in changes and self.motor is not None and hasattr(self.motor, "actualizar_tipos"):
             # Which speakers are small decides the bass stage.
             self.motor.actualizar_tipos()
@@ -885,6 +921,42 @@ class Service:
             "error": est.error,
         }
 
+    # -- a phone's point measurement (spec 2026-10-03 §6, step 3) ------------------------------
+
+    def sync_time(self) -> dict:
+        """The server clock the measurements use (`time.monotonic`): the phone estimates its
+        offset from the round trip with the shortest time."""
+        return {"t": time.monotonic()}
+
+    def probe_reference(self, seconds: float, **span: float) -> dict:
+        """The probe each speaker sent from server time `from`, for `seconds`: int16 little-endian
+        in base64 per speaker, times `scale`. Only while a session plays."""
+        session = self._need_session()
+        ring = getattr(session, "probe_ring", None)
+        if ring is None:
+            raise ContractError("unavailable", "this session keeps no probe")
+        try:
+            refs = ring.reference(float(span["from"]), seconds)
+        except ProbeRingError as exc:
+            raise ContractError("out_of_range", str(exc)) from exc
+        peak = max((float(np.max(np.abs(r))) for r in refs.values()), default=0.0)
+        scale = peak / 32767 if peak > 0 else 1.0
+        speakers = {
+            name: base64.b64encode(np.round(r / scale).astype("<i2").tobytes()).decode() for name, r in refs.items()
+        }
+        return {"sr": ring.sr, "scale": scale, "from": float(span["from"]), "seconds": seconds, "speakers": speakers}
+
+    def sync_measure(self, measurement: dict) -> dict:
+        """A measurement a phone made against `probe_reference`, to the estimator (validated whole)."""
+        speakers = {p.nombre for p in self._need_installation().parlantes}
+        try:
+            m = Measurement.from_dict({"origin": "browser", **measurement}, speakers, time.monotonic())
+        except MeasurementError as exc:
+            raise ContractError(exc.code, exc.message) from exc
+        self.sync_estimator.submit(m)
+        self.log(f"sync: a measurement from {m.source_id} ({len(m.heard)} speakers)", part="sync")
+        return {"accepted": True}
+
     def sync_set(self, changes: dict) -> dict:
         try:
             settings = self.sync_estimator.settings.replace(**changes)
@@ -941,6 +1013,33 @@ class Service:
         listed = ", ".join(f"{n} {v:.2f} ms" for n, v in delays.items())
         self.log(f"sync: applied suggestion {s.id}: {listed} (anchor {s.anchor})", part="sync")
         return {**self._changed(), "applied": s.id, "delays_ms": delays}
+
+    def _spatial_ring(self) -> dict[str, tuple[float | None, str]]:
+        """Each speaker's place for the spatial mode: its angle if principal (from pan and ambience)."""
+        return {
+            p.nombre: (control.angle_of(p.pan, p.ambiente) if p.role_kind == "principal" else None, p.role_kind)
+            for p in (self.installation.parlantes if self.installation else [])
+        }
+
+    def spatial_explain(self) -> dict:
+        """Cached by the chain's spatial values and the speakers' places; built on a worker
+        (rendering test signals takes about a second: never on the engine thread)."""
+        values = self.settings.chain
+        ring = self._spatial_ring()
+        key = json.dumps([values.to_json().get("spatial"), sorted(ring.items())], sort_keys=True, default=str)
+        if self._spatial_explain is not None and self._spatial_explain[0] == key:
+            return self._spatial_explain[1]
+        future = self._spatial_future
+        if future is None or future.done():
+
+            def build() -> None:
+                try:
+                    self._spatial_explain = (key, spatial_docs.explain(values, ring, self._spatial_closed.is_set))
+                except spatial_docs.Stopped:
+                    return
+
+            self._spatial_future = self._spatial_pool.submit(build)
+        return {"pending": True}
 
     def sync_explain(self) -> dict:
         """Cached, built on the estimator's thread (the figures are simulations: never here)."""
@@ -1178,17 +1277,36 @@ class Service:
             self.motor.actualizar_ecualizacion()
         return self._changed()
 
+    def _principals(self) -> int:
+        return sum(1 for p in (self.installation.parlantes if self.installation else []) if p.role_kind == "principal")
+
+    def _replace_auto(self, before: int) -> None:
+        """In `auto`, a speaker that became ambient (or principal again) changes the number of
+        principals: the principals go onto `auto_angles(n)` keeping their clockwise order from the
+        front left (review 2026-10-04: they stayed where they were, as custom roles)."""
+        principals = [p for p in self.installation.parlantes if p.role_kind == "principal"]
+        if not principals:
+            return
+        # Counted from 10° before the front-left role: `angle_of` is within ~1° (its values are
+        # rounded), so starting exactly at that role could put it last; 10° is under half the
+        # spacing of 8 speakers (22.5°), so no other role can fall before it.
+        start = -180.0 / max(before, 1) - 10.0
+        principals.sort(key=lambda p: (control.angle_of(p.pan, p.ambiente) - start) % 360.0)
+        for p, (pan, ambience) in zip(
+            principals, control.layout_roles(control.AUTO, len(principals)).values(), strict=True
+        ):
+            p.pan, p.ambiente = pan, ambience
+
     def assign(self, speaker: str, role: str) -> dict:
         layout = self.settings.layout
-        if role not in control.ROLES[layout]:
-            raise ContractError(
-                "out_of_range", f"{role} is not a role of the {layout} layout: {list(control.ROLES[layout])}"
-            )
+        roles = control.layout_roles(layout, self._principals())
+        if role not in roles:
+            raise ContractError("out_of_range", f"{role} is not a role of the {layout} layout: {list(roles)}")
         target = self._speaker(speaker)
         for p in self.installation.parlantes:
-            if p is not target and control.role_of(p.pan, p.ambiente, layout) == role:
+            if p is not target and control.role_of(p.pan, p.ambiente, layout, self._principals()) == role:
                 raise ContractError("conflict", f"{role} is taken by {p.nombre}; give it another role first")
-        pan, ambience = control.ROLES[layout][role]
+        pan, ambience = roles[role]
         return self.set_speaker(speaker, {"pan": pan, "ambience": ambience})
 
     def presets(self) -> dict:
@@ -1281,7 +1399,7 @@ class Service:
 
     def source(self, kind: str, name: str | None = None) -> dict:
         session = self._need_session()
-        if kind in {"app", "file"} and not name:
+        if kind in {"app", "file", "multichannel"} and not name:
             raise ContractError("bad_request", f"the {kind} source needs a name")
 
         def done(error: str | None) -> None:
@@ -1519,9 +1637,12 @@ class Service:
         if any(p.nombre == output.descripcion for p in self.installation.parlantes):
             raise ContractError("conflict", f"there is already a speaker named {output.descripcion!r}")
         layout = self.settings.layout
-        taken = {control.role_of(p.pan, p.ambiente, layout) for p in self.installation.parlantes}
-        free = next((r for r in control.ROLES[layout] if r not in taken), None)
-        pan, ambience = control.ROLES[layout][free] if free else (0.0, 0.3)
+        roles = control.layout_roles(layout, self._principals() + 1)
+        taken = {
+            control.role_of(p.pan, p.ambiente, layout, self._principals() + 1) for p in self.installation.parlantes
+        }
+        free = next((r for r in roles if r not in taken), None)
+        pan, ambience = roles[free] if free else (0.0, 0.3)
         self.installation.parlantes.append(Parlante(output.descripcion, output.nodo, pan=pan, ambiente=ambience))
         self.log(f"added {output.descripcion} as {free or 'custom'}", part="session")
         return self._changed()
@@ -1680,6 +1801,7 @@ class Service:
             finally:
                 self.session, self.motor = None, None
                 self.ab = None
+                self.monitor.session_closed()
                 self._sync_reset()
                 self.status.move(status, reason)
                 self.log(
@@ -1691,6 +1813,42 @@ class Service:
                     self._restore_radio_log("the session failed")
         elif status == "stopped" and self.status.status == "error":
             self.status.move("stopped")
+
+    # -- the headphone monitor (monitor.py, monitor_control.py) -------------------------
+
+    def monitor_set(self, mode: str, target: str | None = None, gain_db: float | None = None) -> dict:
+        """Choose what the headphones get; not synchronised with the speakers. Opens on a worker:
+        the state says when it is on and where PipeWire really sent it."""
+        current = self.monitor.settings
+        try:
+            settings = MonitorSettings(
+                mode=mode,
+                target=target if target is not None else (current.target if mode != "off" else None),
+                gain_db=current.gain_db if gain_db is None else gain_db,
+            )
+            self.monitor.set(
+                settings, self.session, self.installation, sink_name=self.options.sink_name, rate=self.options.rate
+            )
+        except MonitorError as exc:
+            raise ContractError("conflict" if isinstance(exc, LoopError) else "out_of_range", str(exc)) from exc
+        self.log(f"monitor: {mode}{f' → {settings.target}' if settings.target else ''}", part="monitor")
+        return settings.to_json()
+
+    def _default_monitor_factory(self) -> Callable[..., Any]:
+        """A simulated service never opens PipeWire, even when nobody passed a factory."""
+        if self.simulated:
+            from aurasync.simulated import SimulatedMonitor  # noqa: PLC0415 - simulated imports the session
+
+            return SimulatedMonitor
+        return MonitorOutput
+
+    def _save_monitor(self, data: dict) -> None:
+        """Into `service.json`, as `microphone_set` does. A simulation has no file: nothing kept."""
+        if self.config_path is None or not self.config_path.exists():
+            return
+        config = json.loads(self.config_path.read_text())
+        config["monitor"] = data
+        write_atomic(self.config_path, json.dumps(config, indent=2) + "\n", mode=0o600)
 
     # -- the radio (spec 2026-10-02 §3) -----------------------------------------------------
 
@@ -1851,10 +2009,12 @@ def serve(
         announce("tls is on but there is no directory for the certificates")
         return 1
 
-    def show_code(code: str, seconds: float) -> None:
+    def show_code(code: str, seconds: float, connection: str | None = None) -> None:
         # The terminal only: the log buffer reaches every `read` client.
         if show_token:
             announce(f"  pairing code: {code} (valid {seconds:.0f} s)")
+            if connection:
+                announce(f"  connection code for the PWA: {connection}")
 
     try:
         listeners = remote.open_listeners(
@@ -1875,6 +2035,9 @@ def serve(
     host, real_port = server.server_address[:2]
     urls = lan_urls(host, real_port)
     service.pairing = {"urls": urls}
+    # The address a connection code carries: the same one the QR's link carries (rest.pairing_link).
+    lan_hosts = [urlsplit(u).hostname for u in urls if "127.0.0.1" not in u]
+    listeners.access.where = lambda: lan_hosts[0] if lan_hosts else None
     announce(f"aurasync service {__version__} listening on http://{host}:{real_port}/")
     if not show_token:
         announce("  panel: " + " · ".join(urls) + "  (the token is in service.json; not printed to a file)")

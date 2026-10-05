@@ -412,6 +412,21 @@ svg .low-coherence { opacity: 0.25; stroke-width: 1.25; }
 @media (max-width: 639px) and (prefers-color-scheme: dark) {
   .speakers-table[data-many] tr { border-bottom-color: var(--color-zinc-800); }
 }
+/* Dispositivos Bluetooth en el teléfono: una tarjeta por dispositivo, con sus botones a la vista. La
+   tabla se cortaba y «Emparejar y conectar» quedaba fuera de la pantalla (probes/18-usabilidad). */
+@media (max-width: 639px) {
+  .devices-table thead { display: none; }
+  .devices-table, .devices-table tbody { display: block; }
+  .devices-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.25rem 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--color-zinc-200); }
+  .devices-table tr.group-row { display: block; border: 0; }
+  .devices-table td { display: block; min-width: 0; border: 0; padding: 0; }
+  .devices-table td[data-label]::before { content: attr(data-label); display: block; font-size: 0.75rem; color: var(--color-zinc-500); }
+  .devices-table td:first-child { grid-column: 1 / -1; }
+  .devices-table td:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 639px) and (prefers-color-scheme: dark) {
+  .devices-table tr { border-bottom-color: var(--color-zinc-800); }
+}
 /* La leyenda de la respuesta: cada parlante es un botón que esconde o muestra su curva. */
 .legend-btn { min-height: 1.5rem; cursor: pointer; border-radius: 0.375rem; padding: 0 0.25rem; }
 .legend-btn[aria-pressed="false"] { opacity: 0.45; text-decoration: line-through; }
@@ -427,3 +442,8 @@ svg .low-coherence { opacity: 0.25; stroke-width: 1.25; }
 /* La ruta del archivo de cambios (una palabra larga) ensanchaba la página en el teléfono. */
 
 #radio-note, #radio-log-note { overflow-wrap: anywhere; }
+/* El aviso del modo demo (web/src/remote.ts): arriba, ámbar, con su salida; al bajar queda el chip DEMO de la barra (fija). */
+.demo-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem 0.75rem; padding: 0.5rem 1rem; font-size: 0.875rem; background: var(--color-amber-100); color: var(--color-amber-950); border-bottom: 1px solid var(--color-amber-300); }
+@media (prefers-color-scheme: dark) {
+  .demo-banner { background: var(--color-amber-950); color: var(--color-amber-100); border-bottom-color: var(--color-amber-800); }
+}

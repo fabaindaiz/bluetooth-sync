@@ -9,9 +9,10 @@ import { render } from "preact";
 import { connect } from "./bridge.ts";
 import { ChainScreen } from "./chain/ChainScreen.tsx";
 import { AccessAdmin } from "./connect/AccessAdmin.tsx";
-import { activeDevice, load } from "./devices.ts";
+import { activeDevice, browserName, load } from "./devices.ts";
 import { bootRemote } from "./remote.ts";
 import { announce, install, pageMode, provide } from "./runtime.ts";
+import { measureFromHere } from "./sync/fromHere.ts";
 import { createApi } from "./transport.ts";
 import { createUndo } from "./undo.ts";
 
@@ -25,6 +26,12 @@ runtime.undo = createUndo(document.getElementById("undo"), async (message) => {
   const api = runtime.api ?? (await runtime.ready);
   return api.raw({ op, ...args });
 });
+// "Medir desde este teléfono" (sync/fromHere.ts): app.js calls it from the Sincronía card.
+runtime.syncHere = async ({ role = "target", positionId = "aquí" }) => {
+  const api = runtime.api ?? (await runtime.ready);
+  const sourceId = `browser-${browserName()}`.slice(0, 64);
+  return measureFromHere(api, { role, sourceId, positionId, ...(runtime.recorder ? { recorder: runtime.recorder } : {}) });
+};
 
 async function mountAdmin(): Promise<void> {
   const root = document.getElementById("pair-admin-root");

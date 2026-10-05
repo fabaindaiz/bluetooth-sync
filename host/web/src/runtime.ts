@@ -21,7 +21,13 @@ export interface Runtime {
   pwaStatus(): string;
   /** The "Deshacer" notice (undo.ts), instead of confirm(). Null until the page is parsed. */
   undo: Undo | null;
+  /** A point measurement of the sync with this device's microphone (sync/fromHere.ts). */
+  syncHere?: (options: { role?: "target" | "vote"; positionId?: string }) => Promise<SyncHereResult>;
+  /** What records for `syncHere`: the microphone; a test puts a recording of its own here. */
+  recorder?: Recorder;
 }
+
+import type { Recorder, Result as SyncHereResult } from "./sync/fromHere.ts";
 
 declare global {
   interface Window {

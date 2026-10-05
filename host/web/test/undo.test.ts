@@ -21,6 +21,24 @@ const state = (speakers: ReturnType<typeof speaker>[], global: Record<string, un
 });
 
 describe("the restore plan", () => {
+  it("writes an EQ curve back, and clears one that was not there (research/10 §7.1)", () => {
+    const curve = Array.from({ length: 27 }, (_, i) => (i === 5 ? 3.5 : 0));
+    const withCurve = capture(state([speaker("Red", { eq_db: curve }), speaker("Blue", {})]), null);
+    const cleared = capture(state([speaker("Red", {}), speaker("Blue", {})]), null);
+    expect(restorePlan(withCurve, cleared)).toEqual([{ op: "set", speaker: "Red", changes: { eq_db: curve } }]);
+    expect(restorePlan(cleared, withCurve)).toEqual([{ op: "set", speaker: "Red", changes: { eq_db: null } }]);
+  });
+
+  it("gives a speaker added back its EQ curve", () => {
+    const curve = Array.from({ length: 27 }, () => 1);
+    const before = capture(state([speaker("Red", { eq_db: curve })]), null);
+    const now = capture(state([]), null);
+    expect(restorePlan(before, now)).toEqual([
+      { op: "speaker_add", address: "AA:Red" },
+      expect.objectContaining({ op: "set", speaker: "Red", changes: expect.objectContaining({ eq_db: curve }) }),
+    ]);
+  });
+
   it("is empty when nothing changed", () => {
     const s = capture(state([speaker("Red", {})]), { stages: [{ id: "eq", chosen: {} }] });
     expect(restorePlan(s, s)).toEqual([]);
@@ -47,7 +65,7 @@ describe("the restore plan", () => {
     expect(plan.at(-1)).toEqual({
       op: "set",
       speaker: "Red",
-      changes: { pan: -0.7, ambience: 0.15, gain_db: -3, delay_ms: 0, muted: true, kind: "go4" },
+      changes: { pan: -0.7, ambience: 0.15, gain_db: -3, delay_ms: 0, muted: true, kind: "go4", eq_db: null },
     });
   });
 

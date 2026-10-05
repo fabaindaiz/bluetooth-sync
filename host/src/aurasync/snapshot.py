@@ -45,6 +45,7 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
     outputs = {s["sink"]: s for s in observer.get("outputs", [])}
     devices = {d["address"]: d for d in observer.get("devices", [])}
     layout = svc.settings.layout
+    principals = sum(1 for p in installation.parlantes if p.role_kind == "principal") if installation else 0
 
     speakers = []
     if installation is not None:
@@ -62,7 +63,8 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
                     "gain_db": p.ganancia_db,
                     "delay_ms": round(p.retardo_ms, 3),
                     "delay_now_ms": round(current[p.nombre], 3) if p.nombre in current else None,
-                    "role": control.role_of(p.pan, p.ambiente, layout),
+                    "role": control.role_of(p.pan, p.ambiente, layout, principals),
+                    "role_kind": p.role_kind,
                     "muted": p.nombre in svc.settings.muted,
                     "playing": session is not None and p.nombre not in lost,
                     "connected": (output is not None) if observer.get("at") else None,
@@ -150,10 +152,13 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
         },
         "config": _config(svc),
         "speakers": speakers,
-        "roles": {name: list(roles) for name, roles in control.ROLES.items()},
+        "roles": {
+            **{name: list(roles) for name, roles in control.ROLES.items()},
+            control.AUTO: list(control.layout_roles(control.AUTO, principals)),
+        },
         # Where each role sits, for the panel's room plan and its front/rear groups (5 to 8
         # speakers, experimentos/16 §7): its mix and, when the layout gives one, its angle.
-        "role_places": _role_places(),
+        "role_places": _role_places(principals),
         "speaker_kinds": [{"key": k, "label": v.label} for k, v in profiles.PROFILES.items()],
         "preset": svc.preset,
         "presets": sorted(svc.preset_store.presets),
@@ -185,6 +190,9 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "microphone": svc.options.microphone,
         },
         "microphones": observer.get("microphones", []),
+        "monitor": svc.monitor.view(observer.get("sinks", []), svc.installation, svc.options.sink_name)
+        if getattr(svc, "monitor", None) is not None
+        else None,
         "input": {
             "analysis": session.input_analysis.summary()
             if session is not None and hasattr(session, "input_analysis")
@@ -207,7 +215,7 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
     }
 
 
-def _role_places() -> dict[str, dict[str, dict[str, Any]]]:
+def _role_places(principals: int = 0) -> dict[str, dict[str, dict[str, Any]]]:
     """Each layout's roles with their `pan` and `ambience` (`control.ROLES`), plus `angle_deg` (0 in
     front, positive to the right) and `lift` (the outer ring's extra ambience) where the layout is
     defined by angles (`control.LAYOUT_ANGLES`, when it exists)."""
@@ -221,6 +229,12 @@ def _role_places() -> dict[str, dict[str, dict[str, Any]]]:
             if angle is not None:
                 place["angle_deg"], place["lift"] = angle
             places[layout][role] = place
+    places[control.AUTO] = {
+        role: {"pan": pan, "ambience": ambience, "angle_deg": angle, "lift": 0.0}
+        for (role, (pan, ambience)), angle in zip(
+            control.layout_roles(control.AUTO, principals).items(), control.auto_angles(principals), strict=True
+        )
+    }
     return places
 
 

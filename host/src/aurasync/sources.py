@@ -221,7 +221,7 @@ class Source:
         if self._loop is not None:
             self._loop.join(timeout=3)
         self._loop, self._process = None, None
-        if self.kind in {"file", "tone"}:
+        if self.kind in {"file", "tone", "multichannel"}:
             self.kind, self.name = "system", None
 
     def close(self) -> None:

@@ -115,7 +115,7 @@ def open_listeners(
     https_port: int | None,
     config_dir: Path | None,
     log: Callable[[str], None],
-    show_code: Callable[[str, float], None],
+    show_code: Callable[[str, float, str | None], None],
 ) -> Listeners:
     """Open HTTP, and HTTPS when `tls` is on. Raises OSError when a port cannot be opened."""
     from aurasync.rest import make_server  # noqa: PLC0415 - rest imports service, which imports this

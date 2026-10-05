@@ -195,8 +195,8 @@ def open_app(context: BrowserContext, fragment: str = "") -> Page:
 
 
 def find(page: Page, address: str) -> None:
-    page.get_by_label("Dirección del equipo").fill(address)
-    page.get_by_role("button", name="Buscar").click()
+    page.get_by_label("Código de conexión o dirección").fill(address)
+    page.get_by_role("button", name="Conectar").click()
 
 
 def pair_in_window(page: Page, tsvc: TlsService) -> None:
@@ -253,6 +253,66 @@ def test_add_from_the_qr_fragment_checks_the_root(context, tsvc):
     page.evaluate(f"location.hash = '#d={tsvc.address}&fp={'0' * 64}'")
     expect(page.locator("[data-fp-match='0']")).to_be_visible()
     expect(page.get_by_role("button", name="Pedir acceso")).to_be_disabled()
+
+
+def test_a_connection_code_finds_checks_and_pairs_in_one_step(context, tsvc):
+    """One code (connection_code.py): the address, the pairing code and part of the root's
+    fingerprint. Typed once, the device is found, checked and paired; no other field."""
+    tsvc.access.where = lambda: "127.0.0.1"
+    code = tsvc.command("pair_start")["connection_code"]
+    assert code
+    page = open_app(context)
+    page.get_by_label("Código de conexión o dirección").fill(code.lower().replace("-", " "))
+    page.get_by_role("button", name="Conectar").click()
+    expect(page.locator(".connect-screen")).to_be_hidden(timeout=10000)
+    expect(page.locator("#connection")).to_have_text("En vivo", timeout=10000)
+    assert len(tsvc.access.store.list()) == 1
+
+
+def test_a_connection_code_for_another_device_is_refused(context, tsvc):
+    from aurasync import connection_code
+
+    tsvc.access.where = lambda: "127.0.0.1"
+    started = tsvc.command("pair_start")
+    other = connection_code.encode("127.0.0.1", tsvc.https_port, started["code"], "0" * 64)
+    page = open_app(context)
+    page.get_by_label("Código de conexión o dirección").fill(other)
+    page.get_by_role("button", name="Conectar").click()
+    expect(page.locator("[data-fp-match='0']")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("button", name="Pedir acceso")).to_be_disabled()
+    assert tsvc.access.store.list() == []
+
+
+def test_the_demo_loads_the_panel_with_no_device_and_says_so(context):
+    """The PWA's demo (web/src/demo/api.ts): no service at all. The warning stays at the top, what is
+    changed is kept in the page, what needs hardware says so, and leaving goes back to the start."""
+    page = open_app(context)
+    requests: list[str] = []
+    page.on("request", lambda r: requests.append(r.url))
+    page.locator("[data-demo-open]").click()
+    banner = page.locator("[data-demo]")
+    expect(banner).to_be_visible(timeout=10000)
+    expect(banner).to_contain_text("no hay ningún equipo conectado")
+    expect(page.locator("#engine-badge")).to_have_text("DEMO")
+    expect(page.locator(".connect-screen")).to_be_hidden()
+    expect(page.locator("[data-quick]")).to_have_count(3)
+    page.locator("#now-render").select_option("spatial")
+    page.wait_for_timeout(1200)  # the next poll of the state
+    expect(page.locator("#now-render")).to_have_value("spatial")
+    page.get_by_role("button", name="Calibrar", exact=True).first.click()
+    page.locator("#cal-run").click()
+    expect(page.locator("#toast, .toast").first).to_contain_text("demo", timeout=5000)
+    assert not any(":8443/" in u or "/v1/" in u for u in requests), [u for u in requests if "/v1/" in u]
+    banner.get_by_role("button", name="Salir de la demo").click()
+    expect(page.locator("[data-demo]")).to_have_count(0)
+    expect(page.locator(".connect-screen")).to_be_visible()
+
+
+def test_the_qr_button_says_what_to_do_where_the_page_cannot_read_one(context, tsvc):
+    page = open_app(context)
+    page.evaluate("delete window.BarcodeDetector")
+    page.get_by_role("button", name="Escanear QR").click()
+    expect(page.locator("[data-qr-note]")).to_contain_text("cámara del teléfono")
 
 
 def test_an_untrusted_certificate_is_explained_in_two_steps(playwright: Playwright, site_dir, tsvc):

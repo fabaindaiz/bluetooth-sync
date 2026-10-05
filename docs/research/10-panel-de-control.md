@@ -220,6 +220,13 @@ en Cortes (empuja Servicios y Logs; sin registro ni datos ya no muestra los carr
 casilla «Igualar la sonoridad» del A/B. La pestaña nueva no cuesta nada por sí misma (escondida, el
 total no cambia).
 
+**En Linux mide más (MEDIDO, 2026-10-04, `PC-Ryzen5`, Chromium headless):** el mismo código de `main`
+(489fc8a) da **32,0** y **13,6** (seis: 26,7 y 10,0) contra 31,4 y 13,7 del Mac; la diferencia es del
+render (las fuentes), no del panel, y la guardia fallaba por eso. Ahora la guardia lleva un límite
+por plataforma. La etapa «Modo espacial» de Cadena (spec 2026-10-04) suma **+0,4** en los dos («Montar
+la sala» pasa por encima de ella hasta la decorrelación); sus textos se acortaron a una línea para
+dejarla en eso (era +0,5). Con el monitor de audífonos, al final de Escuchar, el total no cambia.
+
 Las cuatro organizaciones con los siete escenarios (datos en
 `experimentos/datos/10/panel-organizaciones-cadena-2026-10-02.json`):
 
@@ -300,14 +307,17 @@ test falla si apareció uno. Hay dos clases de acción (`host/web/src/undo.ts`):
 
 | Acción | Se hace | «Deshacer» (10 s) |
 |---|---|---|
-| Cargar un preset · quitar un parlante · aplicar una calibración (los dos botones) | al instante | vuelve a escribir el estado artístico de antes: los campos de cada parlante (`pan`, `ambience`, `gain_db`, `delay_ms`, `muted`, `kind`), los globales (`rear_delay_ms`, `extract_ambience`, `decorrelate`, `eq_active`) y las elecciones de la cadena salvo el volumen; un parlante quitado se vuelve a agregar primero. Si el lazo corre, se apaga y se enciende alrededor de los retardos (como `calibration_apply`) |
+| Cargar un preset · quitar un parlante · aplicar una calibración (los dos botones) | al instante | vuelve a escribir el estado artístico de antes: los campos de cada parlante (`pan`, `ambience`, `gain_db`, `delay_ms`, `muted`, `kind`, `eq_db`), los globales (`rear_delay_ms`, `extract_ambience`, `decorrelate`, `eq_active`) y las elecciones de la cadena salvo el volumen; un parlante quitado se vuelve a agregar primero. Si el lazo corre, se apaga y se enciende alrededor de los retardos (como `calibration_apply`) |
 | Olvidar un dispositivo · borrar un preset | se muestra hecho; la orden sale al vencer el aviso (o al irse de la página) | la cancela |
-| Quitar la ecualización | se apaga al instante (se oye); las curvas se borran al vencer el aviso y la ecualización vuelve a quedar como estaba (encendida y plana) | la vuelve a encender, con sus curvas |
+| Quitar la ecualización | al instante: las curvas se borran y la ecualización queda encendida y plana | vuelve a escribir las curvas (`eq_db`) |
 
 **Lo que no vuelve (INFERIDO, por el contrato):** un parlante vuelto a agregar queda al final de la
-lista y pierde su curva de ecualización; `set` no escribe `eq_db`. Para deshacer la ecualización al
-instante haría falta que el contrato la escriba (un campo `eq_db` en `set`, o una orden
-`eq_restore`). Un preset borrado tampoco se puede volver a escribir desde el panel: por eso espera.
+lista. Un preset borrado no se puede volver a escribir desde el panel: por eso espera.
+
+**Desde el 2026-10-04 `set` escribe `eq_db`** (una elevación por tercio, de 0 a 6 dB, o `null`;
+`control.SPEAKER_FIELDS`): quitar la ecualización pasó a ser de la primera clase —se hace al instante y
+«Deshacer» vuelve a escribir las curvas— y un parlante vuelto a agregar recupera su curva
+(`test_clearing_the_eq_is_done_at_once_and_undo_writes_the_curves_back`, `web/test/undo.test.ts`).
 
 ### 7.2 El nivel del micrófono antes de calibrar
 
@@ -380,3 +390,74 @@ se apaga para que la sesión arranque (experimentos/16 §2). Nada se desborda en
 390×844 ni en 1366×900 (test `test_eight_speakers_fit_every_screen`). **Sin probar en un teléfono
 real.**
 
+
+## 8. Pruebas de usabilidad por flujos (2026-10-04, `PC-Ryzen5`)
+
+**Pedido (usuario):** "pruebas de usabilidad en la plataforma basadas en flujos y acciones que un
+usuario haría, evalúes cómo resultan y posibles mejoras para aplicar. La idea es facilitar el uso de
+la herramienta para el usuario final."
+
+**Método (SIMULADO: Chromium headless, servicio simulado, 3 Go 4, sin parlantes).** Dos pasos, en
+`probes/18-usabilidad/`: `capturas.py` saca cada pestaña entera en el teléfono (390×844) y en el PC
+(1366×900), para mirarlas como alguien que llega por primera vez; `flujos.py` hace ocho tareas como
+las haría una persona —con clics de verdad, en orden, desde Escuchar arriba y con la sesión
+detenida— y cuenta toques, cambios de pestaña, pantallas de desplazamiento (lo que hubo que bajar
+para ver el control antes de tocarlo) y lo que trabó. Complementa la medida de §5 (que compara
+organizaciones con un modelo de costo): esta mira si la tarea **se puede hacer y se entiende**.
+
+**Resultados en el teléfono (MEDIDO, antes → después de los arreglos de abajo):**
+
+| Flujo | Toques | Pestañas | Pantallas | Lo que se encontró |
+|---|---|---|---|---|
+| Poner música | 3 → 3 | 0 → 0 | 0 → 0 | — |
+| Probar el modo espacial | 2 → 2 | **1 → 0** | **2,07 → 0** | el modo no estaba en Escuchar: había que saber que vive en Parlantes → Espacial |
+| Un parlante no suena | 3 → 3 | 0 → 0 | 0,90 → 0,90 | **los tres nombres se cortaban en «JBL Go 4…»**: no se sabía cuál era cuál |
+| Calibrar | 2 → 2 | 0 → 0 | 0 → 0 | — |
+| Guardar un preset | 3 → 3 | 0 → 0 | 0,41 → 0,42 | — |
+| Audífonos | 3 → 3 | 0 → 0 | 2,46 → 2,51 | la tarjeta está al final de Escuchar (queda propuesto) |
+| Sumar un parlante | 2 → 2 | 1 → 1 | 0 → 0,49 | **la tabla de dispositivos se cortaba: «Emparejar y conectar» quedaba fuera de la pantalla** |
+| Ubicar los parlantes | 1 → 1 | 1 → 1 | 1,42 → 2,21 | con 3 parlantes la sala de fábrica (cuadrafonía) deja uno «sin rol», sin decir qué hacer |
+
+En el PC los ocho flujos terminan, sin trabas, con a lo sumo 1,05 pantallas. Las pantallas que
+subieron en «Sumar un parlante» y «Ubicar los parlantes» son el costo de lo que se arregló: la tabla
+ahora es una tarjeta por dispositivo (más alta, pero con los botones a la vista) y el aviso de la
+sala es texto nuevo.
+
+**Lo que se aplicó (cada uno con su test en `tests_browser/test_panel_flows.py`):**
+
+1. **El modo en la barra de reproducción** («Modo: clásico · espacial · frente intacto», junto a la
+   fuente): a la vista en todas las pestañas, sin empujar ninguna tarjeta. Primero se probó en la
+   tarjeta Ahora y la guardia de §5 lo atajó: empujaba Presets y «Escuchar música» (peso 20) pasaba a
+   costar 0,54 pantallas, el total subía a 45,1.
+2. **Los nombres enteros en el teléfono:** el nombre corto («Go 4 Red · FL») y el estado debajo, como
+   ya se hacía desde 4 parlantes; el completo queda en el título.
+3. **Dispositivos Bluetooth como tarjetas en el teléfono**, con los botones en su propia fila.
+4. **La sala dice cuando un parlante quedó sin lugar** y ofrece «Usar «Automático»» en un toque.
+5. **El A/B dice por qué no se puede empezar** («Hacen falta dos presets para comparar…»), en vez de
+   un botón gris.
+6. **«Medir desde aquí» enciende la sonda** si estaba apagada (y lo dice), en vez de mandar a Ajustes.
+
+7. **El aviso del micrófono no se salta en un hueco de lectura:** al terminar una calibración el lazo
+   vuelve a empezar y por unos segundos no hay lectura; en ese hueco «Calibrar y aplicar» calibraba sin
+   avisar aunque el micrófono acabara de estar demasiado bajo. El último aviso vale 15 s. Lo encontró el
+   test inestable de 2026-10-02, una vez instrumentado (`test_a_gap_in_the_reading_does_not_skip_the_warning`,
+   visto fallar sin el arreglo).
+
+La guardia de §5 sube +0,3 en el teléfono por los dos textos nuevos (4 y 5), anotado en el test.
+
+**Propuestas que quedan (no aplicadas; cambian la organización o sacan información):**
+
+- **Escuchar es larga en el teléfono** (2.900 px): «Entrada» (correlación L/R, ancho de banda, las
+  aplicaciones) es diagnóstico y empuja al monitor de audífonos al final (2,5 pantallas). Pasarla a
+  Diagnóstico, o plegarla, dejaría Escuchar en lo de todos los días.
+- **«Parlantes en detalle» muestra la MAC, el códec y el `modalias`** en cada fila: para el usuario
+  final es ruido, y empuja la sala más abajo (2,2 pantallas para ubicarlos). Llevarlo a un «ver
+  detalles» por parlante.
+- **La cabecera muestra «Latencia ≥ 399 ms»**, un número técnico que a quien escucha no le dice qué
+  hacer; podría ir a Diagnóstico o al título de la sincronía.
+- **El A/B pide dos presets guardados**: un «comparar con como está ahora» ahorraría el paso más
+  largo del flujo.
+- **Para una instalación de 3 parlantes la sala de fábrica debería ser «Automático»**, no
+  cuadrafonía (hoy el aviso lo resuelve en un toque, pero el primer contacto ya tiene un error).
+
+**Sin probar:** con personas (esto es una persona simulada, que sabe qué buscar) y en un teléfono real.

@@ -335,3 +335,26 @@ def test_the_access_operations_through_the_contract(tmp_path):
     assert run(op="client_revoke", client=client["id"])["error"]["code"] == "not_found"
     assert len(run(op="pair_start")["result"]["code"]) == 6
     assert run(op="pair_deny", request="x" * 24)["error"]["code"] == "not_found"
+
+
+def test_a_new_code_comes_with_its_connection_code(tmp_path):
+    """The PWA's single code (connection_code.py): address, pairing code and the root's fingerprint."""
+    from aurasync import connection_code
+
+    fp = "F7:0C:8B:6B:D8:1B:17:BE:C9:42:A8:38:C8:4F:97:76:95:6E:BE:60:AD:95:BD:F1:CB:A0:1D:40:E3:2B:8E:5B"
+    shown = []
+    acc = Access("m" * 43, ClientStore(tmp_path / "c.json"), window_s=0, show_code=lambda *a: shown.append(a))
+
+    def run(**message):
+        return acc.handle(control.parse({"v": 1, **message}))["result"]
+
+    assert run(op="pair_start")["connection_code"] is None  # no HTTPS: the PWA could not reach it
+    acc.tls = {"port": 8443, "root_sha256": fp}
+    acc.where = lambda: "192.168.100.11"
+    started = run(op="pair_start")
+    decoded = connection_code.decode(started["connection_code"])
+    assert decoded == connection_code.Decoded("192.168.100.11", 8443, started["code"], "F70C8")
+    assert run(op="pair_status")["code"]["connection_code"] == started["connection_code"]
+    assert shown[-1] == (started["code"], 120.0, started["connection_code"])
+    acc.where = lambda: "aurasync.local"  # not an IPv4: only the 6 digits
+    assert run(op="pair_start")["connection_code"] is None

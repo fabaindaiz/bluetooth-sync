@@ -30,7 +30,9 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from aurasync import chain
+from aurasync.dsp.eq import MAX_BOOST_DB
 from aurasync.dsp.profiles import PROFILES
+from aurasync.dsp.response import THIRDS
 
 VERSION = 1
 MAX_BYTES = 64 * 1024
@@ -80,6 +82,8 @@ class Field:
     """A closed set of values. Anything else is `out_of_range`."""
     nullable: bool = False
     pattern: str | None = None
+    length: int | None = None
+    """For a `list` of numbers: how many; `low` and `high` then bound each one."""
 
 
 MAC = r"^[0-9A-F]{2}(:[0-9A-F]{2}){5}$"
@@ -91,6 +95,12 @@ SPEAKER_FIELDS: dict[str, Field] = {
     "delay_ms": Field(float, 0.0, 100.0, attr="retardo_ms"),
     "muted": Field(bool),
     "kind": Field(str, attr="tipo", choices=tuple(PROFILES)),
+    # Spec 2026-10-04 (d-7c8794-48ae2c): a principal gets the direct sound with a direction; an
+    # ambient one, full-spectrum ambience with none.
+    "role_kind": Field(str, attr="role_kind", choices=("principal", "ambient")),
+    # The speaker's EQ curve, one lift per third (dsp/eq.py: it only lifts), or null for none. Written
+    # back by the panel's undo and when a removed speaker is added again (research/10 §7.1).
+    "eq_db": Field(list, 0.0, MAX_BOOST_DB, attr="ecualizacion_db", nullable=True, length=len(THIRDS)),
 }
 """`delay_ms` is normally the recalibration loop's; by hand only while the loop is off."""
 
@@ -114,6 +124,46 @@ def role_from_angle(angle_deg: float, ambience_lift: float = 0.0) -> tuple[float
     return round(max(-1.0, min(1.0, pan)), 2) + 0.0, round(ambience, 2)
 
 
+_K_PAN = 0.7 / math.sin(math.pi / 4)
+_K_AMBIENCE = 0.2 / math.cos(math.pi / 4)
+
+
+def angle_of(pan: float, ambience: float) -> float:
+    """The angle (degrees, 0 in front, positive to the right) whose role is (`pan`, `ambience`):
+    the inverse of `role_from_angle`, so any speaker has a place on the ring the spatial mode
+    renders to (spec 2026-10-04 §3). Within ~1° of the role's angle: both values are rounded to
+    0.01. Where the ambience is at its floor (front) or its cap (rear) it only tells the side."""
+    s = max(-1.0, min(1.0, pan / _K_PAN))
+    if 0.1 + 1e-6 < ambience < 0.55 - 1e-6:
+        c = max(-1.0, min(1.0, (0.35 - ambience) / _K_AMBIENCE))
+    else:
+        c = math.sqrt(max(0.0, 1.0 - s * s)) * (1.0 if ambience <= 0.35 else -1.0)  # noqa: PLR2004
+    return math.degrees(math.atan2(s, c))
+
+
+def auto_angles(n: int) -> list[float]:
+    """The `auto` layout for `n` principal speakers (d-7c8794-d67a23): equal angles, the front pair
+    at ±180/n, clockwise from the front left; an odd count ends with one behind at 180°.
+    3 → -60, 60, 180; 4 → today's quad."""
+    if n <= 1:
+        return [0.0] * max(n, 0)
+    out = []
+    for j in range(n):
+        a = -180.0 / n + 360.0 / n * j
+        out.append(a - 360.0 if a > 180.0 + 1e-9 else a)
+    return out
+
+
+def layout_roles(layout: str, n_principal: int) -> dict[str, tuple[float, float]]:
+    """The roles of `layout` as (pan, ambience). Fixed layouts from `ROLES`; `auto` computed for
+    the number of principal speakers (`P1`…`Pn`, clockwise from the front left)."""
+    if layout == AUTO:
+        return {f"P{i + 1}": role_from_angle(a) for i, a in enumerate(auto_angles(n_principal))}
+    return ROLES[layout]
+
+
+AUTO = "auto"
+MAX_SPEAKERS = 8
 LAYOUT_ANGLES: dict[str, dict[str, tuple[float, float]]] = {
     "quad": {"FL": (-45, 0), "FR": (45, 0), "RL": (-135, 0), "RR": (135, 0)},
     "lcrs": {"FL": (-45, 0), "FC": (0, 0), "FR": (45, 0), "RC": (180, 0)},
@@ -166,7 +216,13 @@ channel. `quad` and `lcrs` are the values `aurasync init` gives and the first li
 (`experimentos/09`); every layout comes from `role_from_angle`, which reproduces those two
 exactly (`tests/test_control.py`). A speaker whose values match no role of the layout is
 "custom"."""
-ALL_ROLES: tuple[str, ...] = tuple(dict.fromkeys(role for roles in ROLES.values() for role in roles))
+LAYOUTS: tuple[str, ...] = (*ROLES, AUTO)
+"""Every layout the contract accepts: the fixed ones and `auto`, which is always available."""
+ALL_ROLES: tuple[str, ...] = tuple(
+    dict.fromkeys(
+        [*(role for roles in ROLES.values() for role in roles), *(f"P{i}" for i in range(1, MAX_SPEAKERS + 1))]
+    )
+)
 """Every role of every layout, for `assign` (the service checks it is one of the layout's)."""
 
 
@@ -175,7 +231,7 @@ GLOBAL_FIELDS: dict[str, Field] = {
     "volume_db": Field(float, -60.0, 0.0),
     "extract_ambience": Field(bool),
     "decorrelate": Field(bool),
-    "layout": Field(str, choices=tuple(ROLES)),
+    "layout": Field(str, choices=LAYOUTS),
     # Applied when the next session starts:
     "block_size": Field(int, choices=(1024, 2048, 4096, 8192)),
     "player_latency_ms": Field(int, 50, 500),
@@ -206,8 +262,8 @@ ARTISTIC_GLOBAL_FIELDS = ("rear_delay_ms", "extract_ambience", "decorrelate")
 would bias an A/B comparison)."""
 
 
-def role_of(pan: float, ambience: float, layout: str) -> str | None:
-    for role, (p, a) in ROLES[layout].items():
+def role_of(pan: float, ambience: float, layout: str, n_principal: int = 0) -> str | None:
+    for role, (p, a) in layout_roles(layout, n_principal).items():
         if abs(pan - p) < 1e-9 and abs(ambience - a) < 1e-9:  # noqa: PLR2004
             return role
     return None
@@ -232,6 +288,12 @@ def check_value(name: str, spec: Field, value: Any) -> Any:
         if not value.isprintable():
             raise ContractError("out_of_range", f"{name} must be printable text")
         return value.strip()
+    if spec.kind is list:
+        if not isinstance(value, list):
+            raise ContractError("type", f"{name} must be a list of numbers; got {json.dumps(value)}")
+        if spec.length is not None and len(value) != spec.length:
+            raise ContractError("out_of_range", f"{name} must have {spec.length} values; got {len(value)}")
+        return [check_value(f"{name}[{i}]", Field(float, spec.low, spec.high), v) for i, v in enumerate(value)]
     # `True` is an int in Python, and must not pass as 1.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ContractError("type", f"{name} must be a number; got {json.dumps(value)}")
@@ -293,7 +355,8 @@ OPS: dict[str, Op] = {
     "shutdown": Op(),
     # The panel (spec §15):
     "source": Op(
-        required={"kind": Field(str, choices=("system", "app", "file", "tone"))}, optional={"name": Field(str, 1, 512)}
+        required={"kind": Field(str, choices=("system", "app", "file", "tone", "multichannel"))},
+        optional={"name": Field(str, 1, 512)},
     ),
     "tone": Op(required={"speaker": SPEAKER}, optional={"seconds": Field(float, 0.5, 10.0)}),
     "recalibrate": Op(required={"active": Field(bool)}),
@@ -327,10 +390,22 @@ OPS: dict[str, Op] = {
     ),
     # The sync estimator (spec 2026-10-03 §6.1): it suggests delays; `sync_apply` applies them.
     "sync_state": Op(),
+    # A phone's point measurement (spec 2026-10-03 §6, step 3): the server clock, the probe each
+    # speaker sent in a span (`probe_ring.py`), and the measurement the phone made against it.
+    "sync_time": Op(),
+    "probe_reference": Op(required={"from": Field(float), "seconds": Field(float, 1.0, 20.0)}),
+    "sync_measure": Op(required={"measurement": Field(dict)}),
     "sync_set": Op(required={"changes": Field(dict)}),
     "sync_apply": Op(optional={"suggestion_id": Field(int)}),
     "sync_explain": Op(),
+    # The spatial mode's knobs explained (spec 2026-10-04 §4), built off the engine thread.
+    "spatial_explain": Op(),
     "chain_reset": Op(required={"stage": Field(str, 1, 64)}, optional={"param": Field(str, 1, 64), "speaker": SPEAKER}),
+    # The headphone monitor (spec 2026-10-04-headphone-monitor-design.md): not synchronised.
+    "monitor_set": Op(
+        required={"mode": Field(str, choices=("off", "stereo", "mix", "binaural"))},
+        optional={"target": Field(str, 1, 256, nullable=True), "gain_db": Field(float, -40.0, 0.0)},
+    ),
     # The radio (spec 2026-10-02 §3.2): raise the bluez5 log level so the radio monitor sees drops.
     "radio_log": Op(required={"active": Field(bool)}, optional={"mode": Field(str, choices=("light", "heavy"))}),
     # Clients and pairing (d-7c8794-37f9bc, `access.py`): they never touch the engine.

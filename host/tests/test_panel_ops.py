@@ -451,3 +451,32 @@ def test_a_loop_measurement_that_cannot_start_falls_back_and_the_audio_goes_on(s
     assert "próxima vuelta" in session.last_recalibration["reason"]
     assert ok(s, op="state")["session"]["status"] == "playing"
     assert session.loop is not None
+
+
+def test_a_speaker_s_eq_curve_can_be_written_back(svc):
+    """research/10 §7.1: undoing the EQ, or adding a speaker back, has to write its curve again."""
+    from aurasync.dsp.response import THIRDS
+
+    s = svc()
+    curve = [0.0] * len(THIRDS)
+    curve[5] = 3.5
+    ok(s, op="set", speaker="Red", changes={"eq_db": curve})
+    assert s.installation.por_nombre("Red").ecualizacion_db == curve
+    assert next(sp for sp in ok(s, op="state")["speakers"] if sp["name"] == "Red")["eq_db"] == curve
+    ok(s, op="set", speaker="Red", changes={"eq_db": None})
+    assert s.installation.por_nombre("Red").ecualizacion_db is None
+
+
+@pytest.mark.parametrize(
+    ("value", "error"),
+    [
+        ([0.0] * 3, "out_of_range"),  # not one value per third
+        ("flat", "type"),
+        (["a"] * 27, "type"),
+        ([9.0] * 27, "out_of_range"),  # the EQ only lifts, up to MAX_BOOST_DB
+        ([-1.0] * 27, "out_of_range"),
+    ],
+)
+def test_a_wrong_eq_curve_is_refused(svc, value, error):
+    s = svc()
+    assert code(s, op="set", speaker="Red", changes={"eq_db": value}) == error

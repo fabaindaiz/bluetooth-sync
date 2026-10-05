@@ -321,3 +321,25 @@ def test_bluez_devices_come_from_dbus_with_battery():
     assert devices[0]["connected"]
     assert parse_bluez_discovering(text)
     assert parse_bluez_objects("no es json") == []
+
+
+def test_a_unit_object_path_escapes_like_systemd():
+    from aurasync.system import unit_object_path
+
+    assert unit_object_path("pipewire.service") == "/org/freedesktop/systemd1/unit/pipewire_2eservice"
+    assert unit_object_path("wireplumber-x.service") == "/org/freedesktop/systemd1/unit/wireplumber_2dx_2eservice"
+
+
+def test_busctl_values_are_read_without_their_type_letter():
+    from aurasync.system import parse_busctl_value
+
+    assert parse_busctl_value('s "active"\n') == "active"
+    assert parse_busctl_value("u 1251\n") == "1251"
+    assert parse_busctl_value("t 55405418") == "55405418"
+    assert parse_busctl_value("") == ""
+
+
+def test_a_unit_without_suffix_is_a_service_as_systemctl_reads_it():
+    from aurasync.system import unit_object_path
+
+    assert unit_object_path("bluetooth") == unit_object_path("bluetooth.service")

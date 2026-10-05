@@ -64,16 +64,18 @@ multiplica por 1 exacto.
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from aurasync import chain as cadena
-from aurasync import chain_stages
+from aurasync import chain_stages, control
 from aurasync.chain import ChainValues
 from aurasync.dsp import ambience, decorrelate, decorrelation_bank, eq, interpolation, limiter, profiles
 from aurasync.dsp.ramps import DecibelRamp, FadeGate, Smoothed
 from aurasync.dsp.retardo import LineaDeRetardo
+from aurasync.dsp.spatial import SPATIAL_RENDERS, SpatialParams, SpatialUpmix, from_character
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -183,6 +185,13 @@ class Motor:
         # directo lo mismo, o el ambiente llegaría corrido respecto de él y el efecto de
         # precedencia haría lo contrario de lo que se busca.
         self.latencia = self._extractor.latencia if self._extractor else 0
+        self._layout_espacial = self._disposicion_espacial()
+        self.espacial: SpatialUpmix | None = (
+            self._nuevo_espacial() if c.algorithm("spatial") in SPATIAL_RENDERS else None
+        )
+        """The spatial renderer (spec 2026-10-04), or None in the classic mode."""
+        if self.espacial is not None and self._extractor is None:
+            self.latencia = self.espacial.latency
         self.latencia_retardo = interpolation.HALF
         """Latencia fija de la lectura de banda limitada de las líneas de retardo, igual en
         todos los parlantes."""
@@ -336,6 +345,9 @@ class Motor:
         if any(etapa == "bass" and param != "harmonics_db" for etapa, param in cambios):
             graves = self._nuevos_graves()
             al_corte.append(lambda: setattr(self, "_graves", graves))
+        if ("spatial", None) in cambios:
+            espacial = self._nuevo_espacial(nuevo) if nuevo.algorithm("spatial") in SPATIAL_RENDERS else None
+            al_corte.append(lambda: setattr(self, "espacial", espacial))
         if ("limiter", None) in cambios or ("limiter", "lookahead_ms") in cambios:
 
             def cambiar_limitadores() -> None:
@@ -391,6 +403,9 @@ class Motor:
                 else:
                     lim.ceiling, lim.step = techo, paso
             hubo = True
+        if self.espacial is not None and any(e == "spatial" and k is not None for e, k in cambios):
+            self.espacial.set_params(self._parametros_espaciales(nuevo))
+            hubo = True
         if ("diffuse", "level_db") in cambios and nuevo.algorithm("diffuse") == self._cadena_difusion():
             self._difusion.set_level(nuevo.param("diffuse", "level_db"))
             hubo = True
@@ -398,6 +413,47 @@ class Motor:
             self._graves.set_harmonics(nuevo.param("bass", "harmonics_db"))
             hubo = True
         return hubo
+
+    def _parametros_espaciales(self, cadena: ChainValues | None = None) -> SpatialParams:
+        """`cadena`: the chain the renderer is for (a change builds it before the chain is swapped)."""
+        c = cadena or self._cadena
+        if c.param("spatial", "manual"):
+            params = SpatialParams(
+                arc_deg=c.param("spatial", "arc_deg"),
+                ambience=c.param("spatial", "ambience"),
+                ambient_level_db=c.param("spatial", "ambient_level_db"),
+                haas_ms=c.param("spatial", "haas_ms"),
+            )
+        else:
+            params = from_character(c.param("spatial", "character"))
+        return replace(params, front_intact=c.algorithm("spatial") == "front")
+
+    def _disposicion_espacial(self) -> tuple[dict[str, float], frozenset[str]]:
+        """Each principal's angle (from its pan and ambience) and the ambient speakers."""
+        ps = self.instalacion.parlantes
+        angles = {p.nombre: control.angle_of(p.pan, p.ambiente) for p in ps if p.role_kind != "ambient"}
+        return angles, frozenset(p.nombre for p in ps if p.role_kind == "ambient")
+
+    def _clasico(self) -> dict[str, tuple[float, float]]:
+        return {p.nombre: (p.pan, p.ambiente) for p in self.instalacion.parlantes}
+
+    def _nuevo_espacial(self, cadena: ChainValues | None = None) -> SpatialUpmix:
+        angles, ambient = self._layout_espacial
+        names = [p.nombre for p in self.instalacion.parlantes]
+        return SpatialUpmix(
+            names, angles, set(ambient), self.sr, self._parametros_espaciales(cadena), classic=self._clasico()
+        )
+
+    def _actualizar_espacial(self) -> None:
+        """A role or a pan changed: the ring changes live (the overlap-add crossfades it; review
+        2026-10-04, where a rebuild at a cut clicked and added latency)."""
+        disposicion = self._disposicion_espacial()
+        if disposicion == self._layout_espacial:
+            return
+        self._layout_espacial = disposicion
+        if self.espacial is not None:
+            angles, ambient = disposicion
+            self.espacial.set_layout(angles, set(ambient), self._clasico())
 
     def _cadena_difusion(self) -> str:
         return "noise_tail" if self._difusion.active else "off"
@@ -648,6 +704,7 @@ class Motor:
         """
         for nombre, objetivo in self.retardos_efectivos_ms().items():
             self._lineas[nombre].objetivo_ms = objetivo
+        self._actualizar_espacial()
 
     def _curva_de(self, parlante) -> list[float] | np.ndarray | None:
         """La curva que suena: la guardada, con el tope de `eq.max_boost_db` aplicado al leerla
@@ -694,6 +751,9 @@ class Motor:
         )
         # Un pan o un ambiente nuevos pueden pedir otra asignación de filtros: espera a un corte.
         self._revisar_asignacion()
+        # The spatial ring follows the roles in both branches: before, the slow one (a front and a
+        # rear role swapped) never reached it (review 2026-10-04).
+        self._actualizar_espacial()
         if lento:
             self.cortar()
         else:
@@ -715,8 +775,15 @@ class Motor:
             for p in self.instalacion.parlantes
         }
 
-    def procesar(self, izq: np.ndarray, der: np.ndarray) -> dict[str, np.ndarray]:
-        """Un bloque estéreo de entrada, un bloque por parlante de salida."""
+    def procesar(
+        self, izq: np.ndarray, der: np.ndarray, canales: dict[str, np.ndarray] | None = None
+    ) -> dict[str, np.ndarray]:
+        """Un bloque estéreo de entrada, un bloque por parlante de salida.
+
+        `canales`: a render made elsewhere, one block per speaker (a multichannel source,
+        experimentos/17 §1.1). Each channel goes to its speaker as it is: no upmix, no decorrelator,
+        no diffusion and no bass crossover; only what belongs to the speaker (delay, EQ, its bass
+        stage, gain, volume, limiter). `izq` and `der` are then only its downmix, for the meters."""
         if len(izq) != len(der):
             msg = f"los canales tienen largos distintos: {len(izq)} y {len(der)}"
             raise ValueError(msg)
@@ -747,10 +814,12 @@ class Motor:
         atraso = (
             round(self._cadena.param("decorrelate", "mean_ms") * self.sr / 1000) if self.decorrelacion_activa else 0
         )
-        graves = self._graves.feed(izq_d, der_d, atraso)
+        graves = self._graves.feed(izq_d, der_d, atraso) if canales is None else None
         sonda = self.sonda if self.sonda is not None and self.sonda.active else None
         if sonda is not None:
             sonda.begin(n)
+
+        espacial = self.espacial.process(izq, der) if self.espacial is not None and canales is None else None
 
         salida = {}
         for p in self.instalacion.parlantes:
@@ -760,15 +829,27 @@ class Motor:
             suave_pan.target, suave_amb.target = p.pan, p.ambiente
             pan = suave_pan.block(n)
             ambiente = suave_amb.block(n) * mezcla
-            directo = (1 - pan) / 2 * izq_d + (1 + pan) / 2 * der_d
-            x = (1 - ambiente) * directo + ambiente * amb
-            # El decorrelador convoluciona aunque esté desviado, para que su cola esté lista
-            # cuando vuelva.
-            mezcla_propia = x
-            decorrelado = self._convolucionar(p.nombre, x)
-            if self.decorrelacion_activa:
-                x = decorrelado
-            if self._difusion.active:
+            if canales is not None:
+                given = canales.get(p.nombre)
+                x = np.zeros(n) if given is None or len(given) != n else np.asarray(given, dtype=float)
+                mezcla_propia = x
+            elif espacial is not None:
+                # Spatial: the direct part placed and left alone; only the ambience is decorrelated
+                # (spec 2026-10-04 §3). The decorrelator's tail is the ambience's.
+                directo_e, ambiente_e = espacial[p.nombre]
+                mezcla_propia = directo_e + ambiente_e
+                decorrelado = self._convolucionar(p.nombre, ambiente_e)
+                x = directo_e + (decorrelado if self.decorrelacion_activa else ambiente_e)
+            else:
+                directo = (1 - pan) / 2 * izq_d + (1 + pan) / 2 * der_d
+                x = (1 - ambiente) * directo + ambiente * amb
+                # El decorrelador convoluciona aunque esté desviado, para que su cola esté lista
+                # cuando vuelva.
+                mezcla_propia = x
+                decorrelado = self._convolucionar(p.nombre, x)
+                if self.decorrelacion_activa:
+                    x = decorrelado
+            if self._difusion.active and canales is None:
                 x = self._difusion.process(p.nombre, x, mezcla_propia)
             if graves is not None:
                 x = self._graves.before_delay(p.nombre, x, graves)

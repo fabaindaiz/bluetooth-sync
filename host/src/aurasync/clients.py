@@ -47,7 +47,9 @@ MAX_CLIENTS = 64
 PREFIX = "asc"
 TOKEN_RE = re.compile(r"^asc_([0-9a-f]{8})_([A-Za-z0-9_-]{43})$")
 
-READ_OPS = frozenset({"state", "logs", "presets", "chain", "sync_state", "sync_explain"})
+READ_OPS = frozenset(
+    {"state", "logs", "presets", "chain", "sync_state", "sync_explain", "spatial_explain", "sync_time"}
+)
 ADMIN_OPS = frozenset(
     {
         "shutdown",
@@ -72,6 +74,8 @@ ADMIN_OPS = frozenset(
 CONTROL_OPS = frozenset(
     {
         "sync_set",
+        "probe_reference",
+        "sync_measure",
         "sync_apply",
         "start",
         "stop",
@@ -99,6 +103,7 @@ CONTROL_OPS = frozenset(
         "ab_stop",
         "chain_set",
         "chain_reset",
+        "monitor_set",
     }
 )
 

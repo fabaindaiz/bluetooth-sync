@@ -218,12 +218,13 @@ npm run build:pwa      # la PWA: arma host/web/dist-pwa/ (no se versiona)
   (`tests_browser/test_pwa.py`, solo Chromium: sirve `dist-pwa/` en `http://localhost:5173` bajo
   `/bluetooth-sync/`, que tiene que estar libre, contra el servicio simulado por HTTPS).
 
-**Publicarla (lo hace el usuario, una vez).** `.github/workflows/pages.yml` la arma y la publica
-en cada push a `main` que toque `host/web/` o el panel, y a mano (*Actions → pages → Run
-workflow*). Para activarla: en GitHub, **Settings → Pages → Build and deployment → Source:
-GitHub Actions**, y correr el workflow una vez. El sitio es público aunque el repositorio sea
-privado (GitHub Pro); no lleva ningún dato de los equipos. Para apagarla: *Settings → Pages →
-Unpublish site* y borrar el workflow.
+**Publicarla.** Vive en la rama **`gh-pages`** (solo el sitio compilado y `.nojekyll`, como el de
+thom-music-player), servida con **Settings → Pages → Deploy from a branch → `gh-pages` / (root)**;
+publicada desde el 2026-10-04. `.github/workflows/pages.yml` la arma, la revisa y suma un commit a
+`gh-pages` en cada push a `main` que toque `host/web/` o el panel, y a mano (*Actions → pages → Run
+workflow*); si nada cambió, no empuja. El sitio es público aunque el repositorio sea privado (GitHub
+Pro); no lleva ningún dato de los equipos. Para apagarla: *Settings → Pages → Unpublish site* y
+borrar el workflow.
 
 ## Requisitos
 
@@ -246,6 +247,23 @@ hatch run aurasync --version
 ```
 
 Desde la raíz, `scripts/check.sh` corre todo esto junto con el chequeo del bundle.
+
+## En contenedor (Linux, Podman)
+
+Sin instalar hatch, Node ni los navegadores en el equipo: solo Podman. PipeWire, BlueZ y
+avahi siguen en el host; la imagen trae sus clientes y aurasync (d-7c8794-6b1a15; qué se
+monta y qué se midió, en `docs/research/08-integracion-y-plan.md` §6.2).
+
+```bash
+container/aurasync-container build              # la imagen runtime (o: build dev, build ml)
+container/aurasync-container run                # aurasync service, con la config de ~/.config/aurasync
+container/aurasync-container run doctor         # cualquier subcomando
+container/aurasync-container build dev
+container/aurasync-container dev hatch test     # los tests con este repositorio montado
+container/aurasync-container dev hatch run browser:test
+```
+
+Las pruebas con parlantes siguen en el host hasta medir que el contenedor no agrega cortes.
 
 ## Versiones
 

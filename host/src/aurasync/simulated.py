@@ -270,6 +270,28 @@ class SimulatedSession(AudioSession):
 SIMULATED_BATTERY_PCT = (90, 75, 60, 45)
 
 
+class SimulatedMonitor:
+    """The headphone monitor without PipeWire (monitor.MonitorOutput's shape): it counts what
+    it gets and says it reached its target."""
+
+    def __init__(self, settings, names, angles, rate, sink) -> None:  # noqa: ARG002 - the factory's signature
+        self.settings = settings
+        self.pushed = 0
+        self.writer = None
+
+    def open(self) -> None:
+        time.sleep(0.05)
+
+    def where(self) -> str | None:
+        return self.settings.target
+
+    def push(self, pair, blocks) -> None:  # noqa: ARG002
+        self.pushed += 1
+
+    def close(self) -> None:
+        pass
+
+
 class SimulatedObserver:
     """The system view of a machine with the installation's speakers connected, and one more nearby."""
 
@@ -321,6 +343,13 @@ class SimulatedObserver:
                 if d["connected"]
             ],
             "apps": [{"name": n, "sample_spec": "float32le 2ch 48000Hz"} for n in SimulatedSource.APPS],
+            # Every output PipeWire would list: the speakers, the PC's own and headphones (the
+            # monitor's candidates, monitor.py).
+            "sinks": [
+                {"node": "simulated_pc_output", "description": "Salida del PC (simulada)"},
+                {"node": "simulated_headphones", "description": "Audífonos (simulados)"},
+                *({"node": d["sink"], "description": d["name"]} for d in self._devices.values() if d["connected"]),
+            ],
             "microphones": [
                 {"node": "simulado", "description": "Micrófono simulado"},
                 {"node": "simulado-2", "description": "Otro micrófono simulado"},

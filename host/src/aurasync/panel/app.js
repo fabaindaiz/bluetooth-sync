@@ -23,6 +23,7 @@ const roleName = (r) => ROLE_NAMES[r] || r;
 const LAYOUT_NAMES = {
   quad: ["Cuadrafonía", "FL FR RL RR"], lcrs: ["Películas", "L C R S"], "5.0": ["5.0", "L C R SL SR"],
   hex: ["Hexágono", "6"], "7.0": ["7.0", "L C R SL SR RL RR"], octagon: ["Octógono", "8"], rings: ["Dos anillos", "4 + 4"],
+  auto: ["Automático", "N parlantes"],
 };
 const SERVICE_STATUS = {
   running: ["", "corriendo"], starting: ["", "iniciando"], stopping: ["", "deteniendo"],
@@ -62,29 +63,29 @@ function share(name, detail) {
 // Las mismas tarjetas, repartidas de cuatro maneras. Se elige con ?layout= (y queda
 // recordada); docs/research/10-panel-de-control.md mide las cuatro con las tareas típicas.
 
-const CARDS_ALL = ["now", "presets", "quick", "ab", "chain", "room", "speakers", "devices", "calibration", "response", "estimator",
+const CARDS_ALL = ["now", "presets", "quick", "monitor", "ab", "chain", "room", "speakers", "devices", "spatial", "calibration", "response", "estimator",
   "health", "cuts", "levels", "input", "services", "logs", "config"];
-const WIDE = new Set(["chain", "speakers", "devices", "services", "logs", "config", "calibration", "estimator"]);
+const WIDE = new Set(["chain", "speakers", "devices", "services", "logs", "config", "calibration", "estimator", "spatial"]);
 const LAYOUTS = {
   pagina: { nav: "none", views: [{ id: "todo", label: "Todo", icon: "list", cards: CARDS_ALL }] },
   pestanas: { nav: "tabs", views: [
     // La pantalla principal: lo de todos los días arriba (estado, efectos, presets, parlantes,
     // niveles); comparar y analizar la entrada, más abajo (research/10 §3, escenarios).
-    { id: "escuchar", label: "Escuchar", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input"] },
+    { id: "escuchar", label: "Escuchar", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input", "monitor"] },
     // La cadena entera (spec 2026-10-02 §7.1): cada etapa, sus algoritmos y sus perillas. Es lo que
     // antes era Ajustes → Sonido, y mucho más; la dibuja cadena.js (Preact, host/web).
     { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
     // Primero conectar, después ajustar cada parlante, al final la sala.
-    { id: "parlantes", label: "Parlantes", icon: "speaker", cards: ["devices", "speakers", "room"] },
+    { id: "parlantes", label: "Parlantes", icon: "speaker", cards: ["devices", "speakers", "room", "spatial"] },
     { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response", "estimator"] },
     { id: "diagnostico", label: "Diagnóstico", icon: "activity", cards: ["health", "cuts", "services", "logs"],
       columns: { left: ["health", "cuts"], right: ["services"], bottom: ["logs"] } },
     { id: "ajustes", label: "Ajustes", icon: "sliders", cards: ["config"] },
   ] },
   inicio: { nav: "hub", views: [
-    { id: "inicio", label: "Inicio", icon: "home", cards: ["now", "presets", "quick", "hub"] },
+    { id: "inicio", label: "Inicio", icon: "home", cards: ["now", "presets", "quick", "hub", "monitor"] },
     { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
-    { id: "parlantes", label: "Sala y parlantes", icon: "speaker", cards: ["devices", "speakers", "room"] },
+    { id: "parlantes", label: "Sala y parlantes", icon: "speaker", cards: ["devices", "speakers", "room", "spatial"] },
     { id: "calibrar", label: "Calibrar", icon: "target", cards: ["calibration", "response", "estimator"] },
     { id: "comparar", label: "A/B ciego", icon: "compare", cards: ["ab", "levels"] },
     { id: "diagnostico", label: "Diagnóstico", icon: "activity", cards: ["health", "cuts", "input", "services", "logs"],
@@ -92,9 +93,9 @@ const LAYOUTS = {
     { id: "ajustes", label: "Ajustes", icon: "sliders", cards: ["config"] },
   ] },
   lateral: { nav: "sidebar", views: [
-    { id: "sonido", label: "Sonido", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input"] },
+    { id: "sonido", label: "Sonido", icon: "play", cards: ["now", "presets", "quick", "levels", "ab", "input", "monitor"] },
     { id: "cadena", label: "Cadena", icon: "chain", cards: ["chain"] },
-    { id: "sala", label: "Sala", icon: "speaker", cards: ["devices", "speakers", "room"] },
+    { id: "sala", label: "Sala", icon: "speaker", cards: ["devices", "speakers", "room", "spatial"] },
     { id: "medir", label: "Medir", icon: "target", cards: ["calibration", "response", "estimator", "health", "cuts"] },
     { id: "sistema", label: "Sistema", icon: "server", cards: ["services", "logs", "config"] },
   ] },
@@ -536,12 +537,16 @@ function render(s) {
   renderConfig(s);
   renderCalibration(s);
   renderEstimator(s);
+  window.aurasyncLastSpeakers = s.speakers.map((sp) => sp.name);
+  renderSpatial(s);
+  renderMonitor(s);
   renderPresets(s);
   share("state", s);
 }
 
 function renderTop(s) {
-  $("engine-badge").hidden = !s.service.simulated;
+  $("engine-badge").hidden = !s.service.simulated && !s.service.demo;
+  $("engine-badge").textContent = s.service.demo ? "DEMO" : "SIMULADO";
   $("dirty").hidden = !s.dirty;
   $("save").hidden = !s.dirty;
   $("pair-open").hidden = !(s.pairing && s.pairing.urls && s.pairing.urls.some((u) => !u.includes("127.0.0.1")));
@@ -590,7 +595,7 @@ function renderControls(s) {
     apps.dataset.synced = "\u0000";
   }
   if (source.kind === "app") syncValue(apps, source.name || "");
-  if (source.kind === "file") syncValue($("source-file"), source.name || "");
+  if (source.kind === "file" || source.kind === "multichannel") syncValue($("source-file"), source.name || "");
   syncSourceFields();
   syncValue($("volume"), s.global.volume_db);
   setText($("volume-out"), `${nf($("volume").value, 0)} dB`);
@@ -603,7 +608,9 @@ function renderControls(s) {
 function syncSourceFields() {
   const kind = $("source-kind").value;
   $("source-app").hidden = kind !== "app";
-  $("source-file").hidden = kind !== "file";
+  // Un WAV estéreo, o uno multicanal: un canal por parlante, en el orden de la sala (un render de afuera).
+  $("source-file").hidden = kind !== "file" && kind !== "multichannel";
+  $("source-file").placeholder = kind === "multichannel" ? "/home/…/render-3-canales.wav" : "/home/…/tema.wav";
 }
 
 // -- sala y parlantes -----------------------------------------------------------
@@ -694,6 +701,21 @@ function renderRoom(s) {
   let note = room.querySelector(".room-custom");
   if (!note) { note = el("div", { class: "room-custom" }); room.append(note); }
   note.textContent = custom.length ? `sin rol: ${custom.length}` : "";
+  // Con una sala que no es la de esta cantidad de parlantes (3 en cuadrafonía), decirlo y ofrecer la
+  // salida, en vez de solo «sin rol: 1» (probes/18-usabilidad).
+  let hint = $("room-hint");
+  if (!hint) {
+    hint = el("p", { id: "room-hint", class: "callout small mt-2", role: "status" });
+    room.after(hint);
+  }
+  const offer = custom.length > 0 && s.global.layout !== "auto";
+  hint.hidden = !offer;
+  if (offer) {
+    const fix = el("button", { type: "button", class: "btn small-btn ml-1", "data-room-auto": "", text: "Usar «Automático»" });
+    fix.addEventListener("click", () => send("set", { changes: { layout: "auto" } }));
+    const what = custom.length === 1 ? "1 parlante quedó sin lugar" : `${custom.length} parlantes quedaron sin lugar`;
+    hint.replaceChildren(`${what} en esta sala (tiene lugar para ${s.speakers.length - custom.length}). «Automático» los reparte a todos alrededor.`, fix);
+  }
   const scan = $("scan");
   scan.disabled = s.scanning;
   scan.textContent = s.scanning ? "Buscando…" : "Buscar parlantes";
@@ -863,6 +885,8 @@ function renderSpeakers(s) {
 
 const quickRows = new Map();
 
+const NARROW = window.matchMedia("(max-width: 639px)");
+
 function quickRow(speaker) {
   const name = speaker.name;
   const current = () => latest && latest.speakers.find((sp) => sp.name === name);
@@ -911,8 +935,10 @@ function renderQuick(s) {
     row.fold.hidden = !many;
     syncFold(row.box, row.fold, many, `quick:${sp.name}`);
     // Plegada, el nombre corto y el estado debajo: en el teléfono no entran en una línea con Tono y Silenciar.
-    row.box.querySelector(".fold-title").classList.toggle("fold-stack", many);
-    row.title.textContent = `${many ? sp.name.replace("JBL ", "") : sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
+    row.box.querySelector(".fold-title").classList.toggle("fold-stack", many || NARROW.matches);
+    // En el teléfono, el nombre corto: entero se cortaba en «JBL Go 4…» y no decía cuál era (probes/18).
+    const short = many || NARROW.matches;
+    row.title.textContent = `${short ? sp.name.replace("JBL ", "") : sp.name}${sp.role ? ` · ${sp.role}` : ""}`;
     row.title.title = sp.name;
     setStatus(row.status, SPEAKER_STATUS, speakerState(s, sp), sp.muted ? " · mudo" : "");
     syncValue(row.ambience.input, sp.ambience);
@@ -1042,9 +1068,9 @@ function deviceRow(d, playing) {
   return el("tr", {},
     el("td", {}, el("div", { class: "speaker-name", text: d.name || d.address }),
       el("div", { class: "speaker-sub", text: d.address })),
-    el("td", { text: state }),
-    el("td", { class: `num ${d.battery_pct != null && d.battery_pct <= 20 ? "text-rose-600" : ""}`, text: battery }),
-    el("td", { class: "num", text: d.rssi_dbm != null ? `${d.rssi_dbm} dBm` : "—" }),
+    el("td", { "data-label": "Estado", text: state }),
+    el("td", { "data-label": "Batería", class: `num ${d.battery_pct != null && d.battery_pct <= 20 ? "text-rose-600" : ""}`, text: battery }),
+    el("td", { "data-label": "Señal", class: "num", text: d.rssi_dbm != null ? `${d.rssi_dbm} dBm` : "—" }),
     el("td", {}, actions));
 }
 
@@ -1847,8 +1873,12 @@ function micReading(s) {
   return { state, rms: mic.rms, peak: mic.peak, playing };
 }
 
+// Para los tests: lo que el panel lee del micrófono en este instante (el aviso lo decide así).
+window.aurasyncMicReading = () => gateReading();
+
 function paintMicCheck() {
   const r = micReading(latest);
+  if (MIC_BLOCKING.has(r.state)) lastBlocking = { reading: r, at: performance.now() };
   const box = $("mic-check");
   if (box.dataset.state !== r.state) box.dataset.state = r.state;
   const pos = $("mic-pos");
@@ -1874,8 +1904,21 @@ function paintMicCheck() {
 }
 
 // Antes de calibrar: con el micrófono fuera de la ventana, avisa y pide confirmar (sin confirm()).
-function gateCalibration(box, go) {
+// La última lectura que pedía avisar, y cuándo: al terminar una calibración el lazo vuelve a empezar
+// y por unos segundos no hay lectura; sin esto, el atajo calibraba sin avisar aunque el micrófono
+// acabara de estar demasiado bajo (lo encontró el test instrumentado, 2026-10-04).
+const GATE_MEMORY_MS = 15000;
+let lastBlocking = null;
+
+function gateReading() {
   const r = micReading(latest);
+  if (MIC_BLOCKING.has(r.state)) lastBlocking = { reading: r, at: performance.now() };
+  else if (r.state === "none" && lastBlocking && performance.now() - lastBlocking.at < GATE_MEMORY_MS) return lastBlocking.reading;
+  return r;
+}
+
+function gateCalibration(box, go) {
+  const r = gateReading();
   if (!MIC_BLOCKING.has(r.state)) {
     box.hidden = true;
     box.replaceChildren();
@@ -2090,20 +2133,17 @@ function appliedMessage(reply) {
   return `Alineación aplicada${skipped.length ? `; quedaron como estaban: ${skipped.join(", ")}` : ""}`;
 }
 
-// Quitar la ecualización: se apaga al instante (se oye), y las curvas se borran al vencer el aviso.
+// Quitar la ecualización: al instante, y «Deshacer» vuelve a escribir las curvas (`set` escribe
+// `eq_db` desde el 2026-10-04; antes se borraban al vencer el aviso, research/10 §7.1).
 let eqClearing = false;
 async function clearEq() {
-  const before = await captureNow();
-  const on = Boolean(latest && latest.global.eq_active);
-  if (on) await send("set", { changes: { eq_active: false } });
   eqClearing = true;
   $("eq-reset").disabled = true;
-  const putBack = async () => { if (before) { const now = await captureNow(); if (now) await undoer().restore(before, now); } };
-  deferUndo("Ecualización quitada", async () => {
-    await send("eq_reset");
-    if (on) await putBack();
+  try {
+    await withUndo("Ecualización quitada", () => send("eq_reset"));
+  } finally {
     eqClearing = false;
-  }, async () => { if (on) await putBack(); eqClearing = false; });
+  }
 }
 
 // -- presets y A/B -------------------------------------------------------------------
@@ -2146,6 +2186,10 @@ function renderPresets(s) {
   const active = Boolean(ab && ab.active);
   $("ab-live").hidden = !active;
   $("ab-start").disabled = active || s.presets.length < 2 || s.session.status !== "playing";
+  // Por qué no se puede empezar, en vez de un botón gris sin explicación (probes/18-usabilidad).
+  $("ab-why").textContent = active ? ""
+    : s.presets.length < 2 ? `Hacen falta dos presets para comparar (hay ${s.presets.length}): guardá cómo suena ahora en Presets, cambiá algo y guardá otro.`
+    : s.session.status !== "playing" ? "Iniciá la reproducción para comparar." : "";
   if (active) {
     for (const button of document.querySelectorAll("[data-ab]")) {
       button.setAttribute("aria-pressed", String(button.dataset.ab === ab.playing));
@@ -2326,11 +2370,11 @@ function setup() {
   kind.addEventListener("change", () => {
     syncSourceFields();
     if (kind.value === "app") app.focus();
-    else if (kind.value === "file") file.focus();
+    else if (kind.value === "file" || kind.value === "multichannel") file.focus();
     else sendFrom(kind, "source", { kind: kind.value });
   });
   app.addEventListener("change", () => { if (app.value) sendFrom(app, "source", { kind: "app", name: app.value }); });
-  file.addEventListener("change", () => { const v = file.value.trim(); if (v) sendFrom(file, "source", { kind: "file", name: v }); });
+  file.addEventListener("change", () => { const v = file.value.trim(); if (v) sendFrom(file, "source", { kind: kind.value === "multichannel" ? "multichannel" : "file", name: v }); });
   const volume = $("volume");
   liveRange(volume, $("volume-out"), (v) => `${nf(v, 0)} dB`, (v) => { markPending($("volume-out")); return setGlobal(volume, { volume_db: v }); });
   $("scan").addEventListener("click", () => send("scan"));
@@ -2386,6 +2430,8 @@ function setup() {
   setupConfig();
   setupLogs();
   setupEstimator();
+  setupSpatial();
+  setupMonitor();
   $("now-calibrate").addEventListener("click", () => gateCalibration($("now-gate"), calibrateAndApply));
   $("chip-quality").addEventListener("click", () => window.aurasyncShow("[data-card=cuts]"));
   $("now-identify").addEventListener("click", identifySpeakers);
@@ -2537,6 +2583,7 @@ function renderExplain(e) {
 }
 
 function drawFigure(fig) {
+  if (fig.kind === "room") return drawRoom(fig);
   const W = 320, H = 140, L = 34, B = 20, T = 8, R = 8;
   const all = fig.series.flatMap((s) => s.points).filter((p) => p[1] !== null);
   const xs = all.map((p) => p[0]), ys = all.map((p) => p[1]);
@@ -2605,6 +2652,225 @@ function drawFigure(fig) {
 function setupEstimator() {
   $("est-apply").addEventListener("click", applyEstimator);
   $("est-explain").addEventListener("toggle", () => { if ($("est-explain").open) loadExplain(); });
+  $("est-here").addEventListener("click", measureHere);
+}
+
+// Medir desde este dispositivo (sync/fromHere.ts): 8 s de micrófono, medidos acá contra la sonda.
+// La sonda sube en 50 ms y el anillo del servidor tiene que tener lo que se va a grabar: un respiro.
+const PROBE_SETTLE_MS = 2500;
+async function measureHere() {
+  const button = $("est-here");
+  const note = $("est-here-note");
+  const run = window.aurasync && window.aurasync.syncHere;
+  if (!run) { note.textContent = "Este panel no puede medir desde aquí."; return; }
+  button.disabled = true;
+  if (!(latest && latest.global && latest.global.probe)) {
+    // Se mide contra la sonda: se enciende acá mismo en vez de mandar a Ajustes (probes/18-usabilidad).
+    note.dataset.state = "running";
+    note.textContent = "Encendiendo la sonda (se mide contra ella; queda encendida, se apaga en Ajustes)…";
+    const reply = await send("set", { changes: { probe: true } });
+    if (!reply || !reply.ok) { note.dataset.state = "failed"; note.textContent = "No se pudo encender la sonda."; button.disabled = false; return; }
+    await new Promise((r) => setTimeout(r, PROBE_SETTLE_MS));
+  }
+  note.dataset.state = "running";
+  note.textContent = "Grabando 8 s… quedate quieto y en silencio.";
+  try {
+    const result = await run({ role: $("est-here-role").value });
+    note.textContent = result.message;
+    note.dataset.state = result.ok ? "done" : "failed";
+  } catch (err) {
+    note.textContent = `No se pudo medir: ${err && err.message ? err.message : err}`;
+    note.dataset.state = "failed";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// -- espacial (spec 2026-10-04) ------------------------------------------------------
+// Cada parlante principal o ambiental, el modo clásico/espacial con sus perillas explicadas
+// (recomendación, cómo suena, figura SIMULADA) y la pieza vista desde arriba.
+
+let spatialKey = null;
+let spatialLoading = 0;
+
+function renderSpatial(s) {
+  const kinds = s.speakers.map((sp) => `${sp.name}:${sp.role_kind}:${sp.pan}:${sp.ambience}`).join("|");
+  const render = (s.chain_summary && s.chain_summary.spatial) || "classic";
+  for (const id of ["spatial-render", "now-render"]) if (!$(id).matches(":focus")) $(id).value = render;
+  const rows = s.speakers.map((sp) => {
+    const kind = sp.role_kind || "principal";
+    const seg = (value, label) => {
+      const b = el("button", { type: "button", class: "seg", "data-role-kind": value, "aria-pressed": String(kind === value), text: label });
+      b.addEventListener("click", () => send("set", { speaker: sp.name, changes: { role_kind: value } }));
+      return b;
+    };
+    return el("li", { "data-speaker": sp.name, class: "row" }, el("span", { text: sp.name }), seg("principal", "Principal"), seg("ambient", "Ambiental"));
+  });
+  $("spatial-speakers").replaceChildren(...rows);
+  const key = `${kinds}#${render}`;
+  if (key !== spatialKey) {
+    spatialKey = key;
+    loadSpatial();
+  }
+}
+
+async function loadSpatial() {
+  const token = ++spatialLoading;
+  for (let i = 0; i < 60 && token === spatialLoading; i++) {
+    // Una pestaña oculta no pregunta: espera a volver a verse, sin gastar intentos.
+    if (document.hidden) {
+      i--;
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
+    const reply = await send("spatial_explain");
+    const e = reply && reply.ok ? reply.result : null;
+    if (e && e.docs) {
+      renderSpatialExplain(e);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+function spatialParam(name, value) {
+  return send("chain_set", { stage: "spatial", params: { [name]: value } });
+}
+
+function renderSpatialExplain(e) {
+  if (!$("spatial-character").matches(":focus")) $("spatial-character").value = String(e.params.character);
+  $("spatial-room").replaceChildren(drawFigure(e.room));
+  const nodes = Object.entries(e.docs).filter(([id]) => id !== "render").map(([id, doc]) => {
+    const value = e.params[id];
+    let input;
+    if (typeof value === "boolean") {
+      input = el("input", { type: "checkbox", "aria-label": doc.title });
+      input.checked = value;
+      input.addEventListener("change", () => spatialParam(id, input.checked));
+    } else {
+      input = el("input", { type: "number", step: "any", class: "num-input", value: String(value), "aria-label": doc.title });
+      input.addEventListener("change", () => spatialParam(id, Number(input.value)));
+    }
+    const rec = typeof doc.recommended === "number" ? `${doc.recommended} ${doc.unit || ""}`.trim() : String(doc.recommended);
+    const box = el("div", { "data-setting": id, class: "setting" },
+      el("div", { class: "row" }, el("strong", { text: doc.title }), input),
+      el("p", { class: "muted small", text: doc.summary }),
+      el("p", { class: "small est-recommended", text: `Recomendado: ${rec}. ${doc.why_recommended}` }));
+    const choices = Object.entries(doc.sounds_choices || {});
+    if (choices.length) box.append(el("ul", { class: "small" }, ...choices.map(([c, t]) => el("li", { text: `${c}: ${t}` }))));
+    else {
+      box.append(el("p", { class: "small", text: `Más bajo: ${doc.sounds_low}` }));
+      box.append(el("p", { class: "small", text: `Más alto: ${doc.sounds_high}` }));
+    }
+    if (doc.figure) {
+      box.append(drawFigure(doc.figure));
+      box.append(el("span", { class: "chip chip-warn est-evidence", text: doc.figure.evidence }));
+    }
+    return box;
+  });
+  // El modo también se explica, arriba de todo.
+  const render = e.docs.render;
+  const head = el("div", { "data-setting": "render", class: "setting" },
+    el("strong", { text: render.title }),
+    el("p", { class: "small est-recommended", text: `Recomendado: ${render.recommended}. ${render.why_recommended}` }),
+    el("ul", { class: "small" }, ...Object.entries(render.sounds_choices).map(([c, t]) => el("li", { text: `${c}: ${t}` }))),
+    drawFigure(render.figure),
+    el("span", { class: "chip chip-warn est-evidence", text: render.figure.evidence }));
+  $("spatial-docs").replaceChildren(head, ...nodes);
+}
+
+function drawRoom(fig) {
+  // La pieza desde arriba: el oyente al centro, 0° arriba, positivos a la derecha.
+  const W = 220, C = 110, R = 80;
+  const root = svg("svg", { viewBox: `0 0 ${W} ${W}`, width: "220", role: "img" });
+  const title = svg("title");
+  title.textContent = fig.caption;
+  root.append(title);
+  root.append(svg("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "currentColor", "stroke-opacity": "0.3" }));
+  root.append(svg("circle", { cx: C, cy: C, r: 5, fill: "currentColor" }));
+  const ambients = fig.series.filter((s) => s.points[0][0] === null);
+  let k = 0;
+  for (const s of fig.series) {
+    let a = s.points[0][0];
+    let r = R;
+    if (a === null) {
+      a = 45 + (360 * k) / Math.max(ambients.length, 1);
+      k += 1;
+      r = R + 18;
+    }
+    const t = (a * Math.PI) / 180;
+    const x = C + r * Math.sin(t), y = C - r * Math.cos(t);
+    const principal = s.style !== "other";
+    root.append(svg("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 8, "data-speaker": s.label,
+      fill: principal ? "#0284c7" : "none", stroke: principal ? "#0284c7" : "#a1a1aa", "stroke-dasharray": principal ? "" : "3 2", "stroke-width": 2 }));
+    const label = svg("text", { x: x.toFixed(1), y: (y + 20).toFixed(1), "font-size": "9", fill: "currentColor", "text-anchor": "middle" });
+    label.textContent = `${s.label}${principal ? "" : " (ambiental)"}`;
+    root.append(label);
+  }
+  return el("figure", {}, root, el("figcaption", { class: "muted small", text: fig.caption }));
+}
+
+function setupSpatial() {
+  for (const id of ["spatial-render", "now-render"]) $(id).addEventListener("change", () => send("chain_set", { stage: "spatial", algorithm: $(id).value }));
+  $("spatial-character").addEventListener("change", () => spatialParam("character", Number($("spatial-character").value)));
+  $("spatial-all-principal").addEventListener("click", () => {
+    for (const p of (window.aurasyncLastSpeakers || [])) send("set", { speaker: p, changes: { role_kind: "principal" } });
+  });
+}
+
+// -- monitor de audífonos (spec 2026-10-04-headphone-monitor-design.md) ---------------
+// Qué se oye, en qué salida y a qué nivel; y lo que PipeWire hizo de verdad (se comprueba con
+// pw-dump después de abrir: un destino pedido no es un destino logrado).
+
+function monitorStateText(m) {
+  const name = (node) => ((m.candidates || []).find((c) => c.node === node) || {}).description || node;
+  if (m.state === "off") return "Apagado.";
+  if (m.state === "waiting") return `Elegido ${name(m.target)}: se enciende al reproducir.`;
+  if (m.state === "opening") return "Abriendo…";
+  if (m.state === "failed") return `No se pudo: ${m.error}`;
+  if (!m.reached) return `PipeWire lo mandó a ${m.routed_to ? name(m.routed_to) : "ninguna salida"}, no a ${name(m.target)}.`;
+  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}`;
+}
+
+function renderMonitor(s) {
+  const m = s.monitor;
+  if (!m) return;
+  const select = $("monitor-target");
+  const key = JSON.stringify([m.candidates, m.target]);
+  if (select.dataset.key !== key && !isEditing(select)) {
+    select.dataset.key = key;
+    const known = (m.candidates || []).some((c) => c.node === m.target);
+    select.replaceChildren(
+      el("option", { value: "", text: "elegí una salida" }),
+      ...(m.candidates || []).map((c) => el("option", { value: c.node, text: c.description })),
+      ...(m.target && !known ? [el("option", { value: m.target, text: `${m.target} (no está)` })] : []),
+    );
+    select.value = m.target || "";
+  }
+  if (!isEditing($("monitor-mode"))) $("monitor-mode").value = m.mode;
+  if (!isEditing($("monitor-gain"))) $("monitor-gain").value = String(m.gain_db);
+  $("monitor-gain-value").textContent = `${Math.round(Number($("monitor-gain").value))} dB`;
+  const state = $("monitor-state");
+  state.textContent = monitorStateText(m);
+  state.dataset.state = m.state === "on" && !m.reached ? "elsewhere" : m.state;
+  state.classList.toggle("warn", state.dataset.state === "failed" || state.dataset.state === "elsewhere");
+}
+
+function sendMonitor() {
+  const mode = $("monitor-mode").value;
+  const target = $("monitor-target").value || null;
+  if (mode !== "off" && !target) {
+    $("monitor-state").textContent = "Elegí una salida primero.";
+    return;
+  }
+  sendFrom($("monitor-state"), "monitor_set", { mode, target, gain_db: Number($("monitor-gain").value) });
+}
+
+function setupMonitor() {
+  $("monitor-mode").addEventListener("change", sendMonitor);
+  $("monitor-target").addEventListener("change", () => { if ($("monitor-mode").value !== "off") sendMonitor(); });
+  $("monitor-gain").addEventListener("input", () => { $("monitor-gain-value").textContent = `${$("monitor-gain").value} dB`; });
+  $("monitor-gain").addEventListener("change", () => { if ($("monitor-mode").value !== "off") sendMonitor(); });
 }
 
 document.addEventListener("DOMContentLoaded", setup);

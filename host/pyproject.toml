@@ -99,7 +99,8 @@ css = "tailwindcss -i src/aurasync/panel/tailwind.input.css -o src/aurasync/pane
 # `pw-dump`, `pw-play` y `pw-record` se invocan por nombre y no por ruta absoluta: viven en
 # PATH y su ubicación cambia entre distribuciones. Fijarla rompería la portabilidad sin
 # ganar nada, porque el usuario ya controla su propio PATH.
-"src/aurasync/sonido.py" = ["S607"]
+# monitor.py lanza pw-play y pw-cli de la misma forma.
+"src/aurasync/{sonido,monitor}.py" = ["S607"]
 # El contrato del servicio de control (spec 2026-09-29): `ContractError(code, message)` lleva
 # un código estable como primer argumento y el mensaje es para quien llama, no un texto que
 # convenga repetir en una variable. EM y TRY003 piden lo contrario en cada `raise`.

@@ -18,7 +18,9 @@ interface PairRequestView {
 interface PairStatus {
   requests: PairRequestView[];
   window: { open: boolean; remaining_s: number };
-  code: { active: boolean; code: string | null; expires_in_s: number };
+  /** `connection_code`: the PWA's single code (address + this code + the root's fingerprint), or
+   * null without HTTPS or without an IPv4 address on the network (connection_code.py). */
+  code: { active: boolean; code: string | null; expires_in_s: number; connection_code?: string | null };
 }
 
 interface ClientView {
@@ -226,12 +228,24 @@ export function AccessAdmin({ visible, selfId }: { visible: () => boolean; selfI
           Código de emparejamiento
         </h3>
         {status?.code.active ? (
-          <p class="text-sm">
-            <strong class="num text-2xl tracking-widest" data-pair-code="1">
-              {status.code.code}
-            </strong>{" "}
-            <span class="muted small">vence en {Math.round(status.code.expires_in_s)} s · sirve una vez</span>
-          </p>
+          <>
+            {status.code.connection_code && (
+              <p class="text-sm">
+                <span class="muted small">Código de conexión (escribilo en la app, en «Agregar equipo»):</span>
+                <br />
+                <strong class="num text-2xl tracking-widest" data-connection-code="1">
+                  {status.code.connection_code}
+                </strong>
+              </p>
+            )}
+            <p class="text-sm">
+              <span class="muted small">{status.code.connection_code ? "O solo el código, junto con la dirección: " : ""}</span>
+              <strong class="num text-2xl tracking-widest" data-pair-code="1">
+                {status.code.code}
+              </strong>{" "}
+              <span class="muted small">vence en {Math.round(status.code.expires_in_s)} s · sirve una vez</span>
+            </p>
+          </>
         ) : (
           <p class="muted small">Con un código, el otro dispositivo queda aprobado al escribirlo, sin pasar por aquí.</p>
         )}

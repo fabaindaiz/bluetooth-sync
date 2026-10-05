@@ -17,9 +17,19 @@ import {
   spacedFingerprint,
 } from "../transport.ts";
 import { AccessAdmin, SCOPE_LABELS } from "./AccessAdmin.tsx";
+import { decodeCode } from "./code.ts";
 import { type Link, ago, parseLink } from "./link.ts";
+import { QrScan } from "./QrScan.tsx";
 
 export const POLL_MS = 1500;
+
+/** Whether the device's root is the one a QR or a connection code named: the whole SHA-256 (a QR)
+ * or its first digits (a code). null when nothing was named. */
+export function fingerprintMatches(root: string, fp: string): boolean | null {
+  if (!fp) return null;
+  const full = compactFingerprint(root);
+  return fp.length === 64 ? full === fp : full.startsWith(fp);
+}
 
 type Add =
   | { phase: "form"; address: string; fp: string; error?: string }
@@ -105,6 +115,9 @@ export function ConnectScreen({ initial, link, start }: Props) {
   const [pairName, setPairName] = useState(browserName());
   const [pairScope, setPairScope] = useState("control");
   const [pairCode, setPairCode] = useState("");
+  /** The pairing code a connection code carried: once the device is found and is the right one,
+   * access is asked with it at once (one code, no more steps). */
+  const pendingCode = useRef<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const savedRef = useRef(saved);
   savedRef.current = saved;
@@ -225,9 +238,10 @@ export function ConnectScreen({ initial, link, start }: Props) {
     };
   }, [add?.phase, add?.phase === "waiting" ? add.id : ""]);
 
-  const ask = async (found: Extract<Add, { phase: "found" }>): Promise<void> => {
+  const ask = async (found: Extract<Add, { phase: "found" }>, code?: string): Promise<void> => {
     const body: { name: string; scope: string; code?: string } = { name: pairName.trim() || browserName(), scope: pairScope };
-    if (pairCode.trim()) body.code = pairCode.trim();
+    const given = (code ?? pairCode).trim();
+    if (given) body.code = given;
     const answer = await pairRequest(baseOf(found.address), body);
     if (!answer.ok) {
       const error = answer.status === 429
@@ -237,6 +251,42 @@ export function ConnectScreen({ initial, link, start }: Props) {
       return;
     }
     setAdd({ phase: "waiting", address: found.address, fp: found.fp, hello: found.hello, id: answer.result.id, check: answer.result.check, scope: body.scope, name: body.name });
+  };
+
+  // A connection code: the device answered and is the one the code named → ask at once.
+  useEffect(() => {
+    if (add?.phase !== "found" || pendingCode.current === null) return;
+    const code = pendingCode.current;
+    pendingCode.current = null;
+    const known = savedRef.current.devices.some((d) => d.id === add.hello.id && d.token);
+    if (!known && fingerprintMatches(add.hello.tls.root_sha256 ?? "", add.fp) === true) void ask(add, code);
+  }, [add?.phase]);
+
+  /** What the address field, or the QR scanner, was given: a connection code, a QR's link or an address. */
+  const take = (text: string): void => {
+    const decoded = decodeCode(text);
+    if (decoded) {
+      pendingCode.current = decoded.pairing;
+      setPairCode(decoded.pairing);
+      setAdd({ phase: "checking", address: decoded.address, fp: decoded.fpPrefix });
+      return;
+    }
+    let link: Link | null = null;
+    try {
+      link = parseLink(new URL(text).hash);
+    } catch {
+      link = null;
+    }
+    if (link) {
+      setAdd({ phase: "checking", address: link.address, fp: link.fp });
+      return;
+    }
+    const address = normalizeAddress(text);
+    if (!address) {
+      setAdd({ phase: "form", address: text, fp: "", error: "Escribí el código de conexión (como 341C-2J9K-XRCG-B) o una dirección como aurasync.local:8443." });
+      return;
+    }
+    setAdd({ phase: "checking", address, fp: add?.address === address ? add.fp : "" });
   };
 
   const closable = Boolean(active?.token) && runtime.api !== null;
@@ -368,37 +418,40 @@ export function ConnectScreen({ initial, link, start }: Props) {
             onSubmit={(e) => {
               e.preventDefault();
               const input = (e.currentTarget as HTMLFormElement).elements.namedItem("address") as HTMLInputElement;
-              const address = normalizeAddress(input.value);
-              if (!address) {
-                setAdd({ phase: "form", address: input.value, fp: "", error: "Escribí una dirección como aurasync.local:8443 o IP:puerto." });
-                return;
-              }
-              setAdd({ phase: "checking", address, fp: add?.address === address ? add.fp : "" });
+              take(input.value);
             }}
           >
             <label class="field min-w-48 flex-1">
-              <span>Dirección del equipo</span>
+              <span>Código de conexión o dirección</span>
               <input
                 name="address"
                 type="text"
-                inputMode="url"
                 autoComplete="off"
-                autoCapitalize="off"
+                autoCapitalize="characters"
                 spellcheck={false}
-                placeholder="aurasync.local:8443"
+                placeholder="341C-2J9K-XRCG-B"
                 class="input"
-                defaultValue={add?.address ?? ""}
+                defaultValue={add?.phase === "form" ? add.address : ""}
                 key={add?.address ?? ""}
                 aria-describedby="add-hint"
               />
             </label>
             <button type="submit" class="btn btn-primary">
-              Buscar
+              Conectar
             </button>
+            <QrScan onResult={take} />
           </form>
           <p id="add-hint" class="muted small mt-1">
-            O IP:puerto; sin puerto se usa el 8443 (HTTPS). También sirve escanear con la cámara el código QR de
-            «Conectar teléfono» en el panel del equipo.
+            El código está en el panel del equipo, en «Conectar teléfono» → «Generar código»: con él se busca el equipo,
+            se comprueba que sea el correcto y se empareja de una vez. O escaneá su QR. Si cambió la red, también sirve
+            la dirección (IP:puerto; sin puerto, el 8443).
+          </p>
+          <p class="muted small mt-2">
+            ¿Sin equipo a mano?{" "}
+            <button type="button" class="link-btn" data-demo-open="1" onClick={() => location.assign(`${location.pathname}?demo`)}>
+              Probar el panel en modo demo
+            </button>{" "}
+            (un ejemplo con tres parlantes; no se conecta a nada).
           </p>
 
           <div class="mt-3" role="status" aria-live="polite">
@@ -477,7 +530,8 @@ interface FoundProps {
 function FoundCard({ add, saved, pairName, setPairName, pairScope, setPairScope, pairCode, setPairCode, onAsk, onUse }: FoundProps) {
   const hello = add.hello;
   const root = hello.tls.root_sha256 ?? "";
-  const matches = add.fp ? compactFingerprint(root) === add.fp : null;
+  const matches = fingerprintMatches(root, add.fp);
+  const named = add.fp.length === 64 ? "del código QR" : "del código de conexión";
   const known = saved.devices.find((d) => d.id === hello.id && d.token);
   return (
     <div class="device-card flex-col items-stretch" data-found={hello.id}>
@@ -491,11 +545,11 @@ function FoundCard({ add, saved, pairName, setPairName, pairScope, setPairScope,
         <div class="small mt-1">
           <Fingerprint fp={root} label="Huella de la raíz:" />
         </div>
-        {matches === true && <p class="small mt-1 text-emerald-700 dark:text-emerald-300" data-fp-match="1">Coincide con la del código QR.</p>}
+        {matches === true && <p class="small mt-1 text-emerald-700 dark:text-emerald-300" data-fp-match="1">Coincide con la {named}.</p>}
         {matches === false && (
           <p class="callout" role="alert" data-fp-match="0">
-            <b>No coincide con la huella del código QR:</b> en esa dirección contesta otro equipo. No lo emparejes; revisá
-            la dirección.
+            <b>No coincide con la huella {named}:</b> en esa dirección contesta otro equipo. No lo emparejes; revisá
+            la dirección o generá un código nuevo.
           </p>
         )}
       </div>

@@ -75,6 +75,9 @@ class Parlante:
     """Qué parlante es (`dsp/profiles.py`: "go4", "charge6", "generic"), lo dice la persona.
     La ecualización confía en la banda del fabricante antes que en la del micrófono.
     `None`: se deduce del nombre si lo dice ("JBL Go 4 …"), y si no, genérico."""
+    role_kind: str = "principal"
+    """`principal` (the direct sound, placed by its angle) or `ambient` (full-spectrum ambience, no
+    direction): spec 2026-10-04, d-7c8794-48ae2c. Only the principals make the `auto` ring."""
 
     @property
     def ubicado(self) -> bool:

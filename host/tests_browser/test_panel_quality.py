@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import platform
 import re
 from pathlib import Path
 
@@ -428,8 +429,28 @@ def test_visible_numbers_use_a_decimal_comma(page: Page, svc: Running):
 # Cortes; +0.2: the A/B's "Igualar la sonoridad"), and the seventh, "Afinar la cadena", brings
 # the totals to 31.4 and 13.7 (docs/research/10-panel-de-control.md §5). The guard holds these;
 # a change that has to raise them says so here.
-MAX_COST = {"teléfono": 31.4, "PC": 13.7}
-MAX_COST_SIX = {"teléfono": 26.1, "PC": 10.0}
+#
+# Per platform (2026-10-04): those numbers are the Mac's. On Linux (PC-Ryzen5, the same Chromium
+# headless) the same code measures more, by its fonts: `main` at 489fc8a gives 32.0 and 13.6 (six:
+# 26.7 and 10.0). Then +0.4 on both for the "Modo espacial" stage in Cadena (spec 2026-10-04): a
+# stage more between the ambience and the decorrelation, which "Montar la sala" scrolls past
+# (its texts were cut down to a line each to keep it at that).
+_SPATIAL_STAGE = 0.4
+# And +0.3 on the phone for two explanations the usability flows asked for (probes/18-usabilidad,
+# 2026-10-04): the A/B says why it cannot start, and Sala says a speaker has no place and offers
+# «Automático». Both are text that pushes what follows a little.
+_USABILITY_HINTS = 0.3
+MAX_COST_BY_PLATFORM = {
+    "Darwin": (
+        {"teléfono": 31.4 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 13.7 + _SPATIAL_STAGE},
+        {"teléfono": 26.1 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 10.0 + _SPATIAL_STAGE},
+    ),
+    "Linux": (
+        {"teléfono": 32.0 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 13.6 + _SPATIAL_STAGE},
+        {"teléfono": 26.7 + _SPATIAL_STAGE + _USABILITY_HINTS, "PC": 10.0 + _SPATIAL_STAGE},
+    ),
+}
+MAX_COST, MAX_COST_SIX = MAX_COST_BY_PLATFORM.get(platform.system(), MAX_COST_BY_PLATFORM["Darwin"])
 
 
 def test_the_navigation_cost_of_the_tabs_does_not_grow(browser: Browser):
@@ -440,9 +461,9 @@ def test_the_navigation_cost_of_the_tabs_does_not_grow(browser: Browser):
     results = medir.run(["pestanas"], medir.VIEWPORTS, browser=browser)
     totals = {vp: by["pestanas"]["total"] for vp, by in results.items()}
     for vp, limit in MAX_COST.items():
-        assert totals[vp] <= limit, (vp, totals[vp], results[vp]["pestanas"]["escenarios"])
+        assert totals[vp] <= round(limit, 1), (vp, totals[vp], results[vp]["pestanas"]["escenarios"])
         six = results[vp]["pestanas"]["total_seis"]
-        assert six <= MAX_COST_SIX[vp], (vp, six, results[vp]["pestanas"]["escenarios"])
+        assert six <= round(MAX_COST_SIX[vp], 1), (vp, six, results[vp]["pestanas"]["escenarios"])
 
 
 # -- 8. sync for the listener -------------------------------------------------------------------

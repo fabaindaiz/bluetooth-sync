@@ -100,26 +100,25 @@ def test_applying_a_calibration_can_be_undone(page: Page, svc: Running):
     assert svc.state()["recalibration"]["active"]
 
 
-def test_clearing_the_eq_is_heard_at_once_and_done_when_the_notice_ends(page: Page, svc: Running):
+def test_clearing_the_eq_is_done_at_once_and_undo_writes_the_curves_back(page: Page, svc: Running):
+    """Since `set` writes `eq_db` (research/10 §7.1, 2026-10-04): no deferred order any more."""
     start(page)
     calibrate(page)
     page.locator("#eq-apply").click()
     expect(page.locator("#eq-reset")).to_be_enabled(timeout=5000)
     curves = {s["name"]: s["eq_db"] for s in svc.state()["speakers"]}
     assert any(curves.values())
-    # Undo: the EQ comes back on, with its curves.
     page.locator("#eq-reset").click()
     expect(page.locator("#undo")).to_contain_text("Ecualización quitada")
-    assert svc.state()["global"]["eq_active"] is False
+    # Done at once: the curves are gone while the notice is still up.
+    assert wait_until(lambda: all(s["eq_db"] is None for s in svc.state()["speakers"]))
     undo(page)
-    state = svc.state()
-    assert state["global"]["eq_active"] is True
-    assert {s["name"]: s["eq_db"] for s in state["speakers"]} == curves
-    # Let it run out: the curves go, and the EQ is on again (flat), as eq_reset leaves it.
+    assert wait_until(lambda: {s["name"]: s["eq_db"] for s in svc.state()["speakers"]} == curves)
+    assert svc.state()["global"]["eq_active"] is True
+    # Let it run out: the curves stay gone, and the EQ on (flat), as eq_reset leaves it.
     page.evaluate("window.aurasync.undo.setDuration(1000)")
     page.locator("#eq-reset").click()
     expect(page.locator("#undo")).to_be_hidden(timeout=5000)
-    page.wait_for_timeout(800)
     state = svc.state()
     assert all(s["eq_db"] is None for s in state["speakers"])
     assert state["global"]["eq_active"] is True
@@ -193,8 +192,29 @@ def test_a_quiet_microphone_asks_before_calibrating(page: Page, svc: Running):
         # The shortcut in Escuchar asks the same.
         expect(page.locator("#cal-note")).to_contain_text("Medido", timeout=30000)
         go(page, "Escuchar")
+        # The warning is decided at the click, on the live reading (stream or state). It failed once
+        # under load (2026-10-04, not reproduced): if the reading is not "low" here, this says so
+        # instead of failing as an empty warning.
+        reading = page.evaluate("window.aurasyncMicReading()")
+        assert reading["state"] == "low", reading
         page.locator("#now-calibrate").click()
         expect(page.locator("#now-gate")).to_contain_text("demasiado bajo")
+
+
+def test_a_gap_in_the_reading_does_not_skip_the_warning(page: Page, svc: Running):
+    """After a calibration the loop starts again and for a while there is no reading: the shortcut
+    then calibrated without asking, though the microphone had just been too low (found by the
+    instrumented test above under load, 2026-10-04). The last warning holds for a few seconds."""
+    play_tone(page)
+    go(page, "Calibrar")
+    with quiet_microphone(svc):
+        expect(page.locator("#mic-check")).to_have_attribute("data-state", "low", timeout=5000)
+        svc.command("set", changes={"recalibrate": False})  # the loop stops: no reading any more
+        expect(page.locator("#mic-check")).to_have_attribute("data-state", "none", timeout=5000)
+        go(page, "Escuchar")
+        page.locator("#now-calibrate").click()
+        expect(page.locator("#now-gate")).to_contain_text("demasiado bajo")
+        assert svc.state()["calibration"] is None  # it did not start
 
 
 def test_in_silence_the_check_says_it_cannot_tell_and_does_not_stop_the_calibration(page: Page, svc: Running):

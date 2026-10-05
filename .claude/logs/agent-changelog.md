@@ -7,6 +7,163 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-04 · s-7c8794-a1da58 — Los pendientes sin parlantes y las pruebas de usabilidad por flujos
+
+**Qué.** El usuario: "corrige todos los pendientes que no requieran parlantes, luego pruebas de
+usabilidad basadas en flujos". (1) HTTPS encendido en `PC-Ryzen5` (`tls: true` en `service.json`;
+se revierte con `false`) y el servicio reiniciado con el código nuevo. (2) La descripción duplicada en
+Ajustes (la etiqueta de la sonda usaba `setting-desc`). (3) La guardia del costo de navegación por
+plataforma (Linux mide más que el Mac con el mismo código) y la etapa espacial acortada. (4) El test
+inestable del micrófono bajo, instrumentado (no se reprodujo). (5) `set` escribe `eq_db`: quitar la
+ecualización es inmediato y «Deshacer» devuelve las curvas. (6) `pages.yml` publica en `gh-pages`
+sin forzar. (7) **Código de conexión** (`connection_code.py`, `web/src/connect/code.ts`) y «Escanear QR»
+en la página. (8) **Fuente multicanal** (`multichannel.py`, `motor.procesar(…, canales=…)`). (9) **Medir
+desde aquí** (paso 3 del estimador: `probe_ring.py`, `sync_time`, `probe_reference`, `sync_measure`,
+`web/src/sync/`). (10) Usabilidad: `probes/18-usabilidad/` (capturas y ocho flujos) y seis arreglos
+(research/10 §8), más un error real que destapó el test inestable instrumentado (el aviso del micrófono
+se saltaba en el hueco de lectura tras calibrar). La PWA nueva publicada en `gh-pages` (`0df52fe`).
+Después, a pedido: el **modo demo** de la PWA (`web/src/demo/`, `?demo` o «Probar el panel en modo demo»),
+con un aviso ámbar y el chip DEMO; su estado lo escribe `scripts/demo_fixture.py` sin nada de un equipo
+real (el parlante cercano del simulado tenía una MAC inventada que la PWA habría rechazado: ahora
+`demo-N`). Publicado en `gh-pages` (`a66ffa1`).
+**Archivos.** `host/src/aurasync/{access,connection_code,control,clients,service,session,sources,motor,multichannel,probe_ring,contract_types,chain}.py`,
+`host/src/aurasync/panel/{index.html,app.js,tailwind.input.css,tailwind.css,cadena.js}`,
+`host/web/src/{undo.ts,runtime.ts,main.tsx,connect/*,sync/*}`, `.github/workflows/pages.yml`,
+`host/README.md`, tests (`test_panel_ops`, `test_clients`, `test_connection_code`, `test_motor_direct`,
+`test_multichannel`, `test_session_multichannel`, `test_probe_ring`, `test_sync_from_phone`,
+`test_probe_measure_fixture`; `web/test/{undo,code,measure}.test.ts`; `tests_browser/{test_pwa,
+test_panel_usability,test_panel_quality,test_panel_sync_here,test_panel_flows}`), `probes/17-…`,
+`probes/18-usabilidad/`; docs: research/10 §5 y §8, experimentos/17, roadmap.
+**Por qué.** Lo pidió el usuario, para facilitar el uso al usuario final.
+**Arquitectura.** ✅ Cumple: el anillo de la sonda es trabajo fijo en el motor (0,04 ms por bloque con
+3 parlantes); la fuente multicanal lee bloques de largo fijo; el audio del teléfono no sale de él.
+**Qué salió mal en el camino.** Medir el costo de navegación en `main` mostró que la guardia fallaba
+por la plataforma, no por el código. El modo en la tarjeta Ahora hizo saltar la guardia a 45,1 (empujaba
+Presets): se movió a la barra fija. Dejar partir los nombres en dos líneas agrandó las tarjetas plegadas
+de 8 parlantes (86 px contra 72): se apilan nombre y estado y se vuelve a `truncate`. Una variable local
+`directo` del motor pisaba el argumento nuevo del mismo nombre (se renombró a `canales`). El chequeo de
+privacidad de la PWA atajó los rangos privados escritos como texto en `code.ts` (ahora números). `pkill
+-f "bin/aurasync service"` mató también al shell que lo corría. Un primer servicio arrancó desde la raíz
+del repositorio y no encontró el paquete.
+**Qué quedó pendiente.** Probar en un teléfono real el código de conexión, el QR desde la página y
+«Medir desde aquí» (si Chrome Android y Safari apagan el procesamiento de voz); el límite de una
+medición por segundo por cliente; el A/B ciego entre fuentes (hoy se cambia de fuente a mano); las
+propuestas de research/10 §8 (Entrada fuera de Escuchar, los detalles técnicos de cada parlante, la
+latencia en la cabecera, A/B contra «como está ahora», «Automático» de fábrica con 3 parlantes). Sigue
+fallando `test_interpolation`, igual que en `main`.
+**Desvío del plan.** Ninguno.
+**No verificado.** Nada con parlantes; nada en un teléfono real.
+**Medido.** Flujos en el teléfono: el modo pasó de 1 pestaña y 2,07 pantallas a 0 y 0; los ocho flujos
+terminan sin trabas en teléfono y PC. Costo de navegación (Linux): 32,7 y 14,0 (límites 32,7 y 14,0).
+La medición en el navegador da las de Python dentro de 0,01 ms; de punta a punta, las diferencias de
+llegada dentro de 0,05 ms.
+
+## 2026-10-04 · s-7c8794-c2c756 — Contenedores, monitor de audífonos, frente intacto y las líneas de base del experimento 17
+
+**Qué.** Lo que el usuario aceptó después de la investigación de contexto (research/14), con "primero
+evalúa si es factible" para los contenedores. (1) **Contenedores** (d-7c8794-6b1a15,
+i-7c8794-3b1b92): `host/container/Containerfile` (etapas `runtime`, `dev`, `ml` sobre Arch, como el
+host) y `host/container/aurasync-container`; `system.system_unit` lee el estado de las unidades por
+D-Bus (`busctl`) en vez de `systemctl`. (2) **Monitor de audífonos** no sincronizado
+(d-7c8794-f950ee, i-7c8794-f696d0, spec `2026-10-04-headphone-monitor-design.md`): `monitor.py`,
+`monitor_control.py`, op `monitor_set`, `state.monitor`, tarjeta en Escuchar; `stereo`, `mix` o
+`binaural` con la `filter-chain` SOFA de PipeWire. (3) **Frente intacto** (`render=front` de la etapa
+`spatial`, research/14 §4). (4) **Líneas de base** offline (`probes/17-lineas-de-base/compare.py`,
+FFmpeg `surround`) y el **piloto de pistas** con HTDemucs (`stems.py`, imagen `ml`), en
+experimentos/17 §1.1–1.2. (5) La tarjeta Espacial no consulta con la pestaña oculta.
+**Archivos.** `host/container/`, `host/.containerignore`, `host/src/aurasync/{system,monitor,monitor_control,session,service,snapshot,simulated,control,clients,cli,chain,motor,spatial_docs}.py`,
+`host/src/aurasync/dsp/spatial.py`, `host/src/aurasync/panel/{index.html,app.js}`, `host/pyproject.toml`
+(S607 para monitor.py), tests `test_sonido` (D-Bus), `test_monitor`, `test_monitor_control`,
+`test_session_monitor`, `test_monitor_service`, `test_spatial_front`, `test_motor_spatial`,
+`test_spatial_docs`, `tests_browser/test_panel_monitor`, `test_panel_spatial`; `probes/17-lineas-de-base/`;
+docs: research/08 §6.2.1, experimentos/17, spec del monitor, roadmap, decisiones, `host/README.md`.
+**Por qué.** El usuario: la mayor parte del software, motor incluido, en una imagen, para portar y
+desarrollar sin dependencias; audífonos como salida estéreo o del pipeline junto con los parlantes
+("no hay problema con monitor no sincronizado por ahora"); y explorar lo que research/14 recomendó
+(frente intacto, líneas de base, pistas) "y si genera mejora".
+**Arquitectura.** ✅ Cumple: los demonios siguen en el host; el monitor escribe desde su hilo, sin
+bloquear al motor, y se comprueba con `pw-dump` adónde llegó; el frente intacto es trabajo de largo
+fijo en el mismo renderer.
+**Qué salió mal en el camino.** Dentro del contenedor las tres unidades daban `unknown`: se nombran sin
+`.service` y la ruta de D-Bus no lo agrega como `systemctl` (en el host el chequeo pasó porque se probó
+con el nombre completo); quedó un test. Firefox se colgaba al arrancar en `dev` (92 errores) y hatch no
+creaba su config: el `XDG_CONFIG_HOME` del host existe adentro solo como padre de un montaje, sin
+permiso de escritura; `dev` usa ahora un home propio en un volumen. La lambda que avisa que el monitor
+no abrió capturaba `exc` ya borrado: lo encontró el lint (F821), y el test no porque su `on_engine`
+corría al instante; ahora el test lo difiere como el servicio. `SimulatedObserver` sin `sinks` y un
+`FakeSession` sin `attach_monitor` en los tests viejos: el controlador ya no lo exige con el monitor
+apagado. Un servicio simulado sin fábrica habría abierto PipeWire de verdad para el monitor: ahora el
+simulado usa `SimulatedMonitor` por defecto, con test. La coherencia adelante–atrás de las líneas de
+base la dominaba el bajo compartido: se mide sobre 200 Hz. En la suite de navegador del host fallaban
+`test_a_hidden_tab_closes_the_stream…` (la tarjeta Espacial consultaba con la pestaña oculta: arreglado)
+y `test_a_quiet_microphone_asks…` (pasó en el contenedor; se vuelve a mirar si reaparece).
+**Qué quedó pendiente.** Escuchar el monitor binaural con los 3 Go 4 (¿cada parlante a su lado?; la
+convención de azimut de SOFA es REPORTADA) y contar sus cortes; correr el experimento 12 dentro y fuera
+del contenedor; una **fuente multicanal** en el motor para escuchar FFmpeg y las pistas en el A/B con la
+alineación de cada parlante; `psd` de PipeWire; el piloto de pistas con música real; el A/B del
+experimento 17 con los tres modos y tres posiciones. Siguen fallando, igual que en `main`:
+`test_interpolation` (umbral de tiempo), `test_every_setting_explains_itself`,
+`test_the_navigation_cost_of_the_tabs_does_not_grow` (32,4 contra 31,4) y los de la PWA sin
+`npm run build:pwa`.
+**Desvío del plan.** Las líneas de base y las pistas quedaron offline (lo que sale hacia cada parlante),
+no en el A/B: el motor solo toma estéreo.
+**No verificado.** Nada se escuchó: no había parlantes conectados en la sesión. `FRONT_AMBIENCE_BOOST_DB`
+(+6 dB) es INFERIDO.
+**Medido.** Contenedor: `doctor`, unidades, avahi y la API del servicio simulado funcionan; `pw-play` con
+la misma prioridad que en el host (TS, nice 6); 977/978 unit y 180 de navegador como en el host;
+`runtime` 964 MB, `dev` 3,96 GB. Monitor contra el PipeWire real (silencio, −40 dB): los tres modos
+llegan a la salida analógica, el filtro binaural aparece en 84 ms, `push` ≤ 0,19 ms. Frente intacto:
+reconstruye el estéreo en el par de adelante con error < 1e-9; offline frente 0,99, atrás −7,7 dB,
+coherencia 0,19 (FFmpeg: 0,97, −9,8 dB, 0,91). HTDemucs: 10 s en ~4 s de CPU. Demonios en
+contenedor (research/08 §6.2.2): `btmgmt info` responde sin root solo con `--network host`; el
+veredicto, no en el PC de escritorio, sí como modo equipo dedicado. **La PWA publicada**
+(2026-10-04): rama `gh-pages` (commit huérfano `9525b77`, solo `host/web/dist-pwa` + `.nojekyll`,
+hecho con `git hash-object`/`mktree`/`commit-tree` sin tocar el árbol de trabajo), el mismo método que
+el sitio de thom-music-player; responde en https://fabaindaiz.github.io/bluetooth-sync/ (todos los
+archivos 200, con su tipo). Pendiente: el servicio de `PC-Ryzen5` sigue con `tls: false`, y la PWA
+necesita HTTPS para conectarse; volver a publicar a mano en cada versión, o hacer que `pages.yml`
+empuje a `gh-pages`.
+
+## 2026-10-04 · s-7c8794-58d765 — Modo espacial, disposición auto para N parlantes y parlantes principales o ambientales
+
+**Qué.** Diseñado en conversación (spec `superpowers/specs/2026-10-04-spatial-mode-and-auto-layout-design.md`, decisiones d-7c8794-d67a23, -48ae2c, -be2477,
+roadmap i-7c8794-eb1f78) y construido con "continúa autónomamente": `control.auto_angles`,
+`layout_roles`, `angle_of` y la disposición `auto`; `Parlante.role_kind` (principal o ambiental);
+`dsp/spatial.py` (upmix por índice de paneo y de ambiente, energía conservada, Haas, anillo abierto
+cuando no hay nadie atrás); la etapa `spatial` de la cadena (clásico de fábrica, idéntico bit a bit);
+`spatial_docs.py` y la op `spatial_explain`; la tarjeta Espacial del panel; experimentos/17 con el
+protocolo del A/B (criterio 8 de 10, escrito antes de medir).
+**Archivos.** `host/src/aurasync/{control,config,service,snapshot,chain,motor,spatial_docs,clients,rest}.py`,
+`host/src/aurasync/dsp/spatial.py`, `host/src/aurasync/panel/{index.html,app.js}`,
+`host/web/src/contract.gen.ts`, tests `test_auto_layout`, `test_spatial`, `test_motor_spatial`,
+`test_spatial_docs`, `tests_browser/test_panel_spatial`, `test_chain` (la lista de etapas); docs:
+spec, plan, roadmap, decisiones, experimentos/17.
+**Por qué.** No había disposición para 3; el usuario quería un modo para N, poder elegir parlantes
+principales o ambientales, y una espacialidad notoria: sentía que el estéreo solo a veces le ganaba
+al algoritmo.
+**Arquitectura.** ✅ Cumple: trabajo de largo fijo en el motor; las explicaciones (simulaciones) en
+un hilo aparte; el clásico sin cambios.
+**Qué salió mal en el camino.** Las figuras simuladas mostraron dos defectos antes de los parlantes:
+con dos principales a ±90° una fuente a un lado se filtraba al otro "por atrás" (17,6 dB); el
+carácter casi no movía el ambiente (umbral del extractor). Corregidos con tests vistos fallar. El
+objetivo de costo de 3 ms con 3 parlantes era una suposición: medido 3,1 ms, se fijó en 4 ms. En la
+suite de navegador, explicaciones de servicios ya cerrados seguían calculando y le quitaban el GIL al
+siguiente test; ahora se cachean y se detienen al cerrar. La revisión final en contexto limpio
+encontró, y se corrigieron con un test visto fallar cada uno: intercambiar un rol de adelante con uno
+de atrás no rearmaba el anillo; pasar a espacial o rearmar el anillo hacía clic (490× y 387× la
+segunda diferencia normal) y rearmar sumaba ~38 ms de latencia (ahora el anillo cambia en vivo y un
+render nuevo entra con rampa); en `auto`, volver ambiental a un parlante no recolocaba a los demás;
+el espacial sonaba +1,4 dB (3 principales) a +3,7 dB (2) sobre el clásico (ahora iguala por banda la
+energía de la mezcla clásica de esos parlantes); cambiar el carácter en vivo saltaba el retardo de
+Haas (ahora funde).
+**Qué quedó pendiente.** El A/B con parlantes (experimentos/17). La investigación de mezcladores y
+software espacial abierto que pidió el usuario se lanzó y él la detuvo. DBAP con posiciones.
+**No verificado.** Que el espacial suene mejor: todo es SIMULADO hasta el A/B.
+**Medido.** Simulación en `PC-Ryzen5`: separación espacial > 60 dB contra 22 dB del clásico con 3
+principales; costo ~3,1 ms por bloque (3 parlantes).
+
+---
+
 ## 2026-10-03 · s-7c8794-0136d1 — Microcortes en PC-Ryzen5: el procesamiento descartado y los cortes al log
 
 **Qué.** En `PC-Ryzen5`, con los 3 Go 4, el usuario oyó microcortes "constantes, como 2/s" que

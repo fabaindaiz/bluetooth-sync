@@ -435,7 +435,7 @@ def cmd_service(args) -> int:
             shutil.copy(presets, tmp / "presets.json")
         instalacion, presets = copia, tmp / "presets.json"
         from aurasync.bt_volume import BluetoothVolume
-        from aurasync.simulated import SimulatedRadio, SimulatedVolumes, simulated_log_level
+        from aurasync.simulated import SimulatedMonitor, SimulatedRadio, SimulatedVolumes, simulated_log_level
 
         # El registro de radio y el volumen de los parlantes también se simulan: nada toca el
         # sistema, y los descartes simulados se marcan como tales (`state.radio.simulated`).
@@ -443,6 +443,7 @@ def cmd_service(args) -> int:
         sim_inst = Instalacion.cargar(copia)
         extra = {
             "session_factory": SimulatedSession,
+            "monitor_factory": SimulatedMonitor,
             "observer": SimulatedObserver(sim_inst),
             "simulated": True,
             "log_level": nivel,
@@ -467,6 +468,7 @@ def cmd_service(args) -> int:
         measurements_path=config.measurements_path,
         logs=LogBuffer(),
         config_path=None if args.simular else config_dir() / "service.json",
+        monitor=None if args.simular else config.monitor,
         **extra,
     )
     print(f"instalación: {instalacion}{'' if instalacion.exists() else ' (no existe)'}")

@@ -8,6 +8,7 @@ import { parseLink } from "./connect/link.ts";
 import { type Device, activeDevice, load, save, upsert } from "./devices.ts";
 import { startPwa, statusLine } from "./pwa.ts";
 import { announce, provide, runtime } from "./runtime.ts";
+import { createDemoApi } from "./demo/api.ts";
 import { type AccessEvent, baseOf, createApi } from "./transport.ts";
 
 const SEEN_EVERY_MS = 60_000;
@@ -43,9 +44,49 @@ function start(device: Device): void {
   provide(api, { name: device.name, address: device.address });
 }
 
+/** Whether this page was opened as the demo (`?demo`): the panel with no device (demo/api.ts). */
+export function isDemo(search: string = location.search): boolean {
+  return new URLSearchParams(search).has("demo");
+}
+
+/** The warning while the demo runs: always at the top, with the way out. */
+function demoBanner(): void {
+  const banner = document.createElement("div");
+  banner.className = "demo-banner";
+  banner.setAttribute("role", "alert");
+  banner.dataset["demo"] = "1";
+  const text = document.createElement("span");
+  text.innerHTML =
+    "<b>Modo demo:</b> no hay ningún equipo conectado; nada suena y lo que cambies se pierde al cerrar.";
+  const leave = document.createElement("button");
+  leave.type = "button";
+  leave.className = "btn small-btn";
+  leave.textContent = "Salir de la demo";
+  leave.addEventListener("click", () => location.assign(location.pathname));
+  banner.append(text, leave);
+  document.body.prepend(banner);
+}
+
+function startDemo(): void {
+  demoBanner();
+  const node = document.getElementById("device-open");
+  if (node) {
+    node.hidden = false;
+    node.textContent = "Demo";
+    node.title = "Modo demo: tocá para salir y conectarte a un equipo";
+    node.addEventListener("click", () => location.assign(location.pathname));
+  }
+  provide(createDemoApi(), { name: "Demo", address: "demo" });
+}
+
 export async function bootRemote(): Promise<void> {
   runtime.busy = () => busy(current().state);
   runtime.pwaStatus = () => statusLine();
+  if (isDemo()) {
+    void startPwa(runtime.busy);
+    startDemo();
+    return;
+  }
   // The link of a QR, read before app.js puts its `#v=` in the address.
   const link = parseLink(location.hash);
   if (link) history.replaceState(history.state, "", `${location.pathname}${location.search}`);

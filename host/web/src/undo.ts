@@ -4,17 +4,20 @@
 // - **done at once, undone by restoring** (load a preset, remove a speaker, apply a calibration):
 //   the panel captures the artistic state before (`capture`), does it, and Deshacer sends what
 //   puts it back (`restorePlan`, run by `restore`);
-// - **done at the end** (forget a device, delete a preset, clear the EQ curves): nothing in the
-//   contract brings them back, so the panel shows them done and sends the order when the notice
-//   expires (`commit`); Deshacer just drops it. Leaving the page sends what was waiting.
+// - **done at the end** (forget a device, delete a preset): nothing in the contract brings them
+//   back, so the panel shows them done and sends the order when the notice expires (`commit`);
+//   Deshacer just drops it. Leaving the page sends what was waiting.
+// Clearing the EQ curves is of the first kind since `set` writes `eq_db` (2026-10-04).
 //
 // app.js (a classic script) reaches this through `window.aurasync.undo` (runtime.ts).
 
 export const UNDO_MS = 10_000;
 
-/** What a person chooses per speaker, and what the panel can write back with `set`. Not the EQ
- * curve (`eq_db`): the contract has no way to write it, so clearing it is a deferred action. */
-export const SPEAKER_FIELDS = ["pan", "ambience", "gain_db", "delay_ms", "muted", "kind"] as const;
+/** What a person chooses per speaker, and what the panel can write back with `set`, the EQ curve
+ * (`eq_db`) included. */
+export const SPEAKER_FIELDS = ["pan", "ambience", "gain_db", "delay_ms", "muted", "kind", "eq_db"] as const;
+/** Fields whose null is a value to write back (no EQ curve), not "not set". */
+const NULLABLE = new Set(["eq_db"]);
 /** The same for the whole installation (`set` without a speaker). */
 export const GLOBAL_FIELDS = ["rear_delay_ms", "extract_ambience", "decorrelate", "eq_active"] as const;
 /** The chain's choices a preset does not hold (chain.PRESET_EXCLUDED_STAGES): never restored. */
@@ -53,9 +56,12 @@ export interface ChainLike {
   stages: { id: string; chosen?: Chosen | null }[];
 }
 
-// A null is "not set" (a speaker's `kind` before anyone chose it): `set` cannot write it back.
+// A null is "not set" (a speaker's `kind` before anyone chose it): `set` cannot write it back. Except
+// for the NULLABLE fields, where null means "none" and is written back.
 const pick = (from: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> =>
-  Object.fromEntries(keys.filter((k) => from[k] !== undefined && from[k] !== null).map((k) => [k, from[k]]));
+  Object.fromEntries(
+    keys.filter((k) => from[k] !== undefined && (from[k] !== null || NULLABLE.has(k))).map((k) => [k, from[k]]),
+  );
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 

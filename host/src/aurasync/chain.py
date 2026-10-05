@@ -288,6 +288,113 @@ _AMBIENCE_STAGE = Stage(
     algorithm_apply="live",
 )
 
+_SPATIAL_PARAMS = (
+    Param(
+        "character",
+        "Carácter",
+        "De 0 (ubicación: cada instrumento en su lugar) a 1 (envolvimiento: el ambiente llena la pieza).",
+        "Mueve juntas el arco, el ambiente, su nivel y el retardo de Haas, salvo con «Manual».",
+        "float",
+        0.5,
+        0.0,
+        1.0,
+        0.05,
+    ),
+    Param(
+        "manual",
+        "Manual",
+        "Con esto prendido mandan las cuatro perillas de abajo; apagado, las fija el carácter.",
+        "",
+        "bool",
+        False,
+    ),
+    Param(
+        "arc_deg",
+        "Arco",
+        "Cuánto se abre el estéreo en el anillo: un instrumento a la izquierda del todo va a -arco.",
+        "Con 60° el estéreo queda adelante; con 150° lo de los costados se va atrás.",
+        "float",
+        105.0,
+        30.0,
+        180.0,
+        5.0,
+        "°",
+    ),
+    Param(
+        "ambience",
+        "Ambiente",
+        "Cuánto de lo que parece ambiente se saca del sonido directo.",
+        "",
+        "float",
+        0.5,
+        0.0,
+        1.0,
+        0.05,
+    ),
+    Param(
+        "ambient_level_db",
+        "Nivel del ambiente",
+        "El ambiente frente al directo. La energía total se conserva: es un balance, no volumen.",
+        "",
+        "float",
+        3.0,
+        -6.0,
+        10.0,
+        0.5,
+        "dB",
+    ),
+    Param(
+        "haas_ms",
+        "Retardo de Haas",
+        "Cuánto llega tarde el ambiente: entre 10 y 25 ms suma espacio sin robar la ubicación.",
+        "research/09 §3.",
+        "float",
+        14.0,
+        0.0,
+        30.0,
+        1.0,
+        "ms",
+    ),
+)
+"""The knobs of the spatial renders (`spatial` and `front` share them: dsp/spatial.py)."""
+
+_SPATIAL_STAGE = Stage(
+    "spatial",
+    "Modo espacial",
+    "Cómo se reparte el estéreo entre los parlantes.",
+    "Spec 2026-10-04 (d-7c8794-be2477), dsp/spatial.py. Por cada banda de frecuencia, de qué lado "
+    "del estéreo viene y cuánto es ambiente. El clásico sigue de fábrica hasta que un modo gane el "
+    "A/B ciego 8 de 10.",
+    (
+        Algorithm(
+            "classic",
+            "Clásico",
+            "Una mezcla de L y R por parlante, como hasta ahora.",
+            "Un instrumento suena por todos los parlantes a la vez.",
+        ),
+        Algorithm(
+            "spatial",
+            "Espacial",
+            "Cada instrumento sale de su lado; el ambiente, a los ambientales.",
+            "Upmix por índice de paneo y de ambiente en tiempo-frecuencia (STFT de 2048, la misma "
+            "latencia que el extractor). Conserva la energía de la entrada.",
+            _SPATIAL_PARAMS,
+            cost="~3 ms por bloque con 3 parlantes",
+        ),
+        Algorithm(
+            "front",
+            "Frente intacto",
+            "Adelante, el estéreo tal cual; el resto, solo el ambiente.",
+            "El principio de Logic7 (research/14 §4): nunca peor que el estéreo adelante, y la sala "
+            "alrededor. El ambiente se suma, no se saca del frente. Sin par de adelante (nadie a un "
+            "lado), suena como el espacial. El arco no se usa.",
+            _SPATIAL_PARAMS,
+            cost="~3 ms por bloque con 3 parlantes",
+        ),
+    ),
+    "classic",
+)
+
 _DECORRELATE_STAGE = Stage(
     "decorrelate",
     "Decorrelación",
@@ -861,6 +968,7 @@ _LIMITER_STAGE = Stage(
 
 CHAIN: tuple[Stage, ...] = (
     _AMBIENCE_STAGE,
+    _SPATIAL_STAGE,
     _DECORRELATE_STAGE,
     _DIFFUSE_STAGE,
     _ALIGN_STAGE,

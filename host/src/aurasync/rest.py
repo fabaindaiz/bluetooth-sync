@@ -111,6 +111,8 @@ def route(method: str, path: str, body: Any) -> dict:
             return {**extra, "v": v, "op": "sync_apply"}
         case "GET", ["sync", "explain"]:
             return {"v": v, "op": "sync_explain"}
+        case "GET", ["spatial", "explain"]:
+            return {"v": v, "op": "spatial_explain"}
         case "POST", ["command"]:
             return body
     raise ContractError("not_found", f"no route {method} {path}")

@@ -30,7 +30,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from aurasync import sonido
+from aurasync import monitor, sonido
 from aurasync.sources import list_apps
 
 if TYPE_CHECKING:
@@ -135,16 +135,44 @@ def read_bluez_devices() -> list[dict[str, Any]]:
     return parse_bluez_objects(_bluez_objects())
 
 
+def unit_object_path(unit: str) -> str:
+    """The D-Bus path systemd gives a unit: every byte that is not alphanumeric becomes `_xx`.
+
+    A name without a type is a service, as `systemctl` reads it.
+    """
+    if "." not in unit:
+        unit += ".service"
+    escaped = "".join(c if c.isascii() and c.isalnum() else f"_{ord(c):02x}" for c in unit)
+    return f"/org/freedesktop/systemd1/unit/{escaped}"
+
+
+def parse_busctl_value(text: str) -> str:
+    """`s "active"` → `active`: the value of a `busctl get-property` without its type letter."""
+    _, _, value = text.strip().partition(" ")
+    return value.strip('"')
+
+
 def system_unit(unit: str, *, user: bool) -> dict[str, Any]:
-    base = ["systemctl", "--user"] if user else ["systemctl"]
-    state = _run([*base, "is-active", unit], 2).strip() or "unknown"
-    props = dict(
-        line.split("=", 1)
-        for line in _run([*base, "show", "-p", "MainPID,ActiveEnterTimestampMonotonic", unit], 2).splitlines()
-        if "=" in line
-    )
-    pid = int(props.get("MainPID", "0") or 0) or None
-    since_us = int(props.get("ActiveEnterTimestampMonotonic", "0") or 0)
+    # busctl and not systemctl: `systemctl --user` needs the manager's private socket, which a
+    # container does not see, while the session bus does reach it (docs/research/08 §6.2).
+    bus = "--user" if user else "--system"
+    path = unit_object_path(unit)
+
+    def prop(interface: str, name: str) -> str:
+        cmd = [
+            "busctl",
+            bus,
+            "get-property",
+            "org.freedesktop.systemd1",
+            path,
+            f"org.freedesktop.systemd1.{interface}",
+            name,
+        ]
+        return parse_busctl_value(_run(cmd, 2))
+
+    state = prop("Unit", "ActiveState") or "unknown"
+    pid = int(prop("Service", "MainPID") or 0) or None
+    since_us = int(prop("Unit", "ActiveEnterTimestampMonotonic") or 0)
     uptime = time.clock_gettime(time.CLOCK_MONOTONIC) - since_us / 1e6 if since_us else None
     return {"state": state, "pid": pid, "uptime_s": uptime}
 
@@ -243,6 +271,7 @@ class Observer:
             "microphones": [
                 {"node": e.nodo, "description": e.descripcion} for e in sonido.entradas_audio() if not e.es_monitor
             ],
+            "sinks": monitor.list_sinks(sonido._pw_dump()),  # noqa: SLF001 - the graph's one reader
             "xruns": self._read_xruns(),
             "at": time.time(),
         }

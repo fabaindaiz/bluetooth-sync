@@ -14,9 +14,10 @@ GO4 = ChainContext((("Red", "go4"), ("Blue", "go4")))
 WITH_CHARGE = ChainContext((("Red", "go4"), ("Big", "charge6")))
 
 
-def test_the_stages_are_the_eight_of_the_spec_in_processing_order():
+def test_the_stages_of_the_specs_in_processing_order():
     assert [s.id for s in chain.CHAIN] == [
         "ambience",
+        "spatial",
         "decorrelate",
         "diffuse",
         "align",
@@ -44,6 +45,7 @@ def test_the_defaults_are_todays_sound():
     v = ChainValues()
     assert chain.summary(v) == {
         "ambience": "avendano_jot",
+        "spatial": "classic",
         "decorrelate": "group_delay",
         "diffuse": "off",
         "align": "sinc",

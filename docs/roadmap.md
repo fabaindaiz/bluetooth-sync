@@ -1405,11 +1405,25 @@ en un workspace no está probado); con la E/S de PipeWire, que se compila en cad
 **Las dudas y sus respuestas:** research/12 §5.
 
 ### Panel como PWA en GitHub Pages conectado por red local con HTTPS y token por cliente · i-7c8794-b10884
-**Estado: A medias (2026-10-02): construida y probada en Chromium contra el servicio simulado;
-falta publicarla y probarla en teléfonos.** El transporte con token y ticket, la pantalla de
-conexión y emparejamiento, la administración de clientes, el service worker offline al estilo de
-`thom-music-player` y el workflow de Pages están hechos (75 tests de navegador). **Publicar es
-decisión del usuario:** Settings → Pages → Source: GitHub Actions, y push a `main`. Lo pidió el usuario: un panel reutilizable
+**Estado: A medias (2026-10-04): publicada; falta probarla en teléfonos.** El transporte con token y
+ticket, la pantalla de conexión y emparejamiento, la administración de clientes, el service worker
+offline al estilo de `thom-music-player` y el workflow de Pages están hechos (75 tests de navegador).
+**Publicada el 2026-10-04** en https://fabaindaiz.github.io/bluetooth-sync/ desde la rama
+`gh-pages` (solo el sitio compilado y `.nojekyll`, como thom-music-player); cada versión nueva se
+vuelve a empujar a mano hasta que `pages.yml` lo haga. Para conectarse, el servicio necesita
+`tls: true` en `service.json` (encendido en `PC-Ryzen5` el 2026-10-04). **El ingreso (2026-10-04):**
+un **código de conexión** de 13 a 20 símbolos (`connection_code.py` y `web/src/connect/code.ts`,
+mismos vectores) lleva la IPv4, el puerto si no es 8443, el código de emparejamiento de 6 dígitos y
+20 bits de la huella de la raíz: se escribe una vez y el equipo queda encontrado, comprobado y
+emparejado; «Conectar teléfono» → «Generar código» lo muestra, y la terminal lo imprime. Y un botón
+«Escanear QR» que lee el QR desde la página (`BarcodeDetector`: Chrome; en Safari y Firefox dice que
+se use la cámara del teléfono). La dirección sigue sirviendo en el mismo campo. **Modo demo
+(2026-10-04):** «Probar el panel en modo demo» en la pantalla de conexión, o `?demo` en la dirección,
+abre el panel sin ningún equipo: `web/src/demo/api.ts` contesta como el servicio desde un estado
+capturado del simulado (`web/src/demo/fixture.json`, que escribe `host/scripts/demo_fixture.py` y revisa
+`tests/test_demo_fixture.py` con los mismos patrones de privacidad), guarda en memoria lo que se cambia
+y contesta «En la demo no hay equipo…» a lo que necesita parlantes o micrófono. Un aviso ámbar arriba
+con «Salir de la demo» y el chip DEMO en la barra. Lo pidió el usuario: un panel reutilizable
 que exista sin el dispositivo, se actualice aparte y alivie a la Pi; por ahora siempre en la
 red local. Decisión d-7c8794-37f9bc; investigación en research/13.
 
@@ -1450,6 +1464,54 @@ exactitud desde 7 fuentes simultáneas; el lazo por turnos tarda más en volver 
 **Con qué choca:** con el transporte. Para 8 hacen falta 3–4 adaptadores, 8 Picos, o Auracast
 con un BIG de 8 BIS (research/13 §2.3).
 
+### Modo espacial y disposición auto para N parlantes, con parlantes principales y ambientales · i-7c8794-eb1f78
+**Estado: A medias (2026-10-04). Construido y probado en simulación en `PC-Ryzen5`; falta el A/B con
+parlantes** ([experimentos/17](research/experimentos/17-modo-espacial-con-3-go-4.md)). Spec:
+[superpowers/specs/2026-10-04-spatial-mode-and-auto-layout-design.md](superpowers/specs/2026-10-04-spatial-mode-and-auto-layout-design.md); plan: `docs/superpowers/plans/2026-10-04-spatial-mode-and-auto-layout.md`.
+
+**Qué es:** la disposición `auto` (los principales en ángulos iguales, para cualquier N), el papel de
+cada parlante (principal o ambiental), y un modo de render `spatial` (`dsp/spatial.py`) junto al
+clásico, con sus perillas explicadas (`spatial_docs.py`, op `spatial_explain`) y la tarjeta Espacial.
+
+**Lo medido en simulación:** con 3 principales, una fuente paneada a un lado sale > 60 dB sobre el
+principal más lejano en el espacial, contra 22 dB en el clásico; el carácter lleva el ambiente de ~0 a
+> 10 %; el costo es ~3,1 ms por bloque con 3 parlantes y < 8 ms con 8; el clásico queda idéntico bit a
+bit.
+
+**Lo que falta:** el A/B ciego (experimentos/17, criterio 8 de 10), DBAP con posiciones x, y, y un
+estudio de herramientas abiertas parecidas (se pidió el 2026-10-04 y se detuvo).
+
+### Monitor de audífonos, no sincronizado, junto con los parlantes · i-7c8794-f696d0
+**Estado: A medias (2026-10-04). Construido; probado en simulación y contra el PipeWire real de
+`PC-Ryzen5` sin parlantes**; falta escucharlo con los 3 Go 4 y medir si agrega cortes. Spec:
+[superpowers/specs/2026-10-04-headphone-monitor-design.md](superpowers/specs/2026-10-04-headphone-monitor-design.md)
+(d-7c8794-f950ee).
+
+**Qué es:** una segunda salida del motor a cualquier sink que no sea un parlante (audífonos, la salida
+del PC): `stereo` (la entrada sin procesar), `mix` (los parlantes plegados a I/D por su ángulo) o
+`binaural` (cada parlante como un parlante virtual por el espacializador SOFA de PipeWire, HRTF MIT
+KEMAR). `monitor.py`, `monitor_control.py`, op `monitor_set`, `state.monitor`, la tarjeta "Monitor
+(audífonos)" en Escuchar; la elección se guarda en `service.json`.
+
+**Lo medido (MEDIDO, `PC-Ryzen5`, PipeWire 1.6.9, 2026-10-04, silencio a −40 dB):** los tres modos
+llegan a la salida analógica según `pw-dump` (en binaural, el stream entra al filtro y el filtro sale
+a la salida); el filtro aparece en 84 ms; `push` cuesta ≤ 0,19 ms en el hilo del motor; al cerrar no
+queda ningún nodo.
+
+**Lo que falta:** (1) escucharlo: que el binaural ubique cada parlante a su lado (la convención de
+azimut de SOFA es REPORTADA, de la documentación de PipeWire); (2) con los 3 Go 4 sonando, contar
+los cortes del experimento 12 con y sin monitor, y con audífonos Bluetooth en la misma radio
+(INFERIDO que puede empeorarlos).
+
+### El software en contenedores · i-7c8794-3b1b92
+**Estado: A medias (2026-10-04).** Construido y verificado en `PC-Ryzen5` (d-7c8794-6b1a15;
+[08](research/08-integracion-y-plan.md) §6.2.1): imágenes `runtime` y `dev` (la `ml` está escrita y
+se construye con el piloto de pistas), `host/container/aurasync-container`, y el estado de los
+servicios por D-Bus en vez de `systemctl`.
+
+**Lo que falta:** correr el experimento 12 (cortes) con el servicio en el contenedor y en el host,
+con los parlantes; hasta entonces las pruebas con audio siguen en el host. La imagen para la Pi.
+
 ### Estimador base de sincronía alimentado por mediciones continuas y puntuales de varios micrófonos · i-7c8794-737d4e
 **Estado: A medias (2026-10-03). Pasos 1 y 2 hechos en simulación, en `PC-Ryzen5`**; los pasos 3 a 5
 y las pruebas con parlantes, pendientes. Spec: [superpowers/specs/2026-10-03-sync-estimator-design.md](superpowers/specs/2026-10-03-sync-estimator-design.md); plan de los pasos 1–2:
@@ -1469,10 +1531,22 @@ panel. Criterios en dos semillas y con ventana de 10 y 20 min: deriva de 22 ppm 
 < 0,25 ms de error; un salto de 6,52 ms creído con la segunda medición; micrófonos que oyen 2 de 3
 combinados; un micrófono con sesgo constante no mueve nada.
 
-**Lo que falta:** paso 3 (la medición puntual en el navegador: HTTPS, reloj, referencia de la sonda,
-el estimador en JS), paso 4 (celulares en continua, micrófono movido), paso 5 (`tracks` y `kalman`
-con su tabla comparativa), la calibración con ruido como objetivo, y las pruebas con parlantes
-(spec §7).
+**Paso 3 hecho (2026-10-04, SIMULADO):** «Medir desde aquí» en la tarjeta Sincronía sugerida.
+`probe_ring.py` guarda la sonda que salió a cada parlante con su hora (anillo fijo de 30 s); las
+operaciones `sync_time`, `probe_reference` y `sync_measure`; `web/src/sync/` mide en el navegador
+(`fft.ts`, `measure.ts`: el mismo `probe_measure.measure`, igual a Python dentro de 0,01 ms en
+`web/test/measure.test.ts` con la fixture que escribe `tests/test_probe_measure_fixture.py`) y
+`fromHere.ts` hace el flujo (reloj por 8 idas y vueltas, 8 s de micrófono sin procesamiento de voz a
+48 kHz por un AudioWorklet, referencia, medición, envío). De punta a punta en el navegador, con la
+grabación hecha de la sonda retrasada 20, 27,5 y 24 ms, el servidor recibe esas diferencias dentro de
+0,05 ms (`tests_browser/test_panel_sync_here.py`). El anillo cuesta 0,04 ms por bloque en el hilo
+del motor con 3 parlantes y 0,10 ms con 8 (MEDIDO, `PC-Ryzen5`, mediana de 500 bloques de 4096), y
+ocupa 17 MB (46 MB con 8).
+
+**Lo que falta:** probar el micrófono real del teléfono (Chrome Android y Safari: si respetan apagar
+el procesamiento de voz), el límite de una medición por segundo por cliente, paso 4 (celulares en
+continua, micrófono movido), paso 5 (`tracks` y `kalman` con su tabla comparativa), la calibración con
+ruido como objetivo, y las pruebas con parlantes (spec §7).
 
 ### Calibrar el retardo sin un micrófono central · i-7c8794-4745b4
 **Estado:** Planificado. Pedido del usuario el 2026-09-29. El detalle técnico, con el estado de

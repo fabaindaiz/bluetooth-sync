@@ -29,7 +29,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from aurasync import control
+from aurasync import connection_code, control
 from aurasync.clients import ClientStore, Principal, allows, required_scope
 from aurasync.control import ContractError
 from aurasync.pairing import PairingDesk
@@ -143,14 +143,17 @@ class Access:
         origins: Iterable[str] = DEFAULT_ORIGINS,
         window_s: float = 600.0,
         log: Callable[[str], None] = lambda _: None,
-        show_code: Callable[[str, float], None] = lambda *_: None,
+        show_code: Callable[[str, float, str | None], None] = lambda *_: None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.master = master_token.encode()
         self.store = store if store is not None else ClientStore(None)
         self.origins = frozenset(o.rstrip("/") for o in origins)
         self.log = log
-        self.desk = PairingDesk(self.store, window_s=window_s, clock=clock, log=log, show_code=show_code)
+        self._show_code = show_code
+        self.desk = PairingDesk(self.store, window_s=window_s, clock=clock, log=log, show_code=self._shown)
+        self.where: Callable[[], str | None] = lambda: None
+        """This device's address on the local network (`serve` sets it): what a connection code carries."""
         self.limiter = AttemptLimiter(clock)
         self.tickets = StreamTickets(clock)
         self.tls: dict | None = None
@@ -189,12 +192,29 @@ class Access:
             return control.error(command.id, exc.code, exc.message)
         return control.ok(command.id, result)
 
+    def connection_code(self, code: str | None) -> str | None:
+        """The PWA's single code for this pairing code (`connection_code.py`), or None: without
+        HTTPS the PWA cannot reach the device, and only an IPv4 address fits in a code."""
+        host = self.where()
+        if not code or not self.tls or not self.tls.get("root_sha256") or not host:
+            return None
+        try:
+            return connection_code.encode(host, int(self.tls["port"]), code, str(self.tls["root_sha256"]))
+        except ValueError:
+            return None
+
+    def _shown(self, code: str, seconds: float) -> None:
+        self._show_code(code, seconds, self.connection_code(code))
+
     def _dispatch(self, op: str, args: dict) -> dict:
         match op:
             case "pair_start":
-                return self.desk.start_code(args.get("seconds", 120.0))
+                started = self.desk.start_code(args.get("seconds", 120.0))
+                return {**started, "connection_code": self.connection_code(started["code"])}
             case "pair_status":
-                return self.desk.status()
+                status = self.desk.status()
+                code = status["code"]
+                return {**status, "code": {**code, "connection_code": self.connection_code(code["code"])}}
             case "pair_approve":
                 return self.desk.approve(args["request"], args.get("scope"))
             case "pair_deny":
