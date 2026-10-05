@@ -33,6 +33,8 @@ experimento—. Los otros dispositivos se suman después, por iteraciones. Cada 
    (i-7c8794-10ccb4).
 3. **Escuchar la cadena tal como quedó**, 20 minutos con la pantalla Cadena y la franja de
    calidad abiertas.
+4. **El rendimiento del motor medido** (i-7c8794-be46cb, pedido del 2026-10-05): un informe que se
+   pueda repetir, en el panel junto a la calidad y la sincronía.
 
 **Etapa 2 · Mejorar el sonido, una cosa por vez** (cada una con su A/B ciego con la
 sonoridad igualada, y se enciende por defecto solo si gana; d-7c8794-d1118c):
@@ -1511,6 +1513,39 @@ servicios por D-Bus en vez de `systemctl`.
 
 **Lo que falta:** correr el experimento 12 (cortes) con el servicio en el contenedor y en el host,
 con los parlantes; hasta entonces las pruebas con audio siguen en el host. La imagen para la Pi.
+
+### Rendimiento del motor medido, con su informe en el panel junto a los demás datos · i-7c8794-be46cb
+**Estado: Planificado.** Pedido del usuario el 2026-10-05, mientras se construían los parlantes
+virtuales.
+
+**Qué es:** medir cuánto le cuesta al motor cada bloque, de forma que el número se pueda repetir.
+Incluye:
+- **los percentiles** p50, p99 y máximo, no solo el promedio;
+- **el costo por etapa** de la cadena;
+- **el margen frente al presupuesto** del bloque;
+- **la CPU del proceso**;
+- **la relación con los cortes** de `cuts.py`.
+
+El informe se muestra **en el panel junto a las métricas de calidad y las mediciones de
+sincronía**, y se guarda con ellas (equipo, versiones, ajustes de la cadena), así un cambio de
+rendimiento se puede comparar entre sesiones y entre equipos.
+
+**Lo que ya existe:**
+- el panel muestra el tiempo medio por bloque, suavizado, y cuántas veces más rápido que el tiempo
+  real procesa el motor (`snapshot._health`: `motor_ms`, `realtime_x`, en Diagnóstico);
+- `probes/18-costo-de-la-cadena/costo.py` mide el costo con todo encendido, pero fuera de línea.
+
+Falta unir las dos cosas en una medición dentro de la sesión, con su informe.
+
+**Antes de diseñarlo:**
+- decidir qué se guarda y dónde (junto a `measurement_save`);
+- decidir cómo se mide sin cargar el hilo del motor: el costo de medir, también medido;
+- **anotar la carga del equipo mientras se mide.** El 2026-10-05, en `HP-O16` (enchufado),
+  `test_interpolation.py::test_it_costs_far_less_than_the_formula` falló de forma intermitente
+  (entre 6,3× y 7,6× contra el 8× que pide) **también sobre `main` sin cambios**: pasó 1 de 5 veces
+  con otros procesos corriendo tests en paralelo (MEDIDO). Al principio se lo atribuí a la batería,
+  y era falso: el adaptador estaba conectado. Un informe de rendimiento que no registra la carga del
+  equipo no se puede comparar entre sesiones, y ese test necesita más margen o correr aislado.
 
 ### Estimador base de sincronía alimentado por mediciones continuas y puntuales de varios micrófonos · i-7c8794-737d4e
 **Estado: A medias (2026-10-03). Pasos 1 y 2 hechos en simulación, en `PC-Ryzen5`**; los pasos 3 a 5
