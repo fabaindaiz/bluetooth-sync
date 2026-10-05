@@ -31,8 +31,8 @@ from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 
+from aurasync.cushion import Cushion
 from aurasync.dsp import eq, response
-from aurasync.monitor import Cushion
 from aurasync.radio import MONITOR_TOPIC, SINK_TOPIC, LogLevel, RadioMonitor
 from aurasync.session import AudioSession
 from aurasync.sources import probe_signal
@@ -135,6 +135,12 @@ class SimulatedPlayer:
         self._by_sink = {sink: name for name, sink in sinks.items()}
         self._pids = {sink: next(_pids) for sink in sinks.values()}
         self.room = room
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.cerrar()
 
     @property
     def vivos(self) -> list[str]:
@@ -273,6 +279,20 @@ class SimulatedSession(AudioSession):
 
     def _microphone(self, name: str, seconds: float) -> SimulatedMicrophone:  # noqa: ARG002
         return SimulatedMicrophone(self.room, self.options.rate, seconds)
+
+    # A change of which speakers play (request_output): the new real part is a `SimulatedPlayer`
+    # over the new set, in the same room. It is not fed while it waits: the room has one timeline,
+    # and a second writer would play silence into it twice as fast as real time.
+
+    def _new_player(self, nodes: list[str], name: str) -> SimulatedPlayer:  # type: ignore[override]  # noqa: ARG002
+        name_of = {sink: n for n, sink in self._sinks.items() if sink is not None}
+        return SimulatedPlayer({name_of[node]: node for node in nodes}, self.room)
+
+    def _prime(self, change) -> None:
+        pass
+
+    def _feed(self, change, seconds: float | None) -> None:
+        change.stop.wait(seconds)
 
     def _new_source(self) -> SimulatedSource:  # type: ignore[override]
         return SimulatedSource()

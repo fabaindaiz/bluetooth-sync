@@ -133,14 +133,17 @@ Two ops, only with a session running (scope `control`):
 
 1. **Prepare in the background** while everything keeps playing: build the new real part with the
    new set of sinks, prime it with silence, check its routing. In `combinado`, a new combine
-   module with another node name, briefly alongside the old one; in `separado`, only the new
-   `pw-play`.
+   module with another node name, briefly alongside the old one. **In `separado` too, the whole
+   real part is rebuilt over the new set** (amended 2026-10-05 during Task 8: adding a single
+   `pw-play` needs a composite player whose pipe-level accounting and SIGTERM of a full pipe add
+   risk for a non-default mode; the cost is the same 80 + 80 ms fade for every speaker that
+   `combinado` already pays).
 2. **Swap at the bottom of a cut**: `motor.cortar(action)` (the 80 + 80 ms fade presets use). The
    action, on the engine thread, replaces the real part and closes the old one.
 3. If preparation fails (the stream did not reach its sink), nothing changes: the speaker stays
    as it was, and the error goes to the log and to `errors`.
 
-`leave` uses the same path with one sink fewer (in `separado` it is only `soltar`).
+`leave` uses the same path with one sink fewer, in both output modes.
 
 **Sync after a join:** rebuilding the stream can change each speaker's offset (experiment 05: a
 waking A2DP stream comes back with a different offset). If the recalibration loop is on, it
@@ -220,3 +223,19 @@ On real machines, written in `docs/research/experimentos/`:
 
 Until that measurement exists, phase 2 is **not validated with speakers**, said so in the README
 (card `unrunnable-system-moves-the-gate`: `HP-O16` cannot see Bluetooth composition).
+
+## 9. Additions approved on 2026-10-05 (phase 2)
+
+While using phase 1 on `HP-O16` the user asked for two things that belong to the same output side:
+
+- **A controlled cushion for every output, not only the monitor.** The monitor got it first
+  (commit 5efc460: one engine block + one driver quantum, watched every block). For the speakers the
+  same calculation applies, with one constraint: **all speakers get the same cushion, changed together
+  at the bottom of a cut**, or they drift apart — the error `combinado` exists to avoid.
+- **A `direct` render for the speakers, at the same loudness as the processed one.** `direct` is
+  "pure aligned stereo": each speaker plays its side of L/R by its pan (constant power), with no
+  ambience extraction, decorrelation, EQ or effects; alignment delay, per-speaker gain, master volume
+  and the safety limiter stay. Switching render goes through the cut. The loudness match is the same
+  unit the monitor uses (`loudness_match.py`): the speakers' summed short-term loudness relative to the
+  input is held equal to the reference render's (`classic`), corrected slowly, capped at ±12 dB, frozen
+  on silence, cuts and calibrations, with each render's makeup remembered so a switch never jumps.

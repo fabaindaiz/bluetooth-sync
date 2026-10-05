@@ -280,13 +280,26 @@ def test_calibration_without_a_playing_speaker_is_refused(monkeypatch):
 
 
 def test_a_refused_calibration_leaves_the_loop_on(monkeypatch):
+    s, _, _ = open_session(monkeypatch, {"A": "sA", "B": "sB"}, {"sA", "sB"})
+    s.enable_recalibration("mic")
+    with pytest.raises(SessionError):
+        s.start_calibration(5.0, 0.05, None)
+    assert s.loop is not None
+    s.close()
+
+
+def test_losing_every_playing_speaker_turns_the_loop_off_and_calibration_is_refused(monkeypatch):
+    """The loop follows the playing set (Task 8 ruling): with none playing it stays off, and a
+    calibration has no one to measure."""
     s, players, _ = open_session(monkeypatch, {"A": "sA", "B": "sB"}, {"sA", "sB"})
     s.enable_recalibration("mic")
     players[0].alive.clear()
     s.step()
-    with pytest.raises(SessionError):
+    assert s.loop is None
+    with pytest.raises(SessionError) as err:
         s.start_calibration(5.0, 0.05, "mic")
-    assert s.loop is not None
+    assert err.value.code == "conflict"
+    assert s.loop is None
     s.close()
 
 
@@ -496,6 +509,14 @@ def test_snapshot_output_is_null_without_session_and_follows_the_session(served)
     assert (speaker(state, "A")["output"], speaker(state, "V")["output"]) == ("playing", "virtual")
     assert speaker(state, "A")["playing"] is True
     assert speaker(state, "V")["playing"] is False, "playing equals output == 'playing'"
+
+
+def test_snapshot_rejoin_is_null_unless_the_speaker_is_lost(served):
+    svc = served([Parlante("A", "s0"), Parlante("V", None)])
+    assert speaker(_ok(svc, op="state"), "A")["rejoin"] is None
+    _ok(svc, op="start")
+    state = _ok(svc, op="state")
+    assert (speaker(state, "A")["rejoin"], speaker(state, "V")["rejoin"]) == (None, None)
 
 
 def test_avrcp_skips_non_bluetooth(served):

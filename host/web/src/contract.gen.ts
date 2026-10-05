@@ -206,6 +206,7 @@ export interface SpeakerView {
   playing: boolean;
   output: "virtual" | "absent" | "playing" | "lost" | null;
   output_kind: "virtual" | "bluetooth" | "wired";
+  rejoin: "trying" | "gave_up" | null;
   address: string | null;
   battery_pct: number | null;
   codec: string | null;

@@ -74,6 +74,8 @@ ADMIN_OPS = frozenset(
 )
 CONTROL_OPS = frozenset(
     {
+        "speaker_join",
+        "speaker_leave",
         "sync_set",
         "probe_reference",
         "sync_measure",

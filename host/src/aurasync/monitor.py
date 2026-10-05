@@ -24,6 +24,15 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+# The cushion lives in its own module since the speakers use it too (cushion.py); its names stay
+# importable from here for the monitor's callers.
+from aurasync.cushion import (  # noqa: F401 - DRIVER_QUANTUM_FRAMES and MAX_CUSHION_S are re-exported
+    BACKLOG_BLOCKS,
+    DRIVER_QUANTUM_FRAMES,
+    MAX_CUSHION_S,
+    Cushion,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -38,12 +47,6 @@ log = logging.getLogger("aurasync.monitor")
 NO_MOVE = "node.dont-move = true node.dont-reconnect = true node.dont-fallback = true"
 LATENCY_MS = 100
 QUEUE_BLOCKS = 4
-DRIVER_QUANTUM_FRAMES = 2048
-"""The Bluetooth driver's quantum with A2DP (WH-CH520, AAC): 2048 frames, 42.7 ms at 48 kHz, as
-`pw-top` showed on HP-O16 on 2026-10-05 (MEDIDO). `pw-play` asks the pipe for one every cycle."""
-MAX_CUSHION_S = 0.4
-"""Cap of the cushion: more than this is latency the listener hears against the picture."""
-BACKLOG_BLOCKS = 2
 SETTLE_S = 0.8
 """How long after opening the routing is read: PipeWire links a stream after its first data."""
 
@@ -183,51 +186,6 @@ def _write_all(stream: Any, data: bytes) -> None:
     while view:
         n = stream.write(view)
         view = view[n:] if isinstance(n, int) else view[len(view) :]
-
-
-class Cushion:
-    """How much audio the monitor keeps ahead in the pipe of `pw-play`, as a pure decision.
-
-    The engine hands over one block every `block` frames but the driver takes a quantum every
-    cycle: with nothing written ahead each block lands just after the cycle that needed it, and
-    half the cycles are silent (MEDIDO on HP-O16, 2026-10-05). The delay is part of the calculation:
-    the target is one block plus one driver quantum, capped at `MAX_CUSHION_S`. `plan` is asked
-    before every block with the pipe level in frames."""
-
-    def __init__(self, block: int, rate: int) -> None:
-        self.block = block
-        self.rate = rate
-        self.target_frames = min(block + DRIVER_QUANTUM_FRAMES, int(MAX_CUSHION_S * rate))
-        self.refills = 0
-        self.trims = 0
-        self.level_frames: int | None = None
-        self._primed = False
-        """The first level read after the open is the priming: the open-time silence has been
-        draining while the routing was checked, so finding the pipe low then is not a starvation."""
-
-    @property
-    def target_ms(self) -> float:
-        return self.target_frames / self.rate * 1000
-
-    @property
-    def level_ms(self) -> float | None:
-        return None if self.level_frames is None else self.level_frames / self.rate * 1000
-
-    def plan(self, level_frames: int | None) -> tuple[int, bool]:
-        """`(frames of silence to write first, whether to write the block)`."""
-        self.level_frames = level_frames
-        if level_frames is None:
-            return 0, True
-        first, self._primed = not self._primed, True
-        if first and level_frames < DRIVER_QUANTUM_FRAMES:
-            return self.target_frames - level_frames, True
-        if level_frames < DRIVER_QUANTUM_FRAMES:
-            self.refills += 1
-            return self.target_frames - level_frames, True
-        if level_frames > self.target_frames + BACKLOG_BLOCKS * self.block:
-            self.trims += 1
-            return 0, False
-        return 0, True
 
 
 class Writer:

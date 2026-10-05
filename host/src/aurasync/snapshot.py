@@ -78,6 +78,8 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
                     "muted": p.nombre in svc.settings.muted,
                     "output": state,
                     "output_kind": kind,
+                    # A lost speaker: the service keeps trying by itself ("trying") or has stopped ("gave_up").
+                    "rejoin": (("gave_up" if svc.rejoin.gave_up(p.nombre) else "trying") if state == "lost" else None),
                     "playing": state == "playing",
                     # Only a Bluetooth link is observed: a virtual or wired output has no "connected".
                     "connected": (output is not None) if observer.get("at") and bluetooth else None,
@@ -438,9 +440,26 @@ def _health(svc: Service, block_ms: float, lost: list[str]) -> dict[str, Any]:
         "observed_at": svc.observer.view.get("at"),
         "xruns": svc.observer.view.get("xruns", {}) if session is not None else {},
         "pipe_level_ms": round(session.pipe_ms, 1) if getattr(session, "pipe_ms", None) is not None else None,
+        "output_cushion": _output_cushion(session),
         "bt_discovering": bool(svc.observer.view.get("discovering")),
         "cuts": session.cuts.latest() if session is not None and hasattr(session, "cuts") else None,
         "streams_open": svc.streams.get("open", 0),
+    }
+
+
+def _output_cushion(session: Any) -> dict[str, Any] | None:
+    """The speakers' cushion (cushion.SharedCushion): its target, how many times a pipe that was
+    running dry was refilled for every speaker, whether a refill waits for its cut, why one is not
+    being asked (`reason`), and whether it stopped asking (`gave_up`)."""
+    cushion = getattr(getattr(session, "outputs", None), "cushion", None)
+    if cushion is None:
+        return None
+    return {
+        "target_ms": round(cushion.target_ms, 1),
+        "refills": cushion.refills,
+        "pending": cushion.pending,
+        "reason": cushion.reason,
+        "gave_up": cushion.gave_up,
     }
 
 

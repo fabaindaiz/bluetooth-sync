@@ -362,3 +362,8 @@ def test_a_new_code_comes_with_its_connection_code(tmp_path):
 
 def test_adding_a_virtual_speaker_needs_admin():
     assert required_scope("speaker_add_virtual") == "admin"
+
+
+def test_join_and_leave_need_control():
+    assert required_scope("speaker_join") == "control"
+    assert required_scope("speaker_leave") == "control"

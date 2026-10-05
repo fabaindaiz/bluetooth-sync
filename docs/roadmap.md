@@ -35,6 +35,9 @@ experimento—. Los otros dispositivos se suman después, por iteraciones. Cada 
    calidad abiertas.
 4. **El rendimiento del motor medido** (i-7c8794-be46cb, pedido del 2026-10-05): un informe que se
    pueda repetir, en el panel junto a la calidad y la sincronía.
+5. **Antes del próximo release** (pedido del 2026-10-05): el modo simple con antes y después
+   (i-7c8794-0ad844), "Sonando ahora" (i-7c8794-99f87e) y la campaña de A/B de la ecualización
+   (i-7c8794-d9c64a), que se mide con los parlantes en `PC-Ryzen5`.
 
 **Etapa 2 · Mejorar el sonido, una cosa por vez** (cada una con su A/B ciego con la
 sonoridad igualada, y se enciende por defecto solo si gana; d-7c8794-d1118c):
@@ -1515,8 +1518,8 @@ servicios por D-Bus en vez de `systemctl`.
 con los parlantes; hasta entonces las pruebas con audio siguen en el host. La imagen para la Pi.
 
 ### Parlantes virtuales, sesión sin parlantes reales y entrada en caliente · i-7c8794-757041
-**Estado: A medias (2026-10-05). La fase 1 está construida y probada solo con tests; la fase 2 está
-pendiente.** Spec: [superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md](superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md);
+**Estado: A medias (2026-10-05). La fase 1 y las tareas 8 a 10 de la fase 2 están construidas y probadas
+solo con tests y `--simular`, sin validar con parlantes; faltan las tareas 11 y 12 y los experimentos.** Spec: [superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md](superpowers/specs/2026-10-05-virtual-speakers-and-hot-join-design.md);
 plan: `superpowers/plans/2026-10-05-virtual-speakers-and-hot-join.md`. Decisiones: d-7c8794-0e5063
 (el parlante virtual es `sink: null`), d-7c8794-05bdd6 (la sesión vive sin parlantes reales),
 d-7c8794-618666 (el regreso automático).
@@ -1530,18 +1533,100 @@ y que un parlante real entre y salga con la sesión en marcha.
 `output_kind` en el snapshot; el botón «Agregar parlante virtual» y sus estados en el panel; el
 monitor recibe todos los canales. Se validó con `hatch test`, vitest y Playwright contra `--simular`.
 
+**Lo hecho (fase 2, tareas 8 a 10, en `HP-O16`, solo con tests y `--simular`; sin validar con parlantes):**
+entrar y salir en caliente (`speaker_join` / `speaker_leave`, `POST /v1/speakers/{name}/join|leave`),
+con el corte de 80 + 80 ms; el regreso automático de un parlante `lost` (un intento cada 10 s por
+parlante; 3 caídas en 5 minutos y deja de intentar; nunca reconecta el Bluetooth); el lazo de
+recalibración que se reinicia solo sobre el conjunto nuevo; en el panel, **Hacer entrar**, **Sacar** y
+**Reintentar** por parlante (campo `rejoin` del snapshot), el aviso «la alineación puede haber
+cambiado, recalibrá» tras entrar con el lazo apagado, y la calibración que lista a los que quedan
+fuera. Enmienda al spec §5: en `separado` también se reconstruye toda la parte real.
+
 **Lo que falta:**
-1. **Fase 2** (tareas 8 a 10 del plan): entrar y salir en caliente y el regreso automático (un
-   intento cada 10 s por parlante; 3 caídas en 5 minutos y se deja de intentar).
+1. **Tareas 11 y 12 del plan** (pendientes).
 2. **Experimento 18** ([experimentos/18](research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md)),
    en `HP-O16`: bloques en tiempo real con todo virtual, cortes del monitor por minuto y ningún
    `pw-play` hacia un parlante. Necesita que el usuario permita los audífonos WH-CH520 en A2DP.
-3. **Experimento 19**, en `PC-Ryzen5` con los Go 4: apagar y encender un parlante, entrar y salir,
-   y el desfase antes y después medido con micrófono.
+3. **Experimento 19** ([experimentos/19](research/experimentos/19-entrada-en-caliente-con-3-go-4.md)),
+   en `PC-Ryzen5` con los Go 4: apagar y encender un parlante, entrar y salir, el empalme entre el
+   fundido de salida y el de entrada, y el desfase antes y después medido con micrófono. Protocolo
+   listo, sin medir.
 4. Pendientes menores: la PWA publicada rotula un parlante virtual «sin observar» o «perdido» hasta
-   reconstruirla; el lazo de recalibración sigue midiendo un parlante que pasa a `lost` (se arregla
-   en la fase 2); `speaker_add_virtual` repite la elección de rol de `speaker_add`; los colores del
+   reconstruirla; `speaker_add_virtual` repite la elección de rol de `speaker_add`; los colores del
    punto de estado de `virtual` y `absent`.
+
+### Modo simple: controles de lo que se oye, y antes y después · i-7c8794-0ad844
+**Estado: Planificado (pedido del usuario el 2026-10-05; necesita spec).**
+
+**Qué es:**
+- **Un modo simple que se agrega, sin ocultar ni quitar nada.** La vista experta de la cadena queda
+  igual y a un toque. Lo pidió así el usuario, y coincide con la advertencia del rediseño de Sonos de
+  2024: no simplificar quitando funciones (`research/11` §4.2, REPORTADO).
+- **Controles en términos de lo que se oye**, como IRCAM Spat (VERIFICADO en `research/11` §4.2):
+  *Envolvimiento*, *Graves*, *Brillo* e *Intensidad del efecto*. Cada uno mueve varias perillas reales,
+  y la vista experta muestra cuáles movió.
+- **Antes y después.**
+  - Lo audible: pasar al instante de directo a procesado, con la sonoridad igualada. Se apoya en el
+    render `direct` de la tarea 12 de la fase 2 y en `loudness_match.py`.
+  - Lo visible: el espectro de la entrada contra el de cada parlante, y los números (LUFS, PSR).
+  - Así lo hacen las herramientas de especialista (Dirac Live, Audyssey).
+
+**Antes de construirlo:** que las sugerencias de la cadena (i-7c8794-d99df9) se expresen en estos
+mismos controles.
+
+### Sonando ahora (MPRIS) · i-7c8794-99f87e
+**Estado: Planificado (pedido del usuario el 2026-10-05).**
+
+**Qué es:** una tarjeta en el panel con la aplicación, la canción, el artista y la carátula, y los
+controles play/pausa, siguiente y anterior.
+- **Fuente:** MPRIS por el D-Bus de sesión. VERIFICADO en esta sesión en `HP-O16`: `busctl --user`
+  leyó `PlaybackStatus` de Spotify y le mandó `Play`.
+- **Además:** la aplicación que suena hacia el sink `aurasync`, que ya se lee de PipeWire.
+- **Usos:**
+  - que la igualación de volumen distinga una pausa real del silencio de la música;
+  - más adelante, que las sugerencias de la cadena consideren qué está sonando.
+- **Límites:** no hay MPRIS en macOS, ni reproductores en la Raspberry Pi sin escritorio.
+
+### Campaña de A/B ciegos de la ecualización antes del release · i-7c8794-d9c64a
+**Estado: Planificado (pedido del usuario el 2026-10-05: va antes del próximo release).**
+
+**Qué es:** entender **qué mejora y qué empeora la ecualización**, con A/B ciegos con la sonoridad
+igualada (la máquina de A/B y la igualación ya existen), una variable por vez:
+- el EQ medido contra sin EQ;
+- el presupuesto de realce;
+- el techo de agudos sobre 8 kHz (`research/11` §2.1);
+- la curva tipo Harman (+6,6 dB de graves bajo 105 Hz, −2,4 dB de agudos sobre 2,5 kHz; REPORTADO,
+  Olive et al. 2013).
+
+**Dónde:** con los parlantes en `PC-Ryzen5`, porque el EQ sale de la calibración con micrófono de
+cada parlante; los parlantes virtuales de `HP-O16` no tienen respuesta medida. Solo en audífonos se
+puede ensayar el procedimiento, no sacar conclusiones del EQ. Cada resultado es MEDIDO (aciertos
+sobre ensayos) y se repite (CLAUDE.md).
+
+### Sugerencias de ajustes para la cadena · i-7c8794-d99df9
+**Estado: Planificado (fase 2 de i-7c8794-757041; necesita su propia spec antes de construirse).**
+Pedido del usuario el 2026-10-05.
+
+**Qué es:** un modo que **sugiere** valores para las perillas de la cadena, cada uno con su porqué y
+el número que lo sostiene. **Nada cambia solo:** tú aplicas con un botón (por el corte de 80 + 80 ms)
+y puedes deshacer, como en la sincronía sugerida (d-7c8794-2c6f91).
+
+**De dónde salen las sugerencias** (las cuatro fuentes las pidió el usuario):
+1. **Los problemas medidos:** las métricas de calidad y los cortes (limitador trabajando mucho,
+   aplanamiento, saturación, cortes por causa) → qué perilla bajar o cambiar, y por qué.
+2. **La música que suena:** el análisis de la entrada (ancho estéreo, dinámica, cuánto ambiente trae,
+   graves) → cuánto ambiente extraer, la decorrelación, el modo espacial, el limitador.
+3. **La sala y los parlantes:** lo medido con micrófono (respuesta por parlante, niveles, retardos)
+   → EQ, ganancias, crossover y protección de graves. Necesita el micrófono de `PC-Ryzen5`.
+4. **Tus preferencias:** lo que eliges en los A/B ciegos y lo que ajustas a mano → hacia dónde mover
+   las perillas.
+
+**Orden propuesto:** 1 → 2 → 3 → 4. Empieza por lo que ya tiene datos (`quality.py`, `cuts.py`), y
+la 4 necesita historial de A/B. Cada fuente es una spec y un plan.
+
+**Antes de diseñarlo:** que una sugerencia nunca empeore lo medido (cada una dice qué número debería
+mejorar, y después de aplicarla se mide si mejoró); la sonoridad igualada al comparar
+(`loudness_match.py`, d-7c8794-be46cb).
 
 ### Rendimiento del motor medido, con su informe en el panel junto a los demás datos · i-7c8794-be46cb
 **Estado: Planificado.** Pedido del usuario el 2026-10-05, mientras se construían los parlantes

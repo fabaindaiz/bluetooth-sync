@@ -150,6 +150,7 @@ no push in version 1: a client polls `GET /v1/state`.
 | `POST /v1/session/start` (body optional: `{"recalibrate": true}`) | `start` |
 | `POST /v1/session/stop` | `stop` |
 | `PATCH /v1/speakers/{name}` (body = `changes`) | `set` with `speaker` |
+| `POST /v1/speakers/{name}/join` · `POST /v1/speakers/{name}/leave` | `speaker_join` · `speaker_leave` |
 | `PATCH /v1/global` (body = `changes`) | `set` |
 | `GET /v1/presets` | `presets` |
 | `PUT /v1/presets/{name}` · `DELETE /v1/presets/{name}` | `preset_save` · `preset_delete` |
@@ -231,6 +232,8 @@ Sent as raw messages to `POST /v1/command`. All additive to version 1.
 | `microphone_set` | `node` (or `null`) | the microphone for calibration and the loop; kept in `service.json`; a running loop restarts with it |
 | `speaker_add` (`address`) · `speaker_remove` (`speaker`) | | session stopped; `save` writes it |
 | `speaker_add_virtual` (`name`?) | `name` 1–64 characters | scope `admin`, session stopped; adds a speaker with no sink (`sink: null`) that is only computed, never played in the room. Without a name it is "Virtual 1", "Virtual 2"… (the first free); it takes the next free role of the layout, as `speaker_add` does. A name already taken is `conflict`. Remove it with `speaker_remove`; `save` writes it |
+| `speaker_join` (`speaker`) | scope `control`, session running | a real `absent` or `lost` speaker starts playing. The new real part is prepared in the background and swapped in at the bottom of a cut (80 + 80 ms), in both output modes. Errors: `conflict` without a session, for a virtual or already `playing` speaker, or while another change is in progress; `unavailable` ("connect it first") when its sink is not among the outputs; `not_found`. The reply comes when the change is *requested*; a failed preparation leaves the speaker as it was and goes to the log and `state.errors.output`, a success clears it |
+| `speaker_leave` (`speaker`) | scope `control`, session running | a `playing` speaker leaves without stopping the session; it becomes `absent` and is still computed (heard on the monitor). The last playing speaker may leave. `conflict` without a session or when the speaker is not `playing`. A speaker that left never returns by itself |
 | `logs` | `since`, `limit` | the process's log lines after `since`; `gap` says some were lost |
 | `service_start` · `service_stop` · `service_restart` | `name` | `session`, `recalibration`, `source`; the rest are only observed |
 | `ab_start` (`a`, `b`, `match_loudness`?) · `ab_play` (`which`: `a`, `b`, `x`) · `ab_answer` (`x_is`) · `ab_stop` | | blind A/B; X is drawn again after each answer and never shown. Its loudness is measured (see *The A/B and loudness* below) |
@@ -241,8 +244,19 @@ Sent as raw messages to `POST /v1/command`. All additive to version 1.
 `detail`, and the `context` the engine knew then: `loop_measuring`, `bt_discovering`,
 `slow_order`, `last_order`), `faults_10min`, `faults_1min`, `by_kind`, `likely` (a one-line
 reading) and `now` (the clock the events' `t` is on). `health.pipe_level_ms` is the audio
-waiting for the speakers when the engine last wrote. `devices[]` carry `battery_pct` when the
-device reports it.
+waiting for the speakers when the engine last wrote (the lowest pipe in `separado`).
+`health.output_cushion` is the speakers' cushion (`cushion.py`), `null` without a session: one value
+for the whole real part. `target_ms` is one engine block plus one driver quantum (2048 frames),
+capped at 400 ms, as the monitor's; `refills` counts the times a pipe read under a quantum for three
+blocks in a row and the same silence, up to the target, was written to every speaker stream at the
+bottom of a cut (a `fade` in `health.cuts` with that detail); `pending` is true while such a refill
+waits for its cut. A refill is only asked when the silence and the next block fit in the fullest pipe,
+so the write never waits; otherwise `reason` says why not (`"separado: relojes distintos"` when the
+speakers' own pipes drifted apart), and is `null` the rest of the time. At least 30 s pass between two
+of these cuts, and after 3 refills that did not bring the lowest pipe back within a quantum of the
+target in 10 s, `gave_up` turns true and no more are asked in this session (a warning is logged
+once). There is no trim: the pipe's size bounds what waits in it. `devices[]` carry
+`battery_pct` when the device reports it.
 
 The state also carries `speakers[].role/muted/connected/codec/pid`, `services`, `health`,
 `latency`, `meters`, `config`, `calibration`, `source`, `apps`, `devices`, `presets`, `ab`,
@@ -268,6 +282,16 @@ The state also carries `speakers[].role/muted/connected/codec/pid`, `services`, 
   `{"residual_ms": 0.42, "measured_at": "2026-10-02T18:02:11-03:00", "age_s": 12.5, "speakers": ["…"]}`.
   All `null` (and `speakers` empty) until the loop has measured in this session. `age_s` says
   how old it is, so a client does not show a stale number as the present one.
+
+### The automatic return of a lost speaker
+
+Only a speaker that was `playing` in this session and whose stream died (`output: "lost"`) returns
+by itself, when the system observer (every 3 s) sees its sink again: the service runs the same
+`speaker_join` and logs `volvió <name>`. It never calls `connect`: reconnecting Bluetooth stays
+the user's. Brake (d-7c8794-618666): at most one attempt every 10 s per speaker; after 3 drops
+within 5 minutes it stops and the speaker stays `lost` until a `speaker_join` (the panel's
+**Reintentar**). An `absent` speaker (not connected at the start, or taken out with
+`speaker_leave`) and a virtual one never return by themselves.
 
 ### Layouts and roles
 

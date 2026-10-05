@@ -163,3 +163,10 @@ def test_speaker_add_virtual_parses_an_optional_name():
     for bad in ("", "x" * 65, 3):
         with pytest.raises(ContractError):
             control.parse({"v": 1, "op": "speaker_add_virtual", "name": bad})
+
+
+def test_speaker_join_and_leave_need_a_speaker():
+    for op in ("speaker_join", "speaker_leave"):
+        assert control.parse({"v": 1, "op": op, "speaker": "Sala"}).args == {"speaker": "Sala"}
+        with pytest.raises(ContractError):
+            control.parse({"v": 1, "op": op})

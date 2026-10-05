@@ -332,3 +332,22 @@ def test_a_session_starts_with_the_chosen_probe(running):
     _ok(running, op="start")
     options = FakeSession.instances[0].options
     assert (options.probe, options.probe_margin_db) == (True, -30.0)
+
+
+@pytest.mark.parametrize("sink", ["aurasync_salida", "aurasync_salida_b"])
+def test_xruns_of_either_combine_sink_are_the_combined_output(tmp_path, sink):
+    """A speaker change alternates the two combine sinks (session.request_output): an xrun in the
+    `pw-play` feeding either is the combined output's, not an unknown node's."""
+    from types import SimpleNamespace
+
+    from aurasync.cuts import CutLog
+
+    _installation(tmp_path / "inst.json")
+    svc = Service(tmp_path / "inst.json", tmp_path / "p.json", session_factory=FakeSession, log=lambda _: None)
+    svc.session = SimpleNamespace(cuts=CutLog())
+    for at, total in ((1.0, 2), (2.0, 5)):
+        svc.observer = SimpleNamespace(view={"at": at, "xruns": {sink: {"total": total}}})
+        svc._watch_system_cuts()  # noqa: SLF001
+    [event] = [e for e in svc.session.cuts.summary()["events"] if e["kind"] == "xrun"]
+    assert event["where"] == "salida combinada"
+    svc.session.cuts.close()

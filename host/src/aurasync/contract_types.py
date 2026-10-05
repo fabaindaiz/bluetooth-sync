@@ -249,6 +249,8 @@ class SpeakerView(TypedDict):
     # What the session does with it: `null` without a session (`playing` equals `output == "playing"`).
     output: Literal["virtual", "absent", "playing", "lost"] | None
     output_kind: Literal["virtual", "bluetooth", "wired"]
+    # Only while `output == "lost"`: the service retries by itself ("trying") or has given up ("gave_up").
+    rejoin: Literal["trying", "gave_up"] | None
     # Bluetooth only: `null` unless `output_kind == "bluetooth"` (and the link reports it).
     address: str | None
     battery_pct: float | None

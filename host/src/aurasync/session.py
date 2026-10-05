@@ -21,6 +21,7 @@ calibration run on worker threads.
 from __future__ import annotations
 
 import contextlib
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from aurasync import arrival_loop, estimulos, group_calibration, medicion, probe_measure, sincronia, sonido
+from aurasync.cushion import SharedCushion
 from aurasync.cuts import LATE_MS, LOW_MS, CutLog
 from aurasync.dsp import eq, response
 from aurasync.dsp import probe as masked_probe
@@ -48,6 +50,7 @@ if TYPE_CHECKING:
 
     from aurasync.config import Instalacion
     from aurasync.motor import Motor
+    from aurasync.outputs import PlayerLike
 
 
 ROUTING_CHECK_S = 2.0
@@ -79,6 +82,8 @@ PROBE_EVERY_S = 4.0
 """With the probe, a measurement every window: every speaker is measured every 4 s, which
 keeps N x window x drift far under the dead band (experimentos/16 §4.2)."""
 
+
+_log = logging.getLogger("aurasync.session")
 
 OUTPUT_MARGIN_BLOCKS = 2
 """Blocks of audio kept in the pipe beyond what `pw-play` takes per cycle.
@@ -336,8 +341,50 @@ class Calibration:
         }
 
 
+class OutputChange:
+    """One change of which real speakers play, in flight (spec 2026-10-05-virtual-speakers-and-hot-join §5).
+
+    A worker builds the new real part, primes it and checks its routing while the old one keeps
+    playing, then feeds it silence until the engine takes it over at the bottom of a cut. The
+    hand-over is guarded by `feed_lock`: the engine sets `stop` and takes the lock once, and the
+    worker checks `stop` under the lock before every write, so **no silence reaches the new
+    player after the engine's first block** (a dropout in the middle of the music).
+    """
+
+    def __init__(self, playing: set[str], nodes: list[str], name: str, done: Callable[[str | None], None]) -> None:
+        self.playing = set(playing)
+        self.nodes = nodes
+        self.name = name
+        self.done = done
+        self.player: PlayerLike | None = None
+        self.ready = threading.Event()
+        """The new player is built, primed and routed where it was asked: the cut may be asked for."""
+        self.stop = threading.Event()
+        """The worker writes no more (the swap, or the session closing)."""
+        self.over = threading.Event()
+        """The engine swapped it in (`swapped`) or the session gave it up (`cancel_message`)."""
+        self.feed_lock = threading.Lock()
+        self.cut_requested = False
+        self.at_bottom = False
+        """Set by the cut's action, on the engine thread, inside `motor.procesar`."""
+        self.swapped = False
+        self.cancel_message = "the session closed before the speaker change"
+        self.thread: threading.Thread | None = None
+
+    def cancel(self, message: str) -> None:
+        self.cancel_message = message
+        self.stop.set()
+        self.over.set()
+
+
 class AudioSession:
     """Opens the streams and the virtual sink, processes one block per `step`, closes."""
+
+    SWAP_SETTLE_S = 1.0
+    """How long a new player is fed before its routing is repaired: the same second `open` waits
+    after creating the input sink (WirePlumber moves a stream when it takes a default)."""
+    SWAP_CHECK_S = 0.5
+    """And after the repair, before its routing is checked (as `open`)."""
 
     def __init__(
         self,
@@ -352,6 +399,12 @@ class AudioSession:
         self.options = options
         self.log = log
         self.loop: arrival_loop.ArrivalLoop | None = None
+        self._measured: list[str] = []
+        """The speakers the loop measures: the ones playing when it started (or restarted)."""
+        self._loop_wanted = False
+        """The user wants the loop on (`enable_recalibration`), even while fewer than two speakers
+        play and it cannot run: it comes back by itself when two play again (spec §5). Only an
+        explicit `disable_recalibration` clears it, not the session's own restarts."""
         self.last_recalibration: dict[str, Any] | None = None
         self.recalibration_history: list[dict] = []
         """The delay the loop applied to each speaker, after each decision (for the chart)."""
@@ -375,6 +428,15 @@ class AudioSession:
         middle on `time.monotonic`) also goes to the sync estimator (spec 2026-10-03 §4.1)."""
         self._routing_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-ruteo")
         self._routing_future = None
+        self._routing_player: PlayerLike | None = None
+        """The player the routing check in flight reads: its result is only about that one."""
+        self._change: OutputChange | None = None
+        """The change of which speakers play now in flight, if any (`request_output`)."""
+        self._retiring: list[tuple[Any, PlayerLike]] = []
+        """Players swapped out and handed to the routing pool to close, with their futures."""
+        self._output_name = f"{options.sink_name}_salida"
+        """The combine sink's node name last created: a change creates the other one, since the
+        old sink still exists while the new one is prepared."""
         self._last_step_at: float | None = None
         self._input_gap_since: float | None = None
         self._was_fading = False
@@ -391,8 +453,15 @@ class AudioSession:
         self._recal_stack = contextlib.ExitStack()
         self._sinks = {p.nombre: p.sink for p in installation.parlantes}
         self._silence = np.zeros(options.block)
-        self.outputs = OutputSet(self._sinks, Pacer(options.rate, options.block))
+        self.outputs = OutputSet(
+            self._sinks, Pacer(options.rate, options.block), SharedCushion(options.block, options.rate)
+        )
         """Who plays and who is only computed; the only way to the speakers (outputs.py)."""
+        self._cushion_warned = False
+        self._cushion_bottom = False
+        """The cut the speakers' cushion asked for reached its bottom in this step (`_refill`)."""
+        self._fade_detail: str | None = None
+        """What the next intentional cut is for, when the session itself asked for it."""
         self._input: sonido.SinkVirtual | None = None
         self._mic: sonido.MicrofonoContinuo | None = None
         self._cal_mic: sonido.MicrofonoContinuo | None = None
@@ -463,13 +532,7 @@ class AudioSession:
         # plus a margin (`OUTPUT_MARGIN_BLOCKS`). With two blocks (8192 samples) and pw-play asking for 9600,
         # pw-play came up short on every cycle: ~10 xruns per second and badly degraded
         # audio (MEASURED 2026-10-01 with pw-top, experimentos/10 §6).
-        pipe_ms = pipe_size_ms(o.block, o.rate, o.player_latency_ms)
-        if o.output == "combinado":
-            player = sonido.ReproductorCombinado(
-                nodes, o.rate, o.player_latency_ms, tuberia_ms=pipe_ms, nombre=f"{o.sink_name}_salida"
-            )
-        else:
-            player = sonido.Reproductor(nodes, o.rate, o.player_latency_ms, tuberia_ms=pipe_ms)
+        player = self._new_player(nodes, self._output_name)
         with contextlib.ExitStack() as guard:
             guard.enter_context(player)
             self.outputs.attach(player, connected)
@@ -491,6 +554,14 @@ class AudioSession:
             raise SessionError("unavailable", f"the streams did not reach their speakers: {detail}")
         self._after_streams()
 
+    def _new_player(self, nodes: list[str], name: str) -> PlayerLike:
+        """The real part over `nodes` (not yet entered). `name` is the combine sink's node name."""
+        o = self.options
+        pipe_ms = pipe_size_ms(o.block, o.rate, o.player_latency_ms)
+        if o.output == "combinado":
+            return sonido.ReproductorCombinado(nodes, o.rate, o.player_latency_ms, tuberia_ms=pipe_ms, nombre=name)
+        return sonido.Reproductor(nodes, o.rate, o.player_latency_ms, tuberia_ms=pipe_ms)
+
     def _after_streams(self) -> None:
         o = self.options
         self._stack.callback(self._recal_stack.close)
@@ -502,12 +573,25 @@ class AudioSession:
 
     def close(self) -> None:
         """Closes everything in reverse order. Safe to call twice."""
+        change, self._change = self._change, None
+        if change is not None:
+            # Its worker closes the player it built and calls `done` with the reason.
+            change.cancel("the session closed before the speaker change")
+            if change.thread is not None:
+                change.thread.join(timeout=5.0)
         self.attach_monitor(None)
         self._stack.close()
         self.quality.close()
         self.cuts.close()
         self._routing_pool.shutdown(wait=False, cancel_futures=True)
-        self._routing_future = None
+        self._routing_future = self._routing_player = None
+        # A player swapped out whose close never started would keep its streams (and, combined, its
+        # sink) alive: closed here instead. One already closing finishes on the pool's thread.
+        retiring, self._retiring = self._retiring, []
+        for future, player in retiring:
+            if future.cancelled():
+                with contextlib.suppress(Exception):
+                    player.cerrar()
         if self._cal_mic is not None:
             self._cal_mic.cerrar()
         self.outputs.close()
@@ -565,6 +649,13 @@ class AudioSession:
         # Only the playing speakers reach the player; with no real stream alive and nothing
         # coming in, the output set's `Pacer` keeps the loop in real time.
         self.outputs.write(blocks, input_paced=pair is not None)
+        # A change of which speakers play is swapped in here, after the write: the block that ends
+        # at the bottom of its cut went to the old player, which plays out down to zero, and the
+        # new one starts with the fade-in (request_output).
+        player = self.outputs.player
+        self._advance_output_change()
+        # The speakers' cushion is refilled here too, after the block that ends at the bottom.
+        self._refill(swapped=self.outputs.player is not player)
         # The probe as it left the engine, at the time it left (silence while it is off).
         probe = getattr(self.motor, "sonda", None)
         self.probe_ring.write(time.monotonic(), probe.last if probe is not None and probe.active else {})
@@ -591,11 +682,16 @@ class AudioSession:
             rest = "siguen los demás" if self.outputs.playing() else "ninguno suena; la sesión sigue"
             self.log("parlante perdido", motivo=f"sin stream: {', '.join(gone)}; {rest}")
         self.lost = [n for n, state in self.outputs.states().items() if state == "lost"]
+        self._follow_playing_set()
         self._check_routing()
         if self.motor.en_corte:
             self._last_fade = time.monotonic()
             if not self._was_fading:
-                self.cuts.add("fade", None, self.cuts.context.get("last_order") or "")
+                detail, self._fade_detail = self._fade_detail, None
+                self.cuts.add("fade", None, detail or self.cuts.context.get("last_order") or "")
+        else:
+            # A detail asked into a fade already under way (merged into it) is not the next one's.
+            self._fade_detail = None
         self._was_fading = self.motor.en_corte
         self._calibration_step()
         if (
@@ -642,6 +738,7 @@ class AudioSession:
         self.cuts.context["loop_measuring"] = self.loop is not None and measurer is not None and measurer.ocupado
         level = self.outputs.nivel_ms()
         self.pipe_ms = level
+        self._watch_cushion(level)
         if late_ms is not None and late_ms > LATE_MS:
             self.cuts.add("late", "motor", f"{late_ms:.0f} ms tarde", late_ms=round(late_ms))
         if level is None or self.blocks < 3:  # noqa: PLR2004 - the pipe fills during the first blocks
@@ -650,6 +747,59 @@ class AudioSession:
             self.cuts.add("underrun", "salida", "la tubería estaba vacía", level_ms=round(level, 1))
         elif level < LOW_MS:
             self.cuts.add("low", "salida", f"quedaban {level:.0f} ms", level_ms=round(level, 1))
+
+    def _watch_cushion(self, level_ms: float | None) -> None:
+        """The speakers' cushion (cushion.SharedCushion, spec 2026-10-05-virtual-speakers-and-hot-join
+        §9): a pipe that stays nearly empty asks for a cut, and the refill waits for its bottom.
+        Never while a calibration plays its stimulus: the motor does not run then, and silence
+        added under the stimulus would move what the microphone measures."""
+        cushion = self.outputs.cushion
+        if cushion is None:
+            return
+        level = self._frames(level_ms)
+        room = self._room() if level is not None else None
+        calibrating = self.calibration is not None and self.calibration.state == "running"
+        separate = self.options.output == "separado"
+        if cushion.observe(level, room, may_cut=not calibrating, separate=separate):
+            self._fade_detail = "colchón de la salida: la tubería se vaciaba"
+            self.motor.cortar(lambda: setattr(self, "_cushion_bottom", True))
+        if cushion.gave_up and not self._cushion_warned:
+            self._cushion_warned = True
+            message = (
+                f"colchón: dejó de rellenar; {cushion.failed} rellenos no devolvieron la tubería a su nivel "
+                "y no se piden más cortes en esta sesión"
+            )
+            _log.warning("%s", message)
+            self.log("salida", motivo=message)
+
+    def _frames(self, ms: float | None) -> int | None:
+        return None if ms is None else round(ms * self.options.rate / 1000)
+
+    def _room(self) -> int | None:
+        """Room left in the fullest pipe, in whole frames, rounded down: a pad of this size never waits."""
+        ms = self.outputs.espacio_ms()
+        return None if ms is None else int(ms * self.options.rate / 1000)
+
+    def _refill(self, *, swapped: bool) -> None:
+        """At the bottom of the cushion's cut, after its block: the same silence to every speaker
+        stream, so each one is delayed alike and their alignment does not move. If the real part was
+        swapped at this same bottom, the new player was primed by its own worker: nothing to add."""
+        cushion = self.outputs.cushion
+        if not self._cushion_bottom or cushion is None:
+            return
+        self._cushion_bottom = False
+        if swapped:
+            cushion.cancel()
+            return
+        # The room is read now, after the bottom block: the pad must fit without the write waiting.
+        frames = cushion.at_bottom(self._room())
+        if frames:
+            self.outputs.pad(frames)
+            ms = frames / self.options.rate * 1000
+            self.log(
+                "salida",
+                motivo=f"colchón: la tubería se vaciaba; {ms:.0f} ms de silencio a todos los parlantes, en un corte",
+            )
 
     def _watch_input(self, pair) -> None:
         """A short silence from the application while it plays is a gap; a long one is a pause."""
@@ -690,12 +840,18 @@ class AudioSession:
         """
         future = self._routing_future
         if future is not None and future.done():
-            self._routing_future = None
-            try:
-                wrong, existing = future.result()
-            except Exception as exc:  # noqa: BLE001 - a failed check must not stop the audio
-                self.log("ruteo", motivo=f"no se pudo comprobar: {exc!r}")
+            checked = self._routing_player
+            self._routing_future = self._routing_player = None
+            if checked is not self.outputs.player:
+                # The real part was swapped while the check ran (request_output): what it found is
+                # about a player that is gone, and its node names would be read against the new one.
                 wrong, existing = {}, set()
+            else:
+                try:
+                    wrong, existing = future.result()
+                except Exception as exc:  # noqa: BLE001 - a failed check must not stop the audio
+                    self.log("ruteo", motivo=f"no se pudo comprobar: {exc!r}")
+                    wrong, existing = {}, set()
             alive = set(self.outputs.vivos)
             wrong = {asked: real for asked, real in wrong.items() if asked in alive}
             # A stream whose speaker no longer exists cannot be moved back: the speaker was
@@ -708,8 +864,8 @@ class AudioSession:
                     motivo=f"{asked} ya no existe; su stream iba a {wrong[asked] or 'ningún destino'}",
                 )
             movable = {asked: real for asked, real in wrong.items() if asked not in gone}
-            if movable:
-                self._routing_pool.submit(self.outputs.reparar_ruteo)
+            if movable and checked is not None:
+                self._routing_pool.submit(checked.reparar_ruteo)
                 self.routing_repairs += 1
                 for asked, real in movable.items():
                     self.cuts.add("routing", asked, f"había ido a {real or 'ningún destino'}")
@@ -719,9 +875,13 @@ class AudioSession:
         if now < self._next_routing_check or self._routing_future is not None:
             return
         self._next_routing_check = now + ROUTING_CHECK_S
-        if not self.outputs.vivos:
+        player = self.outputs.player
+        if player is None or not self.outputs.vivos:
             return  # no real stream: nothing PipeWire could have moved
-        self._routing_future = self._routing_pool.submit(self._read_routing, self.outputs)
+        # The player is captured now, not read on the worker: a swap in between must not make the
+        # check read one player and its result be applied to another.
+        self._routing_player = player
+        self._routing_future = self._routing_pool.submit(self._read_routing, player)
 
     @staticmethod
     def _read_routing(player) -> tuple[dict[str, str | None], set[str]]:
@@ -729,6 +889,238 @@ class AudioSession:
         wrong = player.mal_ruteados()
         existing = sonido.leer_nombres_de_nodo(sonido._pw_dump()) if wrong else set()  # noqa: SLF001
         return wrong, existing
+
+    # -- changing which speakers play, without stopping (spec 2026-10-05 §5) ------------
+
+    def request_output(self, playing: set[str], done: Callable[[str | None], None]) -> None:
+        """Make exactly `playing` the real speakers that play. Returns at once.
+
+        A worker builds the new real part over their sinks, primes it with silence and checks its
+        routing while the old one keeps playing, then feeds it silence; the next `step` asks the
+        motor for a cut and swaps the players at its bottom (`_swap`). `done(None)` after the swap;
+        `done(message)` if the preparation failed, with nothing changed. One change at a time.
+
+        Both output modes rebuild the whole real part over the new set, and a leave takes the same
+        path with one sink fewer (spec 2026-10-05-virtual-speakers-and-hot-join §5, amended during
+        Task 8): in `separado` too, not only the new `pw-play`.
+        """
+        if self._input is None:
+            raise SessionError("unavailable", "the session is not open")
+        if self._change is not None:
+            raise SessionError("conflict", "a speaker change is already in progress")
+        for name in sorted(playing):
+            if name not in self._sinks:
+                raise SessionError("not_found", f"no speaker {name!r}")
+            if self._sinks[name] is None:
+                raise SessionError("conflict", f"{name} is virtual: it has no output to play on")
+        # Installation order, as at `open`: the combined stream's channels follow it.
+        nodes = [sink for n, sink in self._sinks.items() if n in playing and sink is not None]
+        alternate = f"{self.options.sink_name}_salida"
+        name = f"{alternate}_b" if self._output_name == alternate else alternate
+        change = OutputChange(set(playing), nodes, name, done)
+        change.thread = threading.Thread(
+            target=self._prepare, args=(change,), name="aurasync-output-change", daemon=True
+        )
+        self._change = change
+        change.thread.start()
+
+    def _prepare(self, change: OutputChange) -> None:
+        """On the worker: build, prime and check the new player; feed it until it is swapped in."""
+        error = None
+        try:
+            # A player swapped out earlier may still be closing, and its combine sink still
+            # carries the name this change is about to reuse: it must be gone first.
+            self._wait_retired(change)
+            if change.nodes and not change.over.is_set():
+                change.player = self._new_player(change.nodes, change.name)
+                change.player.__enter__()
+                self._settle(change)
+        except SessionError as exc:
+            error = exc.message
+        except Exception as exc:  # noqa: BLE001 - reported through `done`; the session goes on as it was
+            error = f"the new output could not be opened: {exc!r}"
+        if error is None and not change.over.is_set():
+            change.ready.set()
+            try:
+                self._feed(change, None)
+            except Exception as exc:  # noqa: BLE001 - the swap still comes; `done` must still be called
+                self.log("salida", motivo=f"dejó de alimentar el reproductor nuevo: {exc!r}")
+            change.over.wait()
+        if change.swapped:
+            self._call_done(change, None)
+            return
+        if change.player is not None:
+            with contextlib.suppress(Exception):
+                change.player.cerrar()
+        if self._change is change:
+            self._change = None
+        if error is not None:
+            self.log("salida", motivo=f"no cambió qué parlantes suenan: {error}; todo sigue como estaba")
+        self._call_done(change, error or change.cancel_message)
+
+    def _call_done(self, change: OutputChange, error: str | None) -> None:
+        try:
+            change.done(error)
+        except Exception as exc:  # noqa: BLE001 - the caller's callback must not kill the worker silently
+            self.log("salida", motivo=f"el aviso del cambio de parlantes falló: {exc!r}")
+
+    def _settle(self, change: OutputChange) -> None:
+        """Prime the new player, then repair and check its routing as `open` does (experimentos/09):
+        a stream that did not reach its sink fails the change instead of playing somewhere else."""
+        player = change.player
+        self._prime(change)
+        self._feed(change, self.SWAP_SETTLE_S)
+        if change.over.is_set():
+            return
+        for asked, real in player.reparar_ruteo().items():
+            self.log("ruteo", motivo=f"se desvió a {real or 'ningún destino'}: {asked} — devuelto")
+        self._feed(change, self.SWAP_CHECK_S)
+        if change.over.is_set():
+            return
+        wrong = player.mal_ruteados()
+        if wrong:
+            detail = "; ".join(f"{asked} → {real or 'ningún destino'}" for asked, real in wrong.items())
+            raise SessionError("unavailable", f"the streams did not reach their speakers: {detail}")
+
+    def _prime(self, change: OutputChange) -> None:
+        """Half a second of silence, as `open`: `pw-play` links to its target once it gets data."""
+        o = self.options
+        for _ in range(max(1, int(0.5 * o.rate / o.block))):
+            if not self._feed_one(change):
+                return
+
+    def _feed(self, change: OutputChange, seconds: float | None) -> None:
+        """Silence at the pace of real time for `seconds` (`None`: until `stop`), so the new
+        stream never runs dry while it waits: an A2DP stream that wakes up comes back with
+        another offset (experimentos/05)."""
+        o = self.options
+        pacer = Pacer(o.rate, o.block)
+        ticks = None if seconds is None else int(seconds * o.rate / o.block)
+        k = 0
+        while (ticks is None or k < ticks) and not change.stop.is_set():
+            pacer.wait()
+            k += 1
+            if not self._feed_one(change):
+                return
+
+    def _feed_one(self, change: OutputChange) -> bool:
+        """One block of silence, unless the pipe already holds enough. False once `stop` is set.
+
+        The write must not block (the engine may be waiting for the lock): it only writes while
+        the new pipe holds less than the old one, and never more than its own size allows."""
+        with change.feed_lock:
+            if change.stop.is_set():
+                return False
+            player = change.player
+            if player is not None and self._new_pipe_has_room(player):
+                player.escribir(dict.fromkeys(change.nodes, self._silence))
+        return True
+
+    def _new_pipe_has_room(self, player: PlayerLike) -> bool:
+        level_of = getattr(player, "nivel_ms", None)
+        level = self._level(level_of) if level_of is not None else None
+        if level is None:
+            return True
+        o = self.options
+        block_ms = o.block / o.rate * 1000
+        cap = pipe_size_ms(o.block, o.rate, o.player_latency_ms) - block_ms
+        # As much waiting as in the old pipe, so the new player's fade-in comes out about when the
+        # old one's fade-out ends; at least a block, so it never runs dry.
+        old = self._level(self.outputs.nivel_ms)
+        return level < max(block_ms, cap if old is None else min(old, cap))
+
+    @staticmethod
+    def _level(read: Callable[[], float | None]) -> float | None:
+        """A pipe level read from the worker: a player closing under it reads as unknown."""
+        try:
+            return read()
+        except Exception:  # noqa: BLE001 - only a guess of how full a pipe is
+            return None
+
+    def _advance_output_change(self) -> None:
+        """On the engine thread, after the write: ask for the cut once the new player is ready,
+        and swap at its bottom. Never while a calibration plays its stimulus (the motor does not
+        run then, and the cut would wait for it with the participants changed under it)."""
+        change = self._change
+        if change is None:
+            return
+        if change.at_bottom:
+            self._swap(change)
+        elif (
+            change.ready.is_set()
+            and not change.cut_requested
+            and (self.calibration is None or self.calibration.state != "running")
+        ):
+            change.cut_requested = True
+            self.motor.cortar(lambda: setattr(change, "at_bottom", True))
+
+    def _swap(self, change: OutputChange) -> None:
+        """At the bottom of the cut, on the engine thread: the new player in, the old one out."""
+        change.stop.set()
+        with change.feed_lock:
+            pass  # the worker's last write, if one was under way, is done; it writes no more
+        previous = self.outputs.attach(change.player, change.playing)
+        if change.player is not None:
+            self._output_name = change.name
+        self._change = None
+        if previous is not None:
+            self._retire(previous)
+        now = self.outputs.playing()
+        self.log("salida", motivo=f"suenan: {', '.join(now) if now else 'ninguno'}")
+        change.swapped = True
+        change.over.set()
+
+    def _retire(self, player: PlayerLike) -> None:
+        """Close a swapped-out player on the routing pool: `cerrar` waits for its `pw-play` to play
+        out what it holds (down to the bottom of the cut) and can take seconds."""
+
+        def close() -> None:
+            try:
+                player.cerrar()
+            except Exception as exc:  # noqa: BLE001 - the old output closing badly must not stop the audio
+                self.log("salida", motivo=f"el reproductor anterior no cerró bien: {exc!r}")
+
+        future = self._routing_pool.submit(close)
+        self._retiring = [(f, p) for f, p in self._retiring if not f.done()] + [(future, player)]
+
+    def _wait_retired(self, change: OutputChange, limit_s: float = 15.0) -> None:
+        """Wait for the players still closing, in short slices: a cancelled change stops waiting."""
+        deadline = time.perf_counter() + limit_s
+        for future, _ in list(self._retiring):
+            while not change.over.is_set() and time.perf_counter() < deadline:
+                try:
+                    future.result(timeout=0.05)
+                except TimeoutError:
+                    continue
+                except Exception:  # noqa: BLE001 - closing it failed or was cancelled: it is not closing any more
+                    break
+                break
+
+    def _follow_playing_set(self) -> None:
+        """The loop measures the speakers that were playing when it started. When that set changes
+        (a swap, a stream lost) it starts again over the new one: a speaker that no longer plays
+        still has a music reference correlated with the others', and measuring it can move its
+        delay while it is silent (experimentos/08). A loop the user wants but that stopped for
+        lack of two playing speakers comes back once two play again (spec §5: it measures again
+        by itself). Never while a calibration owns the microphone."""
+        if self.calibration is not None and self.calibration.state in {"running", "measuring"}:
+            return
+        playing = self.outputs.playing()
+        if self.loop is not None:
+            if playing == self._measured:
+                return
+            self.log("lazo", motivo="cambió qué parlantes suenan: el lazo vuelve a empezar")
+            self._stop_loop()
+        elif not (self._loop_wanted and len(playing) >= 2 and self.microphone):  # noqa: PLR2004 - two to align
+            return
+        else:
+            self.log("lazo", motivo="vuelven a sonar dos parlantes: el lazo vuelve")
+        try:
+            self.enable_recalibration(self.microphone)
+        except Exception as exc:  # noqa: BLE001 - the loop is a side channel: it never ends the audio
+            # Not tried again on every block: the user turns it on again.
+            self._loop_wanted = False
+            self.log("lazo", motivo=f"no volvió a encender: {exc!r}")
 
     # -- the masked probe (dsp/probe.py), switchable while playing --------------------
 
@@ -793,6 +1185,7 @@ class AudioSession:
             raise SessionError("unavailable", "recalibration needs a microphone and none was found")
         o = self.options
         self.microphone = microphone
+        self._loop_wanted = True
         # Only what sounds is measured: a virtual, absent or lost speaker never reaches the
         # microphone, and measuring it would give false numbers (spec §3). The loop needs two.
         measured = self.outputs.playing()
@@ -820,6 +1213,12 @@ class AudioSession:
         self.log("lazo", motivo=f"recalibración encendida, con {microphone}")
 
     def disable_recalibration(self) -> None:
+        """The user turns the loop off: it does not come back by itself."""
+        self._loop_wanted = False
+        self._stop_loop()
+
+    def _stop_loop(self) -> None:
+        """Stop the loop, leaving what the user wants as it is (a restart, a calibration's pause)."""
         if self.loop is None:
             return
         self._recal_stack.close()
@@ -996,7 +1395,7 @@ class AudioSession:
         # and the loop would chase the calibration's own noise) and it comes back after.
         self._loop_paused_for_calibration = self.loop is not None
         if self._loop_paused_for_calibration:
-            self.disable_recalibration()
+            self._stop_loop()
         applied = {p.nombre: (p.retardo_ms, p.ganancia_db) for p in self.installation.parlantes}
         eq_on = getattr(self.motor, "ecualizacion_activa", True) and getattr(self.motor, "ecualizar", False)
         # The curve that plays (with the chain's max boost, treble cap and budget), not the stored one.

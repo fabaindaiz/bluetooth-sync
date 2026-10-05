@@ -5,6 +5,7 @@ reproduce y graba no se prueba ac√°: eso necesita parlantes, y su resultado est√
 `docs/research/experimentos/`.
 """
 
+import os
 import wave
 
 import numpy as np
@@ -256,6 +257,26 @@ R  184   9600  48000  13,0ms  10,5us  0,30  0,00  1324    S16LE 3 48000  = pw-pl
     assert parse_xruns(top, dump) == {"aurasync_salida": 1324}
 
 
+def test_los_xruns_de_las_dos_salidas_combinadas_van_al_sink_del_parlante():
+    """A speaker change alternates `aurasync_salida` and `aurasync_salida_b` (session.request_output):
+    the per-speaker streams of both are keyed by the speaker's sink, never by `b_<sink>`."""
+    from aurasync.system import parse_xruns
+
+    top = """S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME
+R  201   1024  48000  13,0ms  10,5us  0,30  0,00     3    F32LE 1 48000  + output.aurasync_salida_bluez_output.AA.1
+R  202   1024  48000  13,0ms  10,5us  0,30  0,00     5    F32LE 1 48000  + output.aurasync_salida_b_bluez_output.BB.1
+"""
+
+    def node(ident, name):
+        return {"id": ident, "type": "PipeWire:Interface:Node", "info": {"props": {"node.name": name}}}
+
+    dump = [
+        node(201, "output.aurasync_salida_bluez_output.AA.1"),
+        node(202, "output.aurasync_salida_b_bluez_output.BB.1"),
+    ]
+    assert parse_xruns(top, dump) == {"stream:bluez_output.AA.1": 3, "stream:bluez_output.BB.1": 5}
+
+
 def test_el_sink_virtual_no_pierde_ni_corre_muestras_si_la_lectura_llega_cortada():
     """Una lectura que termina a mitad de un marco no debe cambiar L por R en lo que sigue."""
     import os
@@ -343,3 +364,55 @@ def test_a_unit_without_suffix_is_a_service_as_systemctl_reads_it():
     from aurasync.system import unit_object_path
 
     assert unit_object_path("bluetooth") == unit_object_path("bluetooth.service")
+
+
+class _PlayOnPipe:
+    """A `pw-play` that is only the write end of a real pipe."""
+
+    def __init__(self, fd):
+        self.stdin = os.fdopen(fd, "wb", buffering=0)
+        self.pid = 1
+
+    def poll(self):
+        return None
+
+
+def test_room_is_that_of_the_fullest_pipe():
+    """The speakers' cushion pads every pipe alike: it may only pad what fits in the fullest one."""
+    (r1, w1), (r2, w2) = os.pipe(), os.pipe()
+    player = sonido.Reproductor(["a", "b"])
+    player._procesos = {"a": _PlayOnPipe(w1), "b": _PlayOnPipe(w2)}  # noqa: SLF001
+    try:
+        os.write(w1, bytes(4000))
+        os.write(w2, bytes(400))
+        size = sonido.tamano_de_tuberia(player._procesos["a"].stdin)  # noqa: SLF001
+        assert size is not None
+        assert size > 0
+        assert player.espacio_ms() == pytest.approx((size - 4000) / 4 / player.sr * 1000)
+    finally:
+        for p in player._procesos.values():  # noqa: SLF001
+            p.stdin.close()
+        os.close(r1)
+        os.close(r2)
+
+
+def test_room_of_the_combined_stream_counts_its_channels():
+    r, w = os.pipe()
+    player = sonido.ReproductorCombinado(["a", "b"])
+    player._play = _PlayOnPipe(w)  # noqa: SLF001
+    try:
+        os.write(w, bytes(800))
+        size = sonido.tamano_de_tuberia(player._play.stdin)  # noqa: SLF001
+        assert player.espacio_ms() == pytest.approx((size - 800) / 8 / player.sr * 1000)
+    finally:
+        player._play.stdin.close()  # noqa: SLF001
+        player._play = None  # noqa: SLF001
+        os.close(r)
+
+
+def test_an_unreadable_pipe_has_no_room_reading():
+    class Closed:
+        def fileno(self):
+            raise ValueError
+
+    assert sonido.tamano_de_tuberia(Closed()) is None

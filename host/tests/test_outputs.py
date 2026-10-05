@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from aurasync import cushion as cushion_module
+from aurasync.cushion import Cushion, SharedCushion
 from aurasync.outputs import OutputSet, Pacer, output_kind
 
 RATE, BLOCK = 48000, 4096
@@ -199,3 +201,182 @@ def test_passthroughs_and_close():
     out.close()
     assert player.closed
     assert out.states() == {"A": "absent"}
+
+
+# -- the speakers' cushion: one for the whole real part (spec §9) ------------------------------
+
+QUANTUM = cushion_module.DRIVER_QUANTUM_FRAMES
+ROOM = 10**6
+"""Room left in the fullest pipe: plenty, unless a test says otherwise."""
+GAP_BLOCKS = -(-cushion_module.MIN_GAP_S * RATE // BLOCK)
+CHECK_BLOCKS = -(-cushion_module.CHECK_S * RATE // BLOCK)
+
+
+def _ask(shared, level=QUANTUM - 1, room=ROOM, **kwargs):
+    """Low readings until the cushion asks for a cut; how many it took."""
+    for n in range(1, 100_000):
+        if shared.observe(level, room, **kwargs):
+            return n
+    return None
+
+
+def test_the_speakers_target_is_the_monitors_calculation():
+    shared = SharedCushion(BLOCK, RATE)
+    assert shared.target_frames == Cushion(BLOCK, RATE).target_frames == BLOCK + QUANTUM
+    assert round(shared.target_ms) == 128
+    assert SharedCushion(48000, RATE).target_frames == 19200, "capped at 400 ms, as the monitor's"
+
+
+def test_a_cut_is_asked_once_the_pipe_stays_under_a_quantum():
+    shared = SharedCushion(BLOCK, RATE)
+    low = QUANTUM - 1
+    asked = [shared.observe(low, ROOM) for _ in range(cushion_module.LOW_BLOCKS)]
+    assert asked == [False] * (cushion_module.LOW_BLOCKS - 1) + [True]
+    assert shared.pending
+    assert not shared.observe(low, ROOM), "one cut per refill: not asked again while it is pending"
+    assert shared.refills == 0, "nothing is written until the bottom of the cut"
+
+
+def test_one_low_reading_is_not_a_refill():
+    """A late engine block leaves the pipe low once and the next writes catch up: no cut for it."""
+    shared = SharedCushion(BLOCK, RATE)
+    for _ in range(20):
+        assert not shared.observe(QUANTUM - 1, ROOM)
+        assert not shared.observe(shared.target_frames, ROOM)
+    assert not shared.observe(None, ROOM)
+    assert not shared.pending
+
+
+def test_the_refill_at_the_bottom_brings_the_level_to_the_target():
+    shared = SharedCushion(BLOCK, RATE)
+    _ask(shared, 1000)
+    assert shared.at_bottom(ROOM) == shared.target_frames - 1000
+    assert shared.refills == 1
+    assert not shared.pending
+    assert shared.at_bottom(ROOM) == 0, "a bottom without a refill pending writes nothing"
+    assert shared.refills == 1
+
+
+def test_a_pipe_that_recovered_by_the_bottom_gets_nothing():
+    shared = SharedCushion(BLOCK, RATE)
+    _ask(shared, 1000)
+    shared.observe(shared.target_frames + 10, ROOM)
+    assert shared.at_bottom(ROOM) == 0
+    assert shared.refills == 0
+    assert not shared.pending
+
+
+def test_no_cut_is_asked_while_one_may_not_be():
+    """During a calibration the stimulus owns the speakers: the level is still read, no cut asked."""
+    shared = SharedCushion(BLOCK, RATE)
+    for _ in range(10):
+        assert not shared.observe(0, ROOM, may_cut=False)
+    assert shared.level_frames == 0
+    assert shared.observe(0, ROOM), "asked as soon as it may be"
+
+
+def test_cancel_drops_the_pending_refill():
+    shared = SharedCushion(BLOCK, RATE)
+    _ask(shared, 0)
+    shared.cancel()
+    assert not shared.pending
+    assert shared.at_bottom(ROOM) == 0
+
+
+def test_no_cut_when_the_pad_would_not_fit_in_every_pipe():
+    """`separado` with clocks that differ: the slowest pipe is full and holds the write back, so a
+    pad sized on the fastest would block the engine. No cut; the state says why."""
+    shared = SharedCushion(BLOCK, RATE)
+    need = shared.target_frames - 1000
+    for _ in range(50):
+        assert not shared.observe(1000, need + BLOCK - 1, separate=True)
+    assert not shared.pending
+    assert shared.reason == "separado: relojes distintos"
+    assert shared.observe(1000, need + BLOCK), "it fits once the fullest pipe leaves room for it and a block"
+    assert shared.reason is None
+
+
+def test_an_unknown_room_is_no_room():
+    shared = SharedCushion(BLOCK, RATE)
+    for _ in range(10):
+        assert not shared.observe(0, None)
+    assert shared.reason is not None
+
+
+def test_the_pad_never_exceeds_the_room_at_the_bottom():
+    shared = SharedCushion(BLOCK, RATE)
+    _ask(shared, 0)
+    assert shared.at_bottom(1000) == 1000, "what fits, not more: the write must not wait"
+    _ask(shared, 0)
+    assert shared.at_bottom(0) == 0
+
+
+def test_cuts_are_at_least_30_s_apart():
+    shared = SharedCushion(BLOCK, RATE)
+    _ask(shared, 0)
+    shared.at_bottom(ROOM)
+    waited = _ask(shared, 0)
+    assert waited is not None
+    assert waited >= GAP_BLOCKS - 1
+
+
+def test_a_refill_that_brings_the_level_back_is_not_a_failure():
+    shared = SharedCushion(BLOCK, RATE)
+    for _ in range(5):
+        _ask(shared, 0)
+        shared.at_bottom(ROOM)
+        # The level reads just under the target after the pad: the drain since then.
+        shared.observe(shared.target_frames - QUANTUM // 2, ROOM)
+    assert shared.failed == 0
+    assert not shared.gave_up
+
+
+def test_three_refills_that_do_not_help_give_up():
+    shared = SharedCushion(BLOCK, RATE)
+    cuts = 0
+    for _ in range(int(20 * GAP_BLOCKS)):
+        if shared.observe(0, ROOM):
+            cuts += 1
+            shared.at_bottom(ROOM)
+    assert cuts == cushion_module.MAX_FAILED
+    assert shared.failed == cushion_module.MAX_FAILED
+    assert shared.gave_up
+    assert not shared.pending
+
+
+def test_pad_writes_the_same_silence_to_every_playing_stream():
+    out, _ = _set({"A": "sA", "V": None, "B": "sB", "C": "sC"})
+    player = FakePlayer(["sA", "sB"])
+    out.attach(player, {"A", "B"})
+    out.pad(1234)
+    [written] = player.written
+    assert set(written) == {"sA", "sB"}, "only the playing ones, in one write"
+    assert all(len(x) == 1234 and not np.any(x) for x in written.values())
+
+
+def test_pad_without_a_real_part_or_frames_writes_nothing():
+    out, _ = _set({"A": "sA"})
+    out.pad(100)
+    player = FakePlayer(["sA"])
+    out.attach(player, {"A"})
+    out.pad(0)
+    assert player.written == []
+
+
+def test_room_is_the_players_or_none():
+    out, _ = _set({"A": "sA"})
+    assert out.espacio_ms() is None
+    player = FakePlayer(["sA"])
+    out.attach(player, {"A"})
+    assert out.espacio_ms() is None, "a player that cannot say"
+    player.espacio_ms = lambda: 12.5
+    assert out.espacio_ms() == 12.5
+
+
+def test_the_cushion_outlives_a_swap_of_the_real_part():
+    shared = SharedCushion(BLOCK, RATE)
+    clock = FakeClock()
+    out = OutputSet({"A": "sA"}, Pacer(RATE, BLOCK, clock.now, clock.sleep), shared)
+    out.attach(FakePlayer(["sA"]), {"A"})
+    out.attach(FakePlayer(["sA"]), {"A"})
+    assert out.cushion is shared

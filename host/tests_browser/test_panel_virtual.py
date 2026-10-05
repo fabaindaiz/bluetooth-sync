@@ -100,3 +100,80 @@ def test_a_virtual_speaker_is_never_reported_lost_while_playing(page: Page, svc:
     page.wait_for_timeout(1500)
     assert "perdido" not in (page.locator("#now-alerts").text_content() or "")
     assert "perdido" not in (page.locator("#chip-alert").text_content() or "")
+
+
+# -- joining and leaving a running session (phase 2, spec §5, §6). SIMULATED -----------
+
+
+def _status(page: Page, name: str):
+    return speaker_row(page, name).locator(".status")
+
+
+def test_leave_and_join_a_speaker_while_playing(page: Page, svc: Running):
+    go(page, "Parlantes")
+    start(page)
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sonando", timeout=5000)
+    speaker_row(page, "JBL Go 4 Red").get_by_role("button", name="Sacar").click()
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sin conectar", timeout=10000)
+    expect(_status(page, "JBL Go 4 Black")).to_contain_text("sonando")
+    speaker_row(page, "JBL Go 4 Red").get_by_role("button", name="Hacer entrar").click()
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sonando", timeout=10000)
+
+
+def test_join_with_the_loop_off_warns_the_alignment_may_have_changed(page: Page, svc: Running):
+    svc.command("set", changes={"recalibrate": False})
+    go(page, "Parlantes")
+    start(page)
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sonando", timeout=5000)
+    speaker_row(page, "JBL Go 4 Red").get_by_role("button", name="Sacar").click()
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sin conectar", timeout=10000)
+    expect(page.locator("#join-warning")).to_be_hidden()
+    speaker_row(page, "JBL Go 4 Red").get_by_role("button", name="Hacer entrar").click()
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sonando", timeout=10000)
+    expect(page.locator("#join-warning")).to_contain_text("recalibr", timeout=5000)
+
+
+def test_a_lost_speaker_returns_by_itself_and_the_log_says_so(page: Page, svc: Running):
+    go(page, "Parlantes")
+    start(page)
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sonando", timeout=5000)
+    sink = next(s["sink"] for s in svc.state()["speakers"] if s["name"] == "JBL Go 4 Red")
+    address = sink.removeprefix("bluez_output.").split(".")[0].replace("_", ":")
+    # The link drops: the observer sees it go and the playing stream dies (the simulator keeps them apart).
+    svc.service.observer.disconnect(address)
+    svc.service.session.outputs.player.soltar(sink)
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("perdido", timeout=10000)
+    svc.service.observer.connect(address)
+    expect(_status(page, "JBL Go 4 Red")).to_contain_text("sonando", timeout=30000)
+    go(page, "Diagnóstico")
+    expect(page.locator("#logs")).to_contain_text("volvió JBL Go 4 Red", timeout=5000)
+
+
+def test_a_speaker_that_gave_up_offers_retry(browser: Browser, svc: Running):
+    def edit(state: dict) -> None:
+        state["session"]["status"] = "playing"
+        state["speakers"][0].update(output="lost", playing=False, rejoin="gave_up")
+
+    page, errors, context = _routed_page(browser, svc, edit)
+    try:
+        go(page, "Parlantes")
+        row = speaker_row(page, "JBL Go 4 Red")
+        expect(row.get_by_role("button", name="Reintentar")).to_be_visible()
+        expect(row.get_by_role("button", name="Hacer entrar")).to_have_count(0)
+        assert errors == []
+    finally:
+        context.close()
+
+
+def test_calibration_lists_who_is_left_out(browser: Browser, svc: Running):
+    def edit(state: dict) -> None:
+        state["session"]["status"] = "playing"
+        state["speakers"][0].update(output="absent", playing=False, rejoin=None)
+
+    page, errors, context = _routed_page(browser, svc, edit)
+    try:
+        go(page, "Calibrar")
+        expect(page.locator("#cal-left-out")).to_contain_text("JBL Go 4 Red")
+        assert errors == []
+    finally:
+        context.close()

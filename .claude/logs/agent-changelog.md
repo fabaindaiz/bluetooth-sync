@@ -65,6 +65,18 @@ Dummy-Driver de PipeWire lleva el reloj con todo virtual sigue sin comprobar (ex
 30 s cada una, sin repetir todavía): el monitor sin colchón tuvo 352 xruns en el `pw-play` (`pw-top`,
 ~11,7/s de 23,4 ciclos/s); con 100 ms de silencio al abrir, 0 (experimentos/18).
 
+**Fase 2 (tareas 8 a 10).** Se construyó entrar y salir en caliente (`speaker_join` / `speaker_leave`, REST
+`POST /v1/speakers/{name}/join|leave`), el regreso automático de un parlante `lost` (un intento cada 10 s,
+3 caídas en 5 minutos y deja de intentar; `rejoin.py`; nunca reconecta el Bluetooth), el reinicio del lazo
+de recalibración sobre el conjunto nuevo, y en el panel **Hacer entrar** / **Sacar** / **Reintentar**
+(campo nuevo `rejoin` por parlante), el aviso «la alineación puede haber cambiado» y la lista de los que
+quedan fuera de la calibración. **Enmienda al spec §5:** en `separado` también se reconstruye toda la parte
+real. **Sin validar:** todo con tests y `--simular`; no se escuchó nada. En `--simular`, desconectar con el
+observador no mata el stream del parlante (hay que soltarlo del reproductor simulado). Sin medir: el empalme
+entre el fundido de salida y el de entrada (hasta ~110 ms), si un regreso automático fallido cuenta dos veces
+como caída, el desfase antes y después de entrar medido con micrófono y el camino `separado` en
+`PC-Ryzen5` (protocolo en `experimentos/19`). Pendientes: tareas 11 y 12 del plan.
+
 **Arreglo del monitor (después de publicar la fase 1).** El usuario oyó el monitor "con muchos cortes".
 Causa: la tubería hacia el `pw-play` del monitor no tenía colchón; el motor entrega un bloque cada dos
 ciclos del driver y cada bloque llegaba justo después del ciclo que lo necesitaba. Diseño aprobado por el

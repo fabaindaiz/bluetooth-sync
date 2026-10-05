@@ -13,10 +13,12 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Literal, Protocol
 
+import numpy as np
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    import numpy as np
+    from aurasync.cushion import SharedCushion
 
 BLUETOOTH_PREFIX = "bluez_output."
 
@@ -86,11 +88,13 @@ class PlayerLike(Protocol):
 
 
 class OutputSet:
-    """Speaker names to sinks, the player that plays the real ones, and the pacer."""
+    """Speaker names to sinks, the player that plays the real ones, the pacer, and the speakers'
+    cushion: one for the whole real part, kept across swaps of the player (cushion.py)."""
 
-    def __init__(self, sinks: dict[str, str | None], pacer: Pacer) -> None:
+    def __init__(self, sinks: dict[str, str | None], pacer: Pacer, cushion: SharedCushion | None = None) -> None:
         self._sinks = dict(sinks)
         self._pacer = pacer
+        self.cushion = cushion
         self._player: PlayerLike | None = None
         self._playing: set[str] = set()
         self._lost: set[str] = set()
@@ -110,6 +114,16 @@ class OutputSet:
             self._pacer.reset()
         elif not self.vivos:
             self._pacer.wait()
+
+    def pad(self, frames: int) -> None:
+        """The same `frames` of silence to every playing stream, in one write: the cushion's refill
+        at the bottom of a cut. The same for all, so every speaker is delayed alike: in `combinado`
+        it is one stream anyway, in `separado` each `pw-play` gets the same silence in this block."""
+        sinks = [self._sinks[n] for n in self._sinks if n in self._playing]
+        if frames <= 0 or self._player is None or not sinks:
+            return
+        silence = np.zeros(frames)
+        self._player.escribir(dict.fromkeys(sinks, silence))
 
     def refresh(self) -> list[str]:
         """Move to `lost` the playing speakers whose node left the player; return them."""
@@ -134,6 +148,12 @@ class OutputSet:
         return [n for n in self._sinks if n in self._playing]
 
     @property
+    def player(self) -> PlayerLike | None:
+        """The real part attached now. Work that runs off the engine thread (a routing check)
+        captures it when it starts, so a swap in between cannot mix two players."""
+        return self._player
+
+    @property
     def vivos(self) -> list[str]:
         return self._player.vivos if self._player is not None else []
 
@@ -145,6 +165,12 @@ class OutputSet:
         """Audio waiting in the pipe to the player, in ms; `None` without one that reports it."""
         level = getattr(self._player, "nivel_ms", None)
         return level() if level is not None else None
+
+    def espacio_ms(self) -> float | None:
+        """Room left in the fullest pipe to the player, in ms: what one write can add to every stream
+        without waiting. `None` without a player that reports it."""
+        room = getattr(self._player, "espacio_ms", None)
+        return room() if room is not None else None
 
     def mal_ruteados(self) -> dict:
         return self._player.mal_ruteados() if self._player is not None else {}

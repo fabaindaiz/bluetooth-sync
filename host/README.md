@@ -198,8 +198,18 @@ y el sonido envolvente sin los parlantes, y para escucharlos por el monitor de a
 - **Colchón del monitor:** escribe por adelantado un bloque más un quantum del driver (tope 400 ms)
   y lo vigila con el nivel de la tubería de `pw-play` (`cushion_ms`, `level_ms`, `refills`, `trims`
   en el estado), porque sin él los audífonos cortaban la mitad de los ciclos (experimentos/18).
-- **Falta (fase 2, d-7c8794-618666):** entrar y salir en caliente y el regreso automático de un
-  parlante real. Se mide en [experimentos/18](../docs/research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md).
+- **Entrar y salir en caliente (fase 2, d-7c8794-618666; sin validar con parlantes, solo tests y
+  `--simular`):** con la sesión sonando, la op `speaker_join` / `speaker_leave` (REST
+  `POST /v1/speakers/{name}/join|leave`) hace entrar o salir a un parlante real sin parar la sesión; en
+  el panel son los botones **Hacer entrar**, **Sacar** y **Reintentar** de cada fila. Responden cuando
+  el cambio está pedido: si la preparación falla, el error queda en `state.errors.output` y en el log.
+  Un parlante `lost` vuelve solo cuando su sink reaparece (un intento cada 10 s; con 3 caídas en
+  5 minutos deja de intentar y el panel ofrece **Reintentar**; nunca reconecta el Bluetooth) y el log
+  dice «volvió <nombre>». El cambio usa el corte de 80 + 80 ms, y en `separado` también se reconstruye
+  toda la parte real (enmienda al spec §5). Con el lazo de recalibración apagado, el panel avisa que la
+  alineación puede haber cambiado; con el lazo encendido, se reinicia solo sobre el conjunto nuevo.
+  Qué falta medir: [experimentos/19](../docs/research/experimentos/19-entrada-en-caliente-con-3-go-4.md)
+  (y [experimentos/18](../docs/research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md) para la fase 1).
 
 ## La aplicación web (`host/web/`)
 

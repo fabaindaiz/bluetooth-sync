@@ -341,3 +341,16 @@ def test_join_needs_control_scope(): ...
 - [ ] **Step 1: Write the failing browser tests** against `--simular`: a simulated speaker disconnected and reconnected through `SimulatedObserver` returns to "sonando" with the log line; **Sacar** → "sin conectar"; **Hacer entrar** → "sonando"; the warning appears with the loop off.
 - [ ] **Step 2: Run** `cd host && hatch run browser:test -k virtual` — FAIL. **Step 3: Implement.** **Step 4: Run** — PASS.
 - [ ] **Step 5:** Write the documents; `PY=python3 scripts/check.sh` — `check: ok`.
+
+### Task 11: The speakers' cushion (spec §9)
+
+**Files:** `host/src/aurasync/session.py`, `host/src/aurasync/outputs.py`, `host/src/aurasync/sonido.py` (`Reproductor`, `ReproductorCombinado`); tests in `host/tests/test_outputs.py` / `test_session_join.py`.
+**Interfaces:** consumes `monitor.Cushion` (commit 5efc460) or a shared extraction of it; one cushion for the whole real part, changed only through `motor.cortar`.
+- [ ] Failing tests: blocks in two-quantum bursts never starve a speaker pipe; a refill applies to every speaker at once and only at a cut's bottom; alignment between speakers is unchanged by a refill (equal delay added to all).
+- [ ] Implement; `hatch test` green.
+
+### Task 12: `direct` render and the speakers' loudness match (spec §9)
+
+**Files:** `host/src/aurasync/chain.py` (algorithm `direct` in the `spatial` stage), `host/src/aurasync/motor.py`, `host/src/aurasync/loudness_match.py` (from the monitor fix), `host/src/aurasync/service.py`, `host/src/aurasync/snapshot.py`, `contract_types.py` + regenerate, `panel/app.js`, `host/docs/control-api.md`.
+- [ ] Failing tests: `direct` output per speaker equals the constant-power pan of L/R through delay, gain, volume and limiter only (golden); switching `classic`→`direct`→`classic` keeps the speakers' summed loudness within 1 LU at the switch after the first visit; first visit converges within 10 s; frozen on silence; capped at ±12 dB.
+- [ ] Implement; `hatch test` and browser test green.

@@ -789,3 +789,17 @@ VERIFICADO:
    corrigen el lip-sync.
 5. **DRM.** Reproducir Netflix, Disney+ y Apple Music (Atmos) hacia el dispositivo
    virtual de cada sistema y anotar si llega señal y cuántos canales.
+
+
+## Anexo (2026-10-05): leer qué está sonando en el PC
+
+- **MPRIS** (`org.mpris.MediaPlayer2`, D-Bus de sesión) expone estado, metadatos (título, artista,
+  álbum, carátula, duración, posición) y controles (play/pausa, siguiente, anterior, saltar). Lo
+  publican Spotify, Firefox, Chrome y la mayoría de los reproductores de Linux (REPORTADO).
+  **VERIFICADO en `HP-O16`:** `busctl --user call org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2
+  org.freedesktop.DBus.Properties Get ss org.mpris.MediaPlayer2.Player PlaybackStatus` devolvió
+  `"Paused"`, y el método `Play` de la misma interfaz lo puso a sonar.
+- PipeWire da la aplicación que manda audio a un sink (`application.name` del stream), sin metadatos
+  de la canción; el servicio ya la lee.
+- No existe en macOS (ahí está `MediaRemote`, privado) ni sirve en la Raspberry Pi sin escritorio.
+- Roadmap: i-7c8794-99f87e.

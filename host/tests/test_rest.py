@@ -114,3 +114,9 @@ def test_raw_command_echoes_the_id(server):
     status, reply = call(server, "POST", "/v1/command", {"v": 1, "id": 42, "op": "presets"})
     assert status == 200
     assert reply["id"] == 42
+
+
+def test_join_and_leave_routes_need_a_session(server):
+    quoted = quote("Go 4 Red")
+    assert call(server, "POST", f"/v1/speakers/{quoted}/join", None)[0] == 409
+    assert call(server, "POST", f"/v1/speakers/{quoted}/leave", None)[0] == 409

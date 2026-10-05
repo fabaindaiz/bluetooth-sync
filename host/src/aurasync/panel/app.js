@@ -780,6 +780,13 @@ function speakerRow(speaker) {
   mute.addEventListener("click", () => { const sp = current(); if (sp) { markPending(mute); send("set", { speaker: name, changes: { muted: !sp.muted } }); } });
   const tone = el("button", { type: "button", class: "ghost small-btn", text: "Tono" });
   tone.addEventListener("click", () => send("tone", { speaker: name, seconds: 2 }));
+  // Entrar y salir de la sesión que suena (fase 2): cada botón se muestra solo cuando corresponde.
+  const join = el("button", { type: "button", class: "ghost small-btn", text: "Hacer entrar", hidden: "" });
+  const retry = el("button", { type: "button", class: "ghost small-btn", text: "Reintentar", hidden: "" });
+  const leave = el("button", { type: "button", class: "ghost small-btn", text: "Sacar", hidden: "" });
+  for (const [button, op] of [[join, "speaker_join"], [retry, "speaker_join"], [leave, "speaker_leave"]]) {
+    button.addEventListener("click", () => { markPending(button); send(op, { speaker: name }); });
+  }
   const remove = el("button", { type: "button", class: "ghost small-btn danger", text: "Quitar" });
   // Sin confirm(): se quita al instante y «Deshacer» lo vuelve a agregar con lo que tenía.
   remove.addEventListener("click", () => withUndo(`${name}: quitado de la instalación (se guarda con «Guardar instalación»)`,
@@ -788,7 +795,7 @@ function speakerRow(speaker) {
   const fold = el("button", { type: "button", class: "fold-btn", "aria-label": `Ajustes de ${name}`, "aria-expanded": "false" });
   const row = {
     tr: el("tr", { "data-speaker": name }), name: el("div", { class: "speaker-name" }), sub: el("div", { class: "speaker-sub" }),
-    status: el("span", { class: "status" }), role, kind, pan, ambience, gain, delay, delayNow, mute, tone, remove, fold,
+    status: el("span", { class: "status" }), role, kind, pan, ambience, gain, delay, delayNow, mute, tone, join, retry, leave, remove, fold,
   };
   fold.addEventListener("click", () => setFolded(row.tr, fold, !row.tr.hasAttribute("data-folded"), name));
   row.tr.append(
@@ -800,7 +807,7 @@ function speakerRow(speaker) {
     el("td", { class: "cell-ambience", "data-label": "Ambiente" }, ambience.cell),
     el("td", { class: "cell-volume", "data-label": "Volumen" }, gain.cell),
     el("td", { class: "num cell-delay", "data-label": "Retardo (ms)" }, delay, delayNow),
-    el("td", { class: "cell-actions" }, el("div", { class: "hstack" }, tone, mute, remove)),
+    el("td", { class: "cell-actions" }, el("div", { class: "hstack" }, join, retry, leave, tone, mute, remove)),
   );
   return row;
 }
@@ -829,7 +836,44 @@ function setStatus(node, table, state, extra = "") {
   node.replaceChildren(el("span", { class: "status-dot", "aria-hidden": "true" }), label + extra);
 }
 
+// Entrar y salir con la sesión sonando (spec 2026-10-05 §5): «Sacar» a quien suena, «Hacer entrar» a
+// quien no está (o lo perdimos y el servicio todavía lo reintenta), «Reintentar» cuando el servicio se rindió.
+function syncJoinButtons(row, s, sp) {
+  const playing = s.session.status === "playing";
+  const state = speakerState(s, sp);
+  const real = sp.output_kind !== "virtual";
+  const gaveUp = state === "lost" && sp.rejoin === "gave_up";
+  row.leave.hidden = !(playing && real && state === "playing");
+  row.retry.hidden = !(playing && real && gaveUp);
+  row.join.hidden = !(playing && real && (state === "absent" || (state === "lost" && !gaveUp)));
+  // Un Bluetooth sin enlace no puede entrar: primero se conecta (Dispositivos).
+  const offline = sp.output_kind === "bluetooth" && sp.connected === false;
+  for (const button of [row.join, row.retry]) {
+    button.disabled = offline;
+    button.title = offline ? "Conectalo primero (Dispositivos)" : "";
+  }
+}
+
+// Lo que entró con el lazo de recalibración apagado puede haber movido la alineación: avisa hasta
+// que se recalibre, se encienda el lazo o la sesión pare.
+let joinWarning = false;
+let lastOutputs = null;
+function trackJoins(s) {
+  const playing = s.session.status === "playing";
+  const outputs = new Map(s.speakers.map((sp) => [sp.name, sp.output]));
+  if (!playing || s.recalibration.active) joinWarning = false;
+  else if (lastOutputs && s.speakers.some((sp) => sp.output === "playing" && lastOutputs.has(sp.name) && lastOutputs.get(sp.name) !== "playing")) joinWarning = true;
+  lastOutputs = playing ? outputs : null;
+  const cal = s.calibration;
+  if (cal && cal.state === "done" && !cal.stale && cal.measured_at !== trackJoins.calAt) { trackJoins.calAt = cal.measured_at; if (trackJoins.seen) joinWarning = false; }
+  trackJoins.seen = true;
+  const box = $("join-warning");
+  box.hidden = !joinWarning;
+  box.textContent = joinWarning ? "Entró un parlante con el lazo de «Mantener sincronía» apagado: la alineación puede haber cambiado, recalibrá." : "";
+}
+
 function renderSpeakers(s) {
+  trackJoins(s);
   const body = $("speakers");
   const seen = new Set();
   const many = s.speakers.length >= FOLD_FROM;
@@ -849,6 +893,7 @@ function renderSpeakers(s) {
     row.sub.textContent = [sp.address, sp.codec, sp.modalias, sp.rssi_dbm != null ? `${sp.rssi_dbm} dBm` : null]
       .filter(Boolean).join(" · ");
     setStatus(row.status, SPEAKER_STATUS, speakerState(s, sp), sp.muted ? " · mudo" : "");
+    syncJoinButtons(row, s, sp);
     const roles = s.roles[s.global.layout];
     if (row.role.dataset.layout !== s.global.layout) {
       row.role.replaceChildren(el("option", { value: "", text: "personalizado", disabled: "" }),
@@ -1198,9 +1243,15 @@ function renderHealth(s) {
   const pipe = h.pipe_level_ms;
   $("t-pipe").textContent = pipe == null || !playing ? "—" : `${Math.round(pipe)} ms`;
   $("t-pipe").className = `tile-value ${pipe == null || !playing ? "" : pipe < 20 ? "bad" : pipe < 60 ? "warn" : "good"}`;
-  $("t-pipe-sub").textContent = h.bt_discovering
+  // El colchón de los parlantes: uno para todos, rellenado para todos en el fondo de un corte.
+  const cushion = h.output_cushion;
+  const refills = !cushion ? ""
+    : (cushion.refills ? ` · ${cushion.refills} relleno(s): la tubería se vaciaba y se rellenó para todos en un corte` : "")
+      + (cushion.gave_up ? " · el colchón dejó de rellenar: los rellenos no alcanzaban" : "")
+      + (cushion.reason ? ` · sin relleno (${cushion.reason})` : "");
+  $("t-pipe-sub").textContent = (h.bt_discovering
     ? "Bluetooth está buscando dispositivos: puede cortar el audio"
-    : "audio esperando en la tubería; bajo 20 ms el parlante se queda sin nada";
+    : "audio esperando en la tubería; bajo 20 ms el parlante se queda sin nada") + refills;
   // Calidad: cada xrun es un hueco o un salto en lo que suena. 0/min es lo esperado.
   const xr = Object.entries(h.xruns || {});
   const worst = xr.reduce((m, [, v]) => (v.per_min != null && v.per_min > m ? v.per_min : m), xr.length ? 0 : null);
@@ -1975,6 +2026,11 @@ function renderCalibration(s) {
     }
   }
   $("cal-note").textContent = note;
+  // Quién queda fuera de la calibración: los que no suenan ahora (virtuales, sin conectar, perdidos).
+  const left = playing ? s.speakers.filter((sp) => sp.output && sp.output !== "playing") : [];
+  const leftBox = $("cal-left-out");
+  leftBox.hidden = left.length === 0;
+  leftBox.textContent = left.length ? `Fuera de la calibración (no suenan): ${left.map((sp) => `${sp.name} (${SPEAKER_STATUS[sp.output][1]})`).join(", ")}.` : "";
   const results = cal ? cal.results : [];
   $("cal-table").hidden = results.length === 0;
   $("cal-results").replaceChildren(...results.map((r) => el("tr", {},

@@ -71,6 +71,10 @@ def route(method: str, path: str, body: Any) -> dict:
             return {"v": v, "op": "stop"}
         case "PATCH", ["speakers", name]:
             return {"v": v, "op": "set", "speaker": name, "changes": body}
+        case "POST", ["speakers", name, "join"]:
+            return {"v": v, "op": "speaker_join", "speaker": name}
+        case "POST", ["speakers", name, "leave"]:
+            return {"v": v, "op": "speaker_leave", "speaker": name}
         case "PATCH", ["global"]:
             return {"v": v, "op": "set", "changes": body}
         case "GET", ["presets"]:

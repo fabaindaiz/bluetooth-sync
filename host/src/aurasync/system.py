@@ -177,6 +177,11 @@ def system_unit(unit: str, *, user: bool) -> dict[str, Any]:
     return {"state": state, "pid": pid, "uptime_s": uptime}
 
 
+COMBINED_STREAM_PREFIXES = ("output.aurasync_salida_b_", "output.aurasync_salida_")
+"""The per-speaker streams of the two combine sinks a session alternates between
+(`session.request_output`): `aurasync_salida` and `aurasync_salida_b`."""
+
+
 def parse_xruns(top: str, dump: list) -> dict[str, int]:
     """ERR de `pw-top` (cortes por falta de datos), por destino.
 
@@ -193,8 +198,10 @@ def parse_xruns(top: str, dump: list) -> dict[str, int]:
         name = str(props.get("node.name", ""))
         if props.get("application.name") == "pw-play" and props.get("target.object"):
             target[str(o["id"])] = str(props["target.object"])
-        elif name.startswith("output.aurasync_salida_"):
-            target[str(o["id"])] = "stream:" + name.removeprefix("output.aurasync_salida_")
+        elif name.startswith(COMBINED_STREAM_PREFIXES):
+            # The alternate combine sink of a speaker change first: its prefix contains the other.
+            prefix = next(p for p in COMBINED_STREAM_PREFIXES if name.startswith(p))
+            target[str(o["id"])] = "stream:" + name.removeprefix(prefix)
         elif name.startswith("bluez_output.") and str(o.get("type", "")).endswith("Node"):
             target[str(o["id"])] = "bt:" + name
     lines = top.splitlines()

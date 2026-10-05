@@ -1,6 +1,6 @@
 {
   "about": "Compilado de host/web con `npm run build` (d-7c8794-6da524). No se edita: scripts/check.sh lo comprueba sin Node con host/scripts/web_stamp.py.",
-  "sources_sha256": "91b3a3556cefee4d41d03b060335efb898b1bf2cfb44afd1e4985d8ffce08b2f",
+  "sources_sha256": "d71010f885ea55476c24b8901c50c6e8d00b31a249e80ffea451f7f476eff4a1",
   "outputs": {
     "cadena.js": "a3dc8d6bd72fbd1d971c8f6fcec4ed34515ec2ebe62abf8636223994b50198d4"
   }

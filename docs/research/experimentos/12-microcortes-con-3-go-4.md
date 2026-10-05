@@ -51,6 +51,26 @@ a poco, y cada tanto da un corte (del orden de una vez cada 30–60 min con ~20�
 comprueba en el paso 0** con `pw-top` mientras suena: la columna del driver de los nodos
 `aurasync` y `aurasync_salida` tiene que ser la misma.
 
+**Desde el 2026-10-05 hay un colchón de los parlantes contra esto** (`host/src/aurasync/cushion.py`,
+`SharedCushion`; spec 2026-10-05-virtual-speakers-and-hot-join §9). VERIFICADO (código y tests, sin
+parlantes): la tubería hacia los parlantes no se vacía por ráfagas, porque `open` la ceba con medio
+segundo de silencio y la escritura espera mientras está llena, así que antes de cada bloque guarda
+su tamaño menos un bloque (≥ 135 ms con los valores por defecto). Lo único que la vacía de forma
+sostenida es esta deriva (un bloque tarde la baja una vez). Si el nivel se lee bajo un quantum (2048 cuadros) tres bloques seguidos, se pide un corte
+(80 + 80 ms) y en su fondo se escribe **el mismo silencio a todos los parlantes**, hasta un bloque
+más un quantum: el desfase entre ellos no se mueve. Se ve en `health.output_cushion.refills` y en
+la tarjeta Cortes como un `fade` "colchón de la salida". INFERIDO, sin medir: que una lectura baja
+aislada sea un bloque tarde que se recupera solo (por eso se esperan tres), y que `pw-play` no
+necesite más de un quantum en la tubería. En `separado`, con relojes distintos por parlante, un
+relleno igual conserva la diferencia entre tuberías y no puede evitar que la más rápida se vacíe
+cuando la más lenta llena la suya: eso lo resuelve `combinado`. La revisión lo midió en la
+simulación: sin freno, el colchón cortaba la música cada ~4 bloques (746 cortes en 3000 bloques con
+derivas −64/+64/0 cuadros por ciclo). Ahora solo se pide un relleno si el silencio y el bloque
+siguiente caben en la tubería más llena (si no, `reason: "separado: relojes distintos"`), con
+30 s como mínimo entre cortes y sin más cortes después de 3 rellenos que no devolvieron la tubería a
+su nivel en 10 s (`gave_up`, un aviso en el log). **En C2 se anota cuántos rellenos
+hubo**; uno cada 30–60 min confirma la deriva, ninguno con el paso 0 en el mismo driver también.
+
 ## 2. Lo que se construyó para medirlo (2026-10-02, en el Mac)
 
 - `host/src/aurasync/radio.py`: el monitor que sigue el journal de WirePlumber, cuenta los

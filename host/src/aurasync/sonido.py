@@ -157,6 +157,14 @@ def bytes_en_tuberia(archivo) -> int | None:
         return None
 
 
+def tamano_de_tuberia(archivo) -> int | None:
+    """The pipe's size in bytes (`F_GETPIPE_SZ`), or `None` if it cannot be read."""
+    try:
+        return int(fcntl.fcntl(archivo.fileno(), fcntl.F_GETPIPE_SZ))
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
 def fijar_volumen_completo(sink: str) -> bool:
     """Pone un sink al 100 % y sin silenciar, y dice si quedó así (se comprueba, no se supone)."""
     subprocess.run(["pactl", "set-sink-volume", sink, "100%"], capture_output=True, check=False)
@@ -362,6 +370,19 @@ class Reproductor:
         ]
         return min(niveles) if niveles else None
 
+    def espacio_ms(self) -> float | None:
+        """Room left in the fullest pipe, in ms: what one write can add to every speaker without
+        waiting (the speakers' cushion, cushion.py). `None` if a pipe cannot be read."""
+        libres = []
+        for p in list(self._procesos.values()):
+            if p is None or p.stdin is None:
+                continue
+            n, tamano = bytes_en_tuberia(p.stdin), tamano_de_tuberia(p.stdin)
+            if n is None or tamano is None:
+                return None
+            libres.append(tamano - n)
+        return min(libres) / 4 / self.sr * 1000 if libres else None
+
     def escribir(self, bloques: dict[str, np.ndarray]) -> None:
         """Un bloque mono por parlante. Las claves son nombres de nodo."""
         for nodo, x in bloques.items():
@@ -533,6 +554,15 @@ class ReproductorCombinado:
             return None
         n = bytes_en_tuberia(self._play.stdin)
         return None if n is None else n / (4 * len(self.nodos)) / self.sr * 1000
+
+    def espacio_ms(self) -> float | None:
+        """Room left in the one pipe, in ms: what one write can add without waiting."""
+        if self._play is None or self._play.stdin is None:
+            return None
+        n, tamano = bytes_en_tuberia(self._play.stdin), tamano_de_tuberia(self._play.stdin)
+        if n is None or tamano is None:
+            return None
+        return (tamano - n) / (4 * len(self.nodos)) / self.sr * 1000
 
     def escribir(self, bloques: dict[str, np.ndarray]) -> None:
         """Un bloque mono por parlante; se intercalan en un solo stream de N canales."""

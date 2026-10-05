@@ -79,6 +79,7 @@ from aurasync.motor import Motor
 from aurasync.outputs import output_kind
 from aurasync.presets import PresetChainStore, PresetStore, read_lenient, write_atomic
 from aurasync.probe_ring import RingError as ProbeRingError
+from aurasync.rejoin import RejoinPolicy
 from aurasync.session import AudioSession, SessionError, SessionOptions
 from aurasync.snapshot import build_snapshot
 from aurasync.sync_estimator import SyncEstimator
@@ -102,6 +103,7 @@ REPLY_TIMEOUT_S = 30.0
 CONFIG_KEYS = {"bind", "port", "token", "installation", "microphone", "measurements", "monitor", *remote.REMOTE_KEYS}
 PARTS = {
     "ruteo": ("routing", logging.WARNING),
+    "salida": ("output", logging.WARNING),
     "parlante perdido": ("session", logging.WARNING),
     "lazo": ("recalibration", logging.INFO),
     "ajuste": ("recalibration", logging.INFO),
@@ -388,6 +390,8 @@ class Service:
         self.logs = logs or LogBuffer()
         self.restarts: dict[str, int] = {}
         self.errors: dict[str, str] = {}
+        self.rejoin = RejoinPolicy()
+        self._output_seen: dict[str, str] = {}
         self._print = log or (lambda line: print(line, flush=True))  # noqa: T201 - the service's log is its stdout
         self._queue: queue.Queue[_Pending] = queue.Queue()
         self._started = time.monotonic()
@@ -515,6 +519,7 @@ class Service:
                 else:
                     self._drain(block=True)
                 self._refresh_views()
+                self._rejoin_lost()
                 self._publish()
         finally:
             try:
@@ -647,6 +652,8 @@ class Service:
         names = {
             p.sink: p.nombre for p in (self.installation.parlantes if self.installation else []) if p.sink is not None
         }
+        # Both combine sinks a session alternates between (a speaker change, session.request_output).
+        combined = {f"{self.options.sink_name}_salida", f"{self.options.sink_name}_salida_b"}
         for key, entry in (view.get("xruns") or {}).items():
             total = entry.get("total") if isinstance(entry, dict) else None
             before = self._xrun_totals.get(key)
@@ -654,7 +661,7 @@ class Service:
             if total is None or before is None or total <= before:
                 continue
             sink = key.split(":", 1)[-1]
-            where = names.get(sink, "salida combinada" if sink == "aurasync_salida" else sink)
+            where = names.get(sink, "salida combinada" if sink in combined else sink)
             layer = {"bt": "nodo Bluetooth", "stream": "stream del sink combinado"}.get(key.split(":", 1)[0], "pw-play")
             cuts.add("xrun", where, f"{total - before} en el {layer}", count=total - before)
 
@@ -1680,6 +1687,95 @@ class Service:
         self.installation.parlantes.append(Parlante(name, None, pan=pan, ambiente=ambience))
         self.log(f"added virtual speaker {name} as {free or 'custom'}", part="session")
         return self._changed()
+
+    def speaker_join(self, speaker: str) -> dict:
+        """A real `absent` or `lost` speaker starts playing, with the session running."""
+        session = self._need_session()
+        states = session.output_states()
+        if speaker not in states:
+            raise ContractError("not_found", f"no speaker {speaker!r}")
+        sink = self._speaker(speaker).sink
+        if sink is None:
+            raise ContractError("conflict", f"{speaker} is virtual: it has no output to play on")
+        if states[speaker] == "playing":
+            raise ContractError("conflict", f"{speaker} is already playing")
+        if sink not in {o.get("sink") for o in self.observer.view.get("outputs", [])}:
+            raise ContractError("unavailable", f"{speaker} is not connected as an audio output; connect it first")
+        self._request_output(session, {n for n, s in states.items() if s == "playing"} | {speaker}, speaker, "joined")
+        return {}
+
+    def speaker_leave(self, speaker: str) -> dict:
+        """A playing speaker leaves the session, which goes on (heard on the monitor)."""
+        session = self._need_session()
+        states = session.output_states()
+        if speaker not in states:
+            raise ContractError("not_found", f"no speaker {speaker!r}")
+        if states[speaker] != "playing":
+            raise ContractError("conflict", f"{speaker} is not playing")
+        self._request_output(session, {n for n, s in states.items() if s == "playing"} - {speaker}, speaker, "left")
+        self.rejoin.clear(speaker)  # a speaker that left has no drops: it never returns by itself
+        return {}
+
+    def _request_output(
+        self, session: Any, playing: set[str], speaker: str, verb: str, *, automatic: bool = False
+    ) -> None:
+        """Ask the session for exactly `playing`; the outcome arrives later on the engine thread.
+
+        A manual join that works clears the speaker's rejoin history; a failed automatic return
+        counts as one more drop, so a link that never comes back meets the brake."""
+        current = {n for n, s in session.output_states().items() if s == "playing"}
+        if playing == current:
+            raise ContractError("conflict", "that is already the set of speakers playing")
+
+        def done(message: str | None) -> None:
+            def finish() -> None:
+                if message is None:
+                    self.errors.pop("output", None)
+                    if verb == "joined":
+                        self.rejoin.clear(speaker)
+                    self.log(f"{verb} {speaker}", part="session")
+                else:
+                    self.errors["output"] = message
+                    if automatic:
+                        self.rejoin.note_lost(speaker)
+                    self.log(f"{speaker}: the speaker change failed: {message}", level=logging.WARNING, part="session")
+
+            self.on_engine(finish)
+
+        try:
+            session.request_output(playing, done)
+        except SessionError as exc:
+            raise ContractError(exc.code, exc.message) from exc
+
+    def _rejoin_lost(self) -> None:
+        """A lost speaker returns by itself when its sink is back (spec §5), with a brake."""
+        session = self.session
+        if session is None or self.installation is None:
+            self._output_seen = {}
+            return
+        states = session.output_states()
+        seen, self._output_seen = self._output_seen, states
+        for name, state in states.items():
+            if state == "lost" and seen.get(name) != "lost":
+                self.rejoin.note_lost(name)
+        lost = [n for n, s in states.items() if s == "lost"]
+        if not lost:
+            return
+        sinks = {o.get("sink") for o in self.observer.view.get("outputs", [])}
+        for name in lost:
+            try:
+                sink = self._speaker(name).sink
+            except ContractError:
+                continue
+            if sink not in sinks or not self.rejoin.may_try(name):
+                continue
+            playing = {n for n, s in states.items() if s == "playing"} | {name}
+            try:
+                self._request_output(session, playing, name, "volvió", automatic=True)
+            except ContractError:
+                return  # a change is in flight: try again at the next tick, without spending the try
+            self.rejoin.note_try(name)
+            return  # one change at a time
 
     def speaker_remove(self, speaker: str) -> dict:
         self._need_no_session("removing a speaker")
