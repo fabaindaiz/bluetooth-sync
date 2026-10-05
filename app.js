@@ -32,6 +32,8 @@ const SERVICE_STATUS = {
 const SPEAKER_STATUS = {
   playing: ["", "sonando"], connected: ["", "conectado"], lost: ["", "perdido"],
   disconnected: ["", "desconectado"], unknown: ["", "sin observar"],
+  // `output` del servicio (parlantes virtuales, fase 1).
+  virtual: ["", "virtual"], absent: ["", "sin conectar"],
 };
 const KIND_NAMES = { proceso: "proceso", tarea: "tarea", sistema: "sistema (solo se observa)" };
 const LEVELS = { debug: 10, info: 20, warning: 30, error: 40, critical: 50 };
@@ -679,7 +681,7 @@ function renderRoom(s) {
     const speaker = s.speakers.find((sp) => sp.role === role);
     slot.name.textContent = speaker ? speaker.name : "libre";
     slot.box.classList.toggle("filled", Boolean(speaker));
-    slot.box.classList.toggle("lost", Boolean(speaker && s.session.status === "playing" && !speaker.playing));
+    slot.box.classList.toggle("lost", Boolean(speaker && s.session.status === "playing" && speakerState(s, speaker) === "lost"));
   }
   // Los parlantes sin rol (con 5 a 8 siempre hay): un recuadro donde los ponen su pan y su ambiente,
   // con la misma escala que los roles (FL en pan −0,7 y ambiente 0,15 cae en su lugar; RL, con 0,55).
@@ -724,6 +726,10 @@ function renderRoom(s) {
 const speakerRows = new Map();
 
 function speakerState(s, sp) {
+  // El servicio nuevo dice qué pasa con la salida; uno viejo no manda `output` y se deduce como siempre.
+  // `output` es null sin sesión: un parlante virtual sigue siendo virtual.
+  if (sp.output) return sp.output;
+  if (sp.output_kind === "virtual") return "virtual";
   if (s.session.status === "playing") return sp.playing ? "playing" : "lost";
   if (sp.connected === null) return "unknown";
   return sp.connected ? "connected" : "disconnected";
@@ -1083,6 +1089,9 @@ function renderDevices(s) {
   $("scan").disabled = Boolean(s.scanning);
   $("scan").textContent = s.scanning ? "Buscando…" : "Buscar cerca";
   const playing = s.session.status === "playing";
+  const addVirtual = $("add-virtual");
+  addVirtual.disabled = playing || s.session.status === "starting";
+  addVirtual.title = addVirtual.disabled ? "Detené la sesión para agregar un parlante" : "";
   const group = (d) => (d.connected ? "connected" : d.paired ? "paired" : "seen");
   const rows = [];
   for (const [key, title] of DEVICE_GROUPS) {
@@ -1458,7 +1467,7 @@ function alertsOf(s) {
   for (const sp of s.speakers) {
     const short = sp.name.replace("JBL ", "");
     const battery = (devices.get(sp.address) || {}).battery_pct;
-    if (playing && !sp.playing) {
+    if (playing && speakerState(s, sp) === "lost") {
       out.push({ icon: "unlink", text: `${sp.name}: perdido, sin stream (los demás siguen)`, short: `${short}: perdido` });
     } else if (!playing && sp.connected === false) {
       out.push({ icon: "unlink", text: `${sp.name}: desconectado`, short: `${short}: desconectado` });
@@ -2378,6 +2387,7 @@ function setup() {
   const volume = $("volume");
   liveRange(volume, $("volume-out"), (v) => `${nf(v, 0)} dB`, (v) => { markPending($("volume-out")); return setGlobal(volume, { volume_db: v }); });
   $("scan").addEventListener("click", () => send("scan"));
+  $("add-virtual").addEventListener("click", () => send("speaker_add_virtual"));
   $("save").addEventListener("click", async () => {
     const reply = await send("save");
     if (reply && reply.ok) toast(`Instalación guardada en ${reply.result.path}`);
