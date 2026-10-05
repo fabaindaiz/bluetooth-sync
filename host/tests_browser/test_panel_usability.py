@@ -88,6 +88,7 @@ def test_removing_a_speaker_can_be_undone_with_what_it_had(page: Page, svc: Runn
 
 def test_applying_a_calibration_can_be_undone(page: Page, svc: Running):
     start(page)
+    svc.command("set", changes={"recalibrate": True})  # off by default; this test is about it running
     calibrate(page)
     before = artistic(svc.state())
     page.locator("#cal-apply").click()
@@ -191,6 +192,9 @@ def test_a_quiet_microphone_asks_before_calibrating(page: Page, svc: Running):
         expect(page.locator("#cal-note")).to_contain_text("Emitiendo", timeout=5000)
         # The shortcut in Escuchar asks the same.
         expect(page.locator("#cal-note")).to_contain_text("Medido", timeout=30000)
+        # With the loop off the calibration closed the microphone: the panel asks for it again
+        # (a few seconds), since the check is in view.
+        expect(page.locator("#mic-check")).to_have_attribute("data-state", "low", timeout=5000)
         go(page, "Escuchar")
         # The warning is decided at the click, on the live reading (stream or state). It failed once
         # under load (2026-10-04, not reproduced): if the reading is not "low" here, this says so
@@ -204,13 +208,17 @@ def test_a_quiet_microphone_asks_before_calibrating(page: Page, svc: Running):
 def test_a_gap_in_the_reading_does_not_skip_the_warning(page: Page, svc: Running):
     """After a calibration the loop starts again and for a while there is no reading: the shortcut
     then calibrated without asking, though the microphone had just been too low (found by the
-    instrumented test above under load, 2026-10-04). The last warning holds for a few seconds."""
+    instrumented test above under load, 2026-10-04). The last warning holds for a few seconds.
+    With the loop off (the default since 2026-10-05) the gap is the end of the on-demand check:
+    the microphone closes after a few seconds (session.MIC_CHECK_S)."""
     play_tone(page)
     go(page, "Calibrar")
     with quiet_microphone(svc):
         expect(page.locator("#mic-check")).to_have_attribute("data-state", "low", timeout=5000)
-        svc.command("set", changes={"recalibrate": False})  # the loop stops: no reading any more
-        expect(page.locator("#mic-check")).to_have_attribute("data-state", "none", timeout=5000)
+        # The check closes by itself: no reading any more, and nothing asks again on its own.
+        expect(page.locator("#mic-check")).to_have_attribute("data-state", "none", timeout=15000)
+        assert svc.state()["recalibration"]["mic_check"] is False
+        expect(page.locator("#mic-recheck")).to_be_visible()
         go(page, "Escuchar")
         page.locator("#now-calibrate").click()
         expect(page.locator("#now-gate")).to_contain_text("demasiado bajo")
@@ -335,8 +343,8 @@ def test_eight_speakers_fit_every_screen(browser: Browser, svc8: Running, size):
     try:
         start(page)
         page.locator("#source-kind").select_option("tone")
-        # Entrada L y R, ocho parlantes y el micrófono.
-        expect(page.locator(".meter")).to_have_count(11, timeout=10000)
+        # Entrada L y R y ocho parlantes (el micrófono, solo mientras se mide su nivel).
+        expect(page.locator(".meter")).to_have_count(10, timeout=10000)
         svc8.command("radio_log", active=True)
         for label in ("Escuchar", "Cadena", "Parlantes", "Calibrar", "Diagnóstico", "Ajustes"):
             go(page, label)
@@ -420,3 +428,14 @@ def test_three_speakers_look_as_always(page: Page):
     expect(page.locator("#quick-group")).to_be_hidden()
     expect(page.locator("[data-quick] .fold-btn:visible")).to_have_count(0)
     expect(page.locator('[data-quick="JBL Go 4 Red"] .q-ambience')).to_be_visible()
+
+
+def test_a_hidden_tab_does_not_open_the_microphone(page: Page, svc: Running):
+    """Privacy (re-review 2026-10-05): the check opens the microphone only for a panel someone
+    is looking at, not for a tab left in the background."""
+    play_tone(page)
+    page.evaluate("Object.defineProperty(document, 'visibilityState', {value: 'hidden', configurable: true})")
+    go(page, "Calibrar")
+    page.wait_for_timeout(1500)
+    assert svc.state()["recalibration"]["mic_check"] is False
+    assert svc.service.session.pids()["microphone"] is None

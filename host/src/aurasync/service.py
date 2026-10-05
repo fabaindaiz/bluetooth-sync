@@ -66,7 +66,7 @@ from aurasync import __version__, control, remote, spatial_docs, sync_docs
 from aurasync import chain as chain_model
 from aurasync import radio as radio_module
 from aurasync.access import ACCESS_OPS
-from aurasync.bt_volume import BluetoothVolume
+from aurasync.bt_volume import BluetoothVolume, PactlVolume
 from aurasync.chain import ChainValues
 from aurasync.config import Instalacion, Parlante, ruta_por_defecto
 from aurasync.control import ContractError
@@ -245,9 +245,9 @@ class Settings:
     recalibrate_every_s: float = 20.0
     recalibrate_measure_s: float = 10.0
     output_mode: str = "combinado"
-    recalibrate: bool = True
-    """The recalibration loop is part of the protocol: on by default whenever there is a
-    microphone. Switching it off is an advanced option, and it takes effect live."""
+    recalibrate: bool = False
+    """The continuous recalibration loop: off by default (it takes the microphone and measures
+    while playing). Switching it on is a choice, and it takes effect live."""
     probe: bool = False
     """The masked probe the loop measures against (dsp/probe.py). Off until the blind A/B
     says it cannot be heard (i-7c8794-e3e40d, step 4)."""
@@ -356,6 +356,7 @@ class Service:
         bt_volume: BluetoothVolume | None = None,
         monitor_factory: Callable[..., Any] | None = None,
         monitor: dict | None = None,
+        monitor_volume: Any = None,
     ) -> None:
         self.installation_path = installation_path
         self.config_path = config_path
@@ -446,6 +447,10 @@ class Service:
             monitor_factory or self._default_monitor_factory(),
             on_engine=self.on_engine,
             save=self._save_monitor,
+            backend=monitor_volume if monitor_volume is not None else self._default_monitor_volume(),
+            # The panel's volume: the digital one, or the speakers' with `volume.avrcp` (whose
+            # digital volume is then 0 dB). The monitor follows it in both (monitor.Levels).
+            volume=lambda: self.settings.volume_db,
         )
         self._publish()
 
@@ -1461,6 +1466,16 @@ class Service:
             raise ContractError(exc.code, exc.message) from exc
         return {}
 
+    def mic_check(self) -> dict:
+        """Open the microphone for a few seconds only to show its level (the panel's check
+        before calibrating, with the loop off). `opened` False: the loop or a calibration
+        already has it."""
+        try:
+            opened = self._need_session().check_microphone(self.options.microphone)
+        except SessionError as exc:
+            raise ContractError(exc.code, exc.message) from exc
+        return {"opened": opened}
+
     def calibrate_cancel(self) -> dict:
         self._need_session().cancel_calibration()
         return {}
@@ -1946,15 +1961,26 @@ class Service:
 
     # -- the headphone monitor (monitor.py, monitor_control.py) -------------------------
 
-    def monitor_set(self, mode: str, target: str | None = None, gain_db: float | None = None) -> dict:
+    def monitor_set(
+        self,
+        mode: str,
+        target: str | None = None,
+        gain_db: float | None = None,
+        volume_control: str | None = None,
+        device_volume_pct: float | None = None,
+    ) -> dict:
         """Choose what the headphones get; not synchronised with the speakers. Opens on a worker:
-        the state says when it is on and where PipeWire really sent it."""
+        the state says when it is on and where PipeWire really sent it. `device_volume_pct`
+        present is a level the listener asked for now: applied to the sink even when it equals
+        the stored one (monitor_control.MonitorController.set)."""
         current = self.monitor.settings
         try:
             settings = MonitorSettings(
                 mode=mode,
                 target=target if target is not None else (current.target if mode != "off" else None),
                 gain_db=current.gain_db if gain_db is None else gain_db,
+                volume_control=current.volume_control if volume_control is None else volume_control,
+                device_volume_pct=current.device_volume_pct if device_volume_pct is None else device_volume_pct,
             )
             self.monitor.set(
                 settings,
@@ -1963,11 +1989,21 @@ class Service:
                 sink_name=self.options.sink_name,
                 rate=self.options.rate,
                 block=self.options.block,
+                level=device_volume_pct,
             )
         except MonitorError as exc:
             raise ContractError("conflict" if isinstance(exc, LoopError) else "out_of_range", str(exc)) from exc
         self.log(f"monitor: {mode}{f' → {settings.target}' if settings.target else ''}", part="monitor")
-        return settings.to_json()
+        # What the controller kept (a switch to the device may have lowered the ceiling).
+        return self.monitor.settings.to_json()
+
+    def _default_monitor_volume(self) -> Any:
+        """The headphones' sink volume. A simulated service never asks the system for it."""
+        if self.simulated:
+            from aurasync.simulated import SimulatedSinkVolume  # noqa: PLC0415
+
+            return SimulatedSinkVolume()
+        return PactlVolume()
 
     def _default_monitor_factory(self) -> Callable[..., Any]:
         """A simulated service never opens PipeWire, even when nobody passed a factory."""

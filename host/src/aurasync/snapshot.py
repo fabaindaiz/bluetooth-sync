@@ -203,6 +203,7 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "drift_ppm": getattr(session, "drift_ppm", None) if session is not None else None,
             "probe": session.probe_state() if session is not None and hasattr(session, "probe_state") else None,
             "microphone": svc.options.microphone,
+            "mic_check": bool(getattr(session, "mic_check", False)) if session is not None else False,
         },
         "microphones": observer.get("microphones", []),
         "monitor": svc.monitor.view(observer.get("sinks", []), svc.installation, svc.options.sink_name)

@@ -160,6 +160,10 @@ class Motor:
         """Si se aplica la ecualización de cada parlante. Solo cambia a través del corte."""
         # Arranca ya en su valor: antes de sonar no hay nada que una rampa tenga que disimular.
         self._volumen = DecibelRamp(volumen_db, c.param("volume", "volume_speed_db_s"), sr)
+        self.volumen_del_bloque_db: float | np.ndarray = float(volumen_db)
+        """The digital volume (dB) the last block was made with, per sample while it ramps: what
+        the headphone monitor takes back out of the speakers' blocks. After a cut's bottom the
+        target has already jumped, but the block was made before (monitor.Levels)."""
         self._mezcla = c.param("ambience", "mix")
         """La mezcla del extractor cuando está prendido (`ambience.mix`)."""
 
@@ -805,7 +809,8 @@ class Motor:
 
         # El volumen y el corte se calculan una vez por bloque, igual para todos.
         envolvente, saltar = self._corte.block(n)
-        salida_global = self._volumen.block(n) * envolvente
+        self.volumen_del_bloque_db = self._volumen.block_db(n)
+        salida_global = 10 ** (self.volumen_del_bloque_db / 20) * envolvente
         compensacion = self._compensacion.block(n)
         if not (isinstance(compensacion, float) and compensacion == 1.0):
             salida_global = salida_global * compensacion

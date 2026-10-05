@@ -26,6 +26,16 @@ def _routed_page(browser: Browser, svc: Running, edit) -> tuple[Page, list[str],
     )
     page.route("**/v1/stream*", lambda route: route.abort())
     page.route("**/v1/state", lambda route: route.fulfill(status=200, json={"v": 1, "ok": True, "result": state}))
+
+    # The snapshot may say a session plays while the real service has none: the microphone check
+    # the panel asks for on Calibrar then answers as that playing session would (the loop is off).
+    def command(route) -> None:
+        if (route.request.post_data_json or {}).get("op") == "mic_check":
+            route.fulfill(status=200, json={"v": 1, "ok": True, "result": {"opened": True}})
+        else:
+            route.continue_()
+
+    page.route("**/v1/command", command)
     page.goto(f"{svc.url}/?t={TOKEN}")
     expect(page.locator("body[data-ready='1']")).to_be_attached()
     return page, errors, context

@@ -1920,9 +1920,10 @@ function micReading(s) {
   };
   const mic = level("mic");
   if (!mic) {
-    return { state: "none", why: s.recalibration.active
+    const waiting = s.recalibration.active || s.recalibration.mic_check;
+    return { state: "none", why: waiting
       ? "Esperando la primera lectura del micrófono…"
-      : "El nivel lo mide el lazo: encendé «Mantener sincronía» para verlo antes de calibrar." };
+      : "El micrófono se abre solo unos segundos para medir su nivel: tocá «Medir el micrófono»." };
   }
   const input = Math.max(...["in L", "in R"].map((n) => (level(n) || { rms: SILENCE }).rms));
   const playing = input > MIC_PLAYING_DB;
@@ -1998,7 +1999,37 @@ function gateCalibration(box, go) {
 
 // -- calibración --------------------------------------------------------------------
 
+// Con el lazo apagado (por defecto) nadie lee el micrófono: al mirar esta verificación se pide
+// abrirlo unos segundos (`mic_check`), nunca de continuo: puede ser el micrófono del portátil.
+// Se pide al entrar (o cuando se puede: sesión sonando, sin lazo ni calibración) y con el botón.
+let micCheckEligible = false;
+
+function micCheckPossible(s) {
+  const cal = s.calibration;
+  // Solo para alguien que mira el panel: una pestaña en segundo plano no abre el micrófono.
+  return document.visibilityState === "visible"
+    && s.session.status === "playing" && !s.recalibration.active
+    && !(cal && ["running", "measuring"].includes(cal.state))
+    && s.recalibration.mic_check !== undefined; // un servicio anterior no tiene `mic_check`
+}
+
+function askMicCheck() {
+  if (api) api.raw({ op: "mic_check" });
+}
+
+function renderMicCheck(s) {
+  const visible = !$("mic-check").closest("[data-view]")?.hidden;
+  const possible = micCheckPossible(s);
+  const eligible = visible && possible;
+  if (eligible && !micCheckEligible) askMicCheck();
+  micCheckEligible = eligible;
+  const button = $("mic-recheck");
+  const show = possible && !s.recalibration.mic_check;
+  if (button.hidden === show) button.hidden = !show;
+}
+
 function renderCalibration(s) {
+  renderMicCheck(s);
   paintMicCheck();
   const cal = s.calibration;
   renderResponse(cal, s.speakers);
@@ -2450,6 +2481,8 @@ function setup() {
   });
   editable($("cal-mic"));
   $("cal-mic").addEventListener("change", () => sendFrom($("cal-mic"), "microphone_set", { node: $("cal-mic").value || null }));
+  $("mic-recheck").addEventListener("click", askMicCheck);
+  document.addEventListener("visibilitychange", () => { if (latest) renderMicCheck(latest); });
   $("cal-run").addEventListener("click", () => {
     const cal = latest && latest.calibration;
     if (cal && ["running", "measuring"].includes(cal.state)) send("calibrate_cancel");
@@ -2896,7 +2929,21 @@ function monitorStateText(m) {
   if (m.state === "failed") return `No se pudo: ${m.error}`;
   if (!m.reached) return `PipeWire lo mandó a ${m.routed_to ? name(m.routed_to) : "ninguna salida"}, no a ${name(m.target)}.`;
   const cushion = m.cushion_ms == null ? "" : ` Colchón ${Math.round(m.cushion_ms)} ms · rellenos ${m.refills || 0}${m.refills ? " (la salida se quedó sin audio y se rellenó)" : ""}${m.trims ? ` · recortes ${m.trims}` : ""}.`;
-  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}${cushion}`;
+  return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}${cushion}${monitorMatchText(m)}`;
+}
+
+// Los modos se oyen al mismo volumen: la mezcla y el binaural se igualan a la entrada al volumen
+// elegido (loudness_match.py). Un servicio anterior no manda `match`: no se dice nada.
+function monitorMatchText(m) {
+  if (!m.match) return "";
+  if (m.match === "unmeasured") return " Compensación binaural sin medir para este HRTF.";
+  if (m.match === "measuring") return " Igualando…";
+  // `frozen`: una pausa, un corte, una calibración o todos los parlantes en silencio.
+  return ` Nivel igualado: ${nf(m.makeup_db, 1)} dB${m.match === "frozen" ? " (en espera)" : ""}.`;
+}
+
+function monitorLevelText(value, device) {
+  return `${Math.round(Number(value))} ${device ? "%" : "dB"}`;
 }
 
 function renderMonitor(s) {
@@ -2915,29 +2962,60 @@ function renderMonitor(s) {
     select.value = m.target || "";
   }
   if (!isEditing($("monitor-mode"))) $("monitor-mode").value = m.mode;
-  if (!isEditing($("monitor-gain"))) $("monitor-gain").value = String(m.gain_db);
-  $("monitor-gain-value").textContent = `${Math.round(Number($("monitor-gain").value))} dB`;
+  // Un servicio anterior no manda `volume_control`: es por software, como era.
+  const control = m.volume_control || "software";
+  if (!isEditing($("monitor-volume-control"))) $("monitor-volume-control").value = control;
+  const gain = $("monitor-gain");
+  // Del audífono: el nivel es el volumen real de la salida, en %, leído de vuelta (también lo
+  // que se cambió con los botones). Por software: la ganancia, en dB.
+  const device = control === "device";
+  if (gain.dataset.control !== control) {
+    gain.dataset.control = control;
+    gain.min = device ? "0" : "-40";
+    gain.max = device ? "100" : "0";
+  }
+  if (!isEditing(gain)) {
+    const real = device ? (m.device_volume_pct ?? m.device_volume_set_pct) : m.gain_db;
+    if (real != null) gain.value = String(real);
+  }
+  $("monitor-gain-value").textContent = monitorLevelText(gain.value, device);
   const state = $("monitor-state");
-  state.textContent = monitorStateText(m);
+  state.textContent = monitorStateText(m) + (device && m.device_volume_reason ? ` Volumen del audífono: ${m.device_volume_reason}.` : "");
   state.dataset.state = m.state === "on" && !m.reached ? "elsewhere" : m.state;
   state.classList.toggle("warn", state.dataset.state === "failed" || state.dataset.state === "elsewhere");
 }
 
-function sendMonitor() {
+// Solo el deslizador manda un nivel: cambiar el modo, la salida o quién controla el volumen
+// nunca lo lleva. Si lo llevara, el volumen leído de una salida (subido con sus botones) se
+// le pediría a la nueva, que subiría sola (revisión, 2026-10-05).
+function sendMonitor(extra = {}) {
   const mode = $("monitor-mode").value;
   const target = $("monitor-target").value || null;
   if (mode !== "off" && !target) {
     $("monitor-state").textContent = "Elegí una salida primero.";
     return;
   }
-  sendFrom($("monitor-state"), "monitor_set", { mode, target, gain_db: Number($("monitor-gain").value) });
+  sendFrom($("monitor-state"), "monitor_set", { mode, target, ...extra });
+}
+
+// La unidad que el deslizador muestra ahora (la del estado), no la del selector: recién cambiado
+// el selector, el deslizador sigue en la unidad anterior hasta el próximo estado.
+function monitorSliderIsDevice() {
+  return ($("monitor-gain").dataset.control || $("monitor-volume-control").value) === "device";
 }
 
 function setupMonitor() {
-  $("monitor-mode").addEventListener("change", sendMonitor);
+  $("monitor-mode").addEventListener("change", () => sendMonitor());
   $("monitor-target").addEventListener("change", () => { if ($("monitor-mode").value !== "off") sendMonitor(); });
-  $("monitor-gain").addEventListener("input", () => { $("monitor-gain-value").textContent = `${$("monitor-gain").value} dB`; });
-  $("monitor-gain").addEventListener("change", () => { if ($("monitor-mode").value !== "off") sendMonitor(); });
+  $("monitor-volume-control").addEventListener("change", () => sendMonitor({ volume_control: $("monitor-volume-control").value }));
+  $("monitor-gain").addEventListener("input", () => {
+    $("monitor-gain-value").textContent = monitorLevelText($("monitor-gain").value, monitorSliderIsDevice());
+  });
+  $("monitor-gain").addEventListener("change", () => {
+    if ($("monitor-mode").value === "off") return;
+    const level = Number($("monitor-gain").value);
+    sendMonitor(monitorSliderIsDevice() ? { device_volume_pct: level } : { gain_db: level });
+  });
 }
 
 document.addEventListener("DOMContentLoaded", setup);

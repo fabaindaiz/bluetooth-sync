@@ -66,6 +66,9 @@ PEAK_FALL_DB_S = 20.0 / 1.7
 """Peak hold and fall like a type I peak meter (IEC 60268-10: 20 dB in 1.7 s)."""
 MIC_SLACK_S = 0.4
 """The microphone starts a little after the stimulus: the recording leaves out this much."""
+MIC_CHECK_S = 8.0
+"""How long the microphone stays open for the panel's level check when the loop is off: a few
+seconds on demand, never continuously (it may be the laptop's own microphone: privacy)."""
 SIGNAL_RMS = 0.005
 """-46 dBFS: below this, before the master volume, the loop does not measure (no content)."""
 CAL_BEFORE_S = 0.7
@@ -465,6 +468,8 @@ class AudioSession:
         self._input: sonido.SinkVirtual | None = None
         self._mic: sonido.MicrofonoContinuo | None = None
         self._cal_mic: sonido.MicrofonoContinuo | None = None
+        self._check_mic: sonido.MicrofonoContinuo | None = None
+        self._check_until = 0.0
         self.monitor = None
         """The headphone monitor (monitor.MonitorOutput), not synchronised with the speakers."""
         self.multichannel: MultichannelFile | None = None
@@ -594,6 +599,7 @@ class AudioSession:
                     player.cerrar()
         if self._cal_mic is not None:
             self._cal_mic.cerrar()
+        self._close_mic_check()
         self.outputs.close()
         self._input = self._mic = self._cal_mic = None
         self.loop = None
@@ -694,6 +700,7 @@ class AudioSession:
             self._fade_detail = None
         self._was_fading = self.motor.en_corte
         self._calibration_step()
+        self._mic_check_step(blocks)
         if (
             getattr(self, "_loop_paused_for_calibration", False)
             and self.calibration is not None
@@ -1201,6 +1208,7 @@ class AudioSession:
         self._emission = sincronia.VentanaDeEmision(measured, o.rate, segundos=o.measure_s + 2.0)
         self._probe_emission = sincronia.VentanaDeEmision(measured, o.rate, segundos=o.measure_s + 2.0)
         self._measurer = sincronia.MedicionEnSegundoPlano(self._measure)
+        self._close_mic_check()  # the loop reads the microphone's level itself
         self._mic = self._recal_stack.enter_context(self._microphone(microphone, o.measure_s + 4.0))
         self._recal_stack.callback(self._measurer.cerrar)
         # Per speaker, following each one's drift, on absolute arrivals: the references are
@@ -1402,6 +1410,7 @@ class AudioSession:
         sounding = getattr(self.motor, "curva_sonando", lambda p: p.ecualizacion_db)
         applied_eq = {p.nombre: (sounding(p) if eq_on else None) for p in self.installation.parlantes}
         cal = Calibration(participants, seconds, amplitude, self.options.rate, applied, applied_eq)
+        self._close_mic_check()  # the calibration has the microphone now
         self._cal_mic = self._microphone(microphone, cal.total / self.options.rate + 3.0)
         self._cal_mic.__enter__()
         self.calibration = cal
@@ -1433,6 +1442,55 @@ class AudioSession:
                 cal.state, cal.error = "error", "the microphone did not deliver enough audio"
                 return
             cal.measure(recording, lambda: self.log("calibración", motivo=f"terminada: {cal.state}"))
+
+    # -- the microphone's level, on demand (the panel's check before calibrating) -------
+
+    @property
+    def mic_check(self) -> bool:
+        """The microphone is open for the level check now."""
+        return self._check_mic is not None
+
+    def check_microphone(self, microphone: str | None, seconds: float | None = None) -> bool:
+        """Open the microphone for `seconds` (default `MIC_CHECK_S`) only to show its level. With
+        the loop on it already does that, and a calibration has the microphone: then nothing
+        opens and the answer is False. Asked again while open, nothing changes: one check lasts
+        that long from its start, so a client asking again and again never keeps it open for
+        good (privacy); a new check opens only once the previous one closed."""
+        if self.loop is not None or self._cal_mic is not None:
+            return False
+        if not microphone:
+            raise SessionError("unavailable", "there is no microphone to check")
+        if self._check_mic is not None:
+            return True
+        span = MIC_CHECK_S if seconds is None else seconds
+        self._check_until = time.monotonic() + span
+        mic = self._microphone(microphone, 1.0)
+        mic.__enter__()
+        self._check_mic = mic
+        self.log("micrófono", motivo=f"abierto para medir su nivel, {span:g} s")
+        return True
+
+    def _mic_check_step(self, blocks: dict[str, np.ndarray]) -> None:
+        mic = self._check_mic
+        if mic is None:
+            return
+        if time.monotonic() >= self._check_until or self.loop is not None or self._cal_mic is not None:
+            self._close_mic_check()
+            return
+        mic.bombear()
+        heard = mic.ultimos(0.1)
+        if heard is not None:
+            self.meters.update("mic", heard, len(next(iter(blocks.values()), [])) / self.options.rate)
+            self.telemetry.record_microphone(heard)
+
+    def _close_mic_check(self) -> None:
+        if self._check_mic is None:
+            return
+        self._check_mic.cerrar()
+        self._check_mic = None
+        if self.loop is None:
+            # The reading goes with the microphone: a stale level must not look live.
+            self.meters.values.pop("mic", None)
 
     # -- test tone ------------------------------------------------------------------
 
@@ -1505,6 +1563,6 @@ class AudioSession:
         return {
             "sink": self._input.pid if self._input is not None else None,
             "players": {n: players.get(sink) if sink is not None else None for n, sink in self._sinks.items()},
-            "microphone": self._mic.pid if self._mic is not None else None,
+            "microphone": next((m.pid for m in (self._mic, self._check_mic) if m is not None), None),
             "source": self.source.pid if self.source is not None else None,
         }

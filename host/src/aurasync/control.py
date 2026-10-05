@@ -362,6 +362,8 @@ OPS: dict[str, Op] = {
     "recalibrate": Op(required={"active": Field(bool)}),
     "calibrate": Op(optional={"seconds": Field(float, 5.0, 20.0), "amplitude": Field(float, 0.02, 0.2)}),
     "calibrate_cancel": Op(),
+    # The microphone open a few seconds for the level check, with the loop off (never continuously).
+    "mic_check": Op(),
     "calibration_apply": Op(),
     "measurement_save": Op(optional={"note": Field(str, 0, 500)}),
     "calibration_dump": Op(),
@@ -407,7 +409,12 @@ OPS: dict[str, Op] = {
     # The headphone monitor (spec 2026-10-04-headphone-monitor-design.md): not synchronised.
     "monitor_set": Op(
         required={"mode": Field(str, choices=("off", "stereo", "mix", "binaural"))},
-        optional={"target": Field(str, 1, 256, nullable=True), "gain_db": Field(float, -40.0, 0.0)},
+        optional={
+            "target": Field(str, 1, 256, nullable=True),
+            "gain_db": Field(float, -40.0, 0.0),
+            "volume_control": Field(str, choices=("device", "software")),
+            "device_volume_pct": Field(float, 0.0, 100.0),
+        },
     ),
     # The radio (spec 2026-10-02 §3.2): raise the bluez5 log level so the radio monitor sees drops.
     "radio_log": Op(required={"active": Field(bool)}, optional={"mode": Field(str, choices=("light", "heavy"))}),

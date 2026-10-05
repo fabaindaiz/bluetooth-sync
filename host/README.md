@@ -193,11 +193,30 @@ y el sonido envolvente sin los parlantes, y para escucharlos por el monitor de a
   virtual, `outputs.py` (`Pacer`) lleva el reloj de los bloques.
 - **Cómo escucharlos:** agregar los parlantes virtuales, arrancar la sesión y elegir los audífonos
   en la tarjeta «Monitor (audífonos)» con el modo `mix` o `binaural` (el monitor recibe todos los
-  canales). `stereo` sale **antes** de la cadena, así que no lleva ningún efecto. Unos audífonos
+  canales). `stereo` sale **antes** de la cadena, así que no lleva ningún efecto (sí el volumen). Unos audífonos
   inalámbricos en **HFP** (una llamada) suenan mono a 16 kHz: hay que pasarlos antes a **A2DP**.
 - **Colchón del monitor:** escribe por adelantado un bloque más un quantum del driver (tope 400 ms)
   y lo vigila con el nivel de la tubería de `pw-play` (`cushion_ms`, `level_ms`, `refills`, `trims`
   en el estado), porque sin él los audífonos cortaban la mitad de los ciclos (experimentos/18).
+- **Mismo volumen en todos los modos del monitor:** `stereo` sigue el volumen elegido y `mix`/`binaural`
+  se igualan a él con una compensación por modo que se recuerda (`loudness_match.py`; `makeup_db` y
+  `match` en el estado; el binaural usa la ganancia del HRTF medida en experimentos/18).
+- **Volumen del monitor por el audífono (por defecto):** el nivel de la tarjeta es el volumen de la
+  salida del monitor (para Bluetooth, el de `bluez_output…`, que WirePlumber manda como AVRCP; el mismo
+  que mueven los botones del audífono) y la ganancia por software queda en 0 dB; la igualación de
+  volumen sigue aplicándose. El estado trae el % real leído de vuelta (`device_volume_pct`, con
+  `device_volume_reason` si no se pudo pedir o leer), también cuando se cambió con los botones. Al
+  abrir el monitor, si la salida está por encima del último valor puesto desde el panel (30 % la primera
+  vez) se baja a él; nunca se sube sola. Solo mover el nivel lo pide (cambiar el modo, la salida o
+  quién controla el volumen nunca lleva un nivel), y pasar de software al audífono deja el tope en 30 %
+  como mucho. **Falla cerrado:** si no se pudo leer la salida a ese valor o por debajo (sin `pactl`,
+  una salida que no lo acepta, miente o no se lee, más de 10 s) o PipeWire mandó el monitor a otra
+  salida, suena con la ganancia por software (`gain_db`, como mucho -12 dB) y `device_volume_reason` lo dice.
+  `volume_control: software` es lo de antes (`gain_db`, la salida intacta). Que ese volumen sea de
+  verdad el AVRCP absoluto del WH-CH520 está sin medir (INFERIDO).
+- **Recalibración continua apagada por defecto** (`recalibrate`): se enciende en el panel o con
+  `start`/`set`. Sin el lazo, la verificación del micrófono en Calibrar lo abre solo unos segundos
+  (`mic_check`, 8 s desde que se abre, sin alargarse aunque se pida otra vez) al entrar con la pestaña visible o con «Medir el micrófono», nunca de continuo.
 - **Entrar y salir en caliente (fase 2, d-7c8794-618666; sin validar con parlantes, solo tests y
   `--simular`):** con la sesión sonando, la op `speaker_join` / `speaker_leave` (REST
   `POST /v1/speakers/{name}/join|leave`) hace entrar o salir a un parlante real sin parar la sesión; en

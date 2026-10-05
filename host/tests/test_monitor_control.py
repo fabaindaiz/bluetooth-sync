@@ -87,7 +87,13 @@ def test_setting_a_mode_opens_off_the_engine_thread_and_attaches_on_it():
     assert view["state"] == "on"
     assert view["routed_to"] == "alsa_out"
     assert view["candidates"] == [{"node": "alsa_out", "description": "PC"}]
-    assert saved[-1] == {"mode": "binaural", "target": "alsa_out", "gain_db": -12.0}
+    assert saved[-1] == {
+        "mode": "binaural",
+        "target": "alsa_out",
+        "gain_db": -12.0,
+        "volume_control": "device",
+        "device_volume_pct": None,
+    }
 
 
 def test_a_speaker_as_target_is_refused_before_anything_opens():

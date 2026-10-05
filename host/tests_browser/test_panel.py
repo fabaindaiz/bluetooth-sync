@@ -157,8 +157,9 @@ def test_the_token_leaves_the_address_bar(page: Page, svc: Running):
 def test_start_shows_levels_and_stop_clears_them(page: Page, svc: Running):
     start(page)
     page.locator("#source-kind").select_option("tone")
-    # Entrada L y R, los tres parlantes y el micrófono (el lazo va encendido por defecto).
-    expect(page.locator(".meter")).to_have_count(6, timeout=5000)
+    # Entrada L y R y los tres parlantes. El micrófono no: el lazo va apagado por defecto y el
+    # micrófono se abre solo unos segundos, para medir su nivel en Calibrar.
+    expect(page.locator(".meter")).to_have_count(5, timeout=5000)
     go(page, "Diagnóstico")
     expect(page.locator("#t-input")).to_have_text("recibe audio", timeout=5000)
     page.locator("#run").click()

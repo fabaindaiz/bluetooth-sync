@@ -102,22 +102,50 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
   "speakers": [{"name": "JBL Go 4 Red", "sink": "bluez_output.90_F2_60_75_4A_83.1",
                 "pan": -0.7, "ambience": 0.15, "gain_db": 0.0, "delay_ms": 0.0, "delay_now_ms": 0.0}],
   "preset": null,
-  "recalibration": {"active": false, "last": null},
+  "recalibration": {"active": false, "last": null, "mic_check": false},
   "warnings": ["alignment not measured in this session"]
 }
 ```
 
-`monitor` (the headphone monitor) reports `mode`, `target`, `gain_db`, `state`, `error`,
+`monitor` (the headphone monitor) reports `mode`, `target`, `gain_db`, `volume_control`, `state`, `error`,
 `routed_to`, `reached`, `drops` (blocks its writer dropped) and its cushion, the audio kept ahead in
 the `pw-play` pipe so the Bluetooth driver never finds it empty:
 
 | Field | Meaning |
 |---|---|
+| `volume_control` | `device` (default): the level is the target sink's volume (for Bluetooth, AVRCP absolute volume) and the software gain stays at 0 dB; `software`: `gain_db`, the sink untouched |
+| `device_volume_pct` | the sink's real volume, read back (also what the headphone buttons set); `null` in `software` mode, when the monitor is off or when it cannot be read |
+| `device_volume_reason` | `null`, or why the sink volume could not be set or read. A failed set keeps its reason until the sink is read back at the value asked or the next set. When it starts with "no se pudo verificar el volumen del audífono: usando volumen por software", the open output plays at `gain_db` by software although `volume_control` is `device` (see below) |
+| `device_volume_set_pct` | the last value set from the panel (the ceiling the sink is lowered to when the monitor opens, never raised; `null` = 30 % the first time). A switch from `software` to `device` without a level caps it at 30 % |
+
+In `device` mode the monitor opens at 0 dB of software gain **only when the sink was read back at
+or below the ceiling**. When it was not (no sink volume backend, `pactl` missing, a sink that
+refuses, lies or cannot be read, a check that fails or takes more than 10 s), or when PipeWire sends
+the audio to another sink than the one checked (`routed_to` ≠ `target`), the output plays by
+software instead, at `gain_db` but never above -12 dB, until it is opened again (a change of mode, target or
+`volume_control`, or a new session). It fails closed: never at full level by surprise.
 | `cushion_ms` | target cushion: one engine block plus one driver quantum (2048 frames), capped at 400 ms; `null` without a monitor output |
 | `level_ms` | the pipe level read before the last block, or `null` if it could not be read |
 | `refills` | times the pipe was about to starve and was refilled with silence up to the target |
 | `pipe_bytes` | the pipe's real size after asking for room for the cushion, or `null` if it could not be set (a warning is logged) |
 | `trims` | blocks dropped because the pipe held more than the target plus two blocks |
+
+Every mode is heard at the same loudness. The reference is the input at the chosen volume (the
+service's `volume_db`, also with `volume.avrcp`), which is what `stereo` sends; `mix` and `binaural`
+get a makeup gain per mode that follows the reference slowly (10 % of the error per second, capped
+at ±12 dB), frozen in a pause (the input, before the volume, under -50 LUFS momentary), during a
+cut or a calibration, and
+remembered per mode so a switch does not jump. All loudness is K-weighted short-term (3 s), before
+the monitor's own `gain_db`. These fields are `null` while the monitor is not playing (and absent
+from an older service):
+
+| Field | Meaning |
+|---|---|
+| `makeup_db` | the makeup gain the current mode gets now, dB |
+| `loudness_reference` | the reference's loudness, LUFS, or `null` in silence |
+| `loudness_monitor` | the monitor's loudness after the makeup, LUFS (for `binaural`, the channels sent plus the HRTF's measured gain), or `null` |
+| `match` | `measuring` (moving toward the reference), `locked` (within 0.5 LU of it), `frozen` (pause, cut, calibration or every speaker silent) or `unmeasured` (`binaural` with an HRTF whose gain was never measured: no makeup) |
+| `match_reason` | why the match cannot work, or `null`; today only "binaural compensation not measured for this HRTF" |
 
 `session.status` is `stopped`, `starting`, `playing` or `error` (with `reason`). There is
 no push in version 1: a client polls `GET /v1/state`.
@@ -224,7 +252,9 @@ Sent as raw messages to `POST /v1/command`. All additive to version 1.
 | `assign` | `speaker`, `role` | sets the role's `pan` and `ambience`; one speaker per role; a role of another layout is `out_of_range` |
 | `source` | `kind` (`system`, `app`, `file`, `tone`), `name` | switches on a worker thread; verified in `pw-dump` |
 | `tone` | `speaker`, `seconds` [0.5, 10] | 660 Hz at -26 dBFS on one speaker |
-| `recalibrate` | `active` | switches the loop on or off while playing |
+| `recalibrate` | `active` | switches the loop on or off while playing; the `recalibrate` global setting (what `start` uses when it is not given) is **off** by default |
+| `monitor_set` | `mode` (`off`, `stereo`, `mix`, `binaural`), `target`, `gain_db` [-40, 0], `volume_control` (`device`, `software`; default `device`), `device_volume_pct` [0, 100] | the headphone monitor. `device_volume_pct` **present** is a level asked for now: in `device` mode it is applied to the target sink and read back even when it equals the stored one (`monitor.device_volume_reason` says why if it did not take), and it becomes the stored ceiling; a change of only that value does not reopen the monitor. Absent, the sink is never raised: a client sends it only when the listener moves the level, never with a change of mode, target or `volume_control` |
+| `mic_check` | — | opens the microphone for 8 s from the moment it opens (a call while it is open does not extend it; a new one opens only after it closed) only to show its level (`meters.mic`, `recalibration.mic_check`), for the check before calibrating while the loop is off; never continuously. `{"opened": false}` when the loop or a calibration already has it; `conflict` without a session |
 | `calibrate` | `seconds` [5, 20], `amplitude` [0.02, 0.2] | stimulus inside the open session; pauses the loop and resumes it after |
 | `calibrate_cancel` · `calibration_apply` | — | apply goes through the fade |
 | `measurement_save` | `note` | writes `calibracion-<date>.json` to `measurements` in `service.json`; refused when simulated |

@@ -70,7 +70,13 @@ def test_the_settings_are_validated():
     with pytest.raises(monitor.MonitorError):
         monitor.MonitorSettings.from_json({"mode": "stereo", "gain_db": 6})
     s = monitor.MonitorSettings.from_json({"mode": "mix", "target": "x", "gain_db": -20})
-    assert s.to_json() == {"mode": "mix", "target": "x", "gain_db": -20.0}
+    assert s.to_json() == {
+        "mode": "mix",
+        "target": "x",
+        "gain_db": -20.0,
+        "volume_control": "device",
+        "device_volume_pct": None,
+    }
     assert monitor.MonitorSettings().mode == "off"
 
 

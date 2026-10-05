@@ -42,7 +42,8 @@ def phone(browser: Browser, svc: Running, **options) -> Page:
 def play_tone(page: Page) -> None:
     start(page)
     page.locator("#source-kind").select_option("tone")
-    expect(page.locator(".meter")).to_have_count(6, timeout=5000)
+    # Entrada L y R y los tres parlantes; el micrófono, solo mientras se mide su nivel.
+    expect(page.locator(".meter")).to_have_count(5, timeout=5000)
     expect(page.locator(".meter", has_text="Entrada L").locator(".meter-value")).not_to_have_text("—", timeout=5000)
 
 

@@ -1,17 +1,23 @@
 """The headphone monitor: a second output of the engine, not synchronised with the speakers
 (spec docs/superpowers/specs/2026-10-04-headphone-monitor-design.md).
 
-`stereo` sends the input pair as the application plays it; `mix` folds the speaker channels to
+`stereo` sends the input pair as the application plays it, at the chosen volume; `mix` folds the speaker channels to
 L/R by each speaker's angle; `binaural` sends them to PipeWire's SOFA spatializer, each one a
 virtual speaker at its angle, so the room is heard on headphones. The monitor never changes
 what the speakers get, and never makes the engine wait: it writes from its own thread and drops
 blocks when the device falls behind.
+
+Every mode is heard at the same loudness (brief 2026-10-05): `stereo` is the input at the chosen
+volume, the reference; `mix` and `binaural` follow it through a makeup gain per mode
+(`loudness_match.py`), metered here with the same K-weighted meter as the quality strip.
 """
 
 from __future__ import annotations
 
 import contextlib
 import fcntl
+import functools
+import hashlib
 import logging
 import math
 import queue
@@ -32,13 +38,19 @@ from aurasync.cushion import (  # noqa: F401 - DRIVER_QUANTUM_FRAMES and MAX_CUS
     MAX_CUSHION_S,
     Cushion,
 )
+from aurasync.dsp.loudness import LoudnessMeter
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from aurasync.loudness_match import LoudnessMatch
+
 MODES = ("off", "stereo", "mix", "binaural")
 GAIN_RANGE_DB = (-40.0, 0.0)
 DEFAULT_GAIN_DB = -12.0
+VOLUME_CONTROLS = ("device", "software")
+DEFAULT_DEVICE_LIMIT_PCT = 30.0
+MAX_DEVICE_VOLUME_PCT = 100.0
 MAX_INPUTS = 8
 """The builtin `mixer` of PipeWire's filter-chain takes up to 8 inputs: the speaker maximum."""
 SOFA = "/usr/share/libmysofa/MIT_KEMAR_normal_pinna.sofa"
@@ -49,6 +61,55 @@ LATENCY_MS = 100
 QUEUE_BLOCKS = 4
 SETTLE_S = 0.8
 """How long after opening the routing is read: PipeWire links a stream after its first data."""
+MIX_ESTIMATE_DB = {1: 6.2, 2: 1.9, 3: 0.5, 4: -0.3, 5: -1.2, 6: -2.2, 7: -2.9, 8: -3.9}
+"""Where `mix` starts the first time, by number of speakers: minus how much louder than the input
+the fold of the speakers is. MEDIDO offline on HP-O16 with the real engine (default chain, 0 dB),
+the `auto` layout of each N and stereo pink noise at -20 dBFS RMS (experimentos/18 "Volumen entre
+modos del monitor"); it grows about as `10 log10(N/4)`. Only a start: the match measures `mix`
+itself."""
+UNMEASURED_HRTF = "binaural compensation not measured for this HRTF"
+KEMAR_SHA256 = "2768ac841213a7ae11d1ea7fd0f25a69b39216102dc5dd913ea6ba0f0dc57e28"
+"""SHA-256 of libmysofa's `MIT_KEMAR_normal_pinna.sofa` (HP-O16, 2026-10-05)."""
+HRTF_GAIN_DB: dict[str, dict[tuple[float, ...], float]] = {
+    KEMAR_SHA256: {
+        (0.0,): 6.10,
+        (-90.0, 90.0): 6.40,
+        (-60.0, 60.0, 180.0): 6.02,
+        (-135.0, -45.0, 45.0, 135.0): 5.75,
+        (-108.0, -36.0, 36.0, 108.0, 180.0): 5.60,
+        (-150.0, -90.0, -30.0, 30.0, 90.0, 150.0): 5.69,
+        (-128.6, -77.1, -25.7, 25.7, 77.1, 128.6, 180.0): 5.60,
+        (-157.5, -112.5, -67.5, -22.5, 22.5, 67.5, 112.5, 157.5): 5.46,
+    }
+}
+"""The binaural chain's broadband gain, dB: K-weighted loudness of its L/R output minus that of the
+N channels it got (G = 1), with independent pink noise per channel, for the `auto` layout of each
+N = 1..8 (sorted angles, `_angle_key`). MEDIDO on HP-O16, 2026-10-05, PipeWire 1.6.9, the monitor's
+own filter-chain into a temporary null sink (`probes/21-ganancia-hrtf/`, experimentos/18 "Volumen
+entre modos del monitor"); the user's quad measured again apart: 5.73. With the **same** signal in
+every channel the gain went from +4.2 to +9.1 dB (the HRTF's ears sum it coherently): the table is
+right for uncorrelated speakers and off by up to that much for correlated ones (INFERIDO for music,
+which is in between)."""
+HRTF_ANGLE_GAIN_DB: dict[str, dict[float, float]] = {
+    KEMAR_SHA256: {
+        0.0: 6.10,
+        15.0: 6.27,
+        30.0: 6.66,
+        45.0: 6.92,
+        60.0: 6.82,
+        75.0: 6.57,
+        90.0: 6.38,
+        105.0: 5.52,
+        120.0: 4.77,
+        135.0: 4.21,
+        150.0: 3.66,
+        165.0: 3.59,
+        180.0: 3.78,
+    }
+}
+"""One input alone at each azimuth (deg from the front, either side), dB, same probe. -45, -90 and
+-135 measured equal to +45, +90 and +135 (MEDIDO): the HRTF is symmetric. The power mean of these
+reproduces the measured sets within 0.2 dB (auto4: 5.77 against 5.75; auto8: 5.65 against 5.46)."""
 
 
 class MonitorError(ValueError):
@@ -64,8 +125,20 @@ class MonitorSettings:
     mode: str = "off"
     target: str | None = None
     gain_db: float = DEFAULT_GAIN_DB
+    volume_control: str = "device"
+    """`device`: the level is the target sink's volume (the headphones', AVRCP absolute volume for
+    Bluetooth) and the software gain stays at 0 dB; `software`: `gain_db`, the sink untouched."""
+    device_volume_pct: float | None = None
+    """The last sink volume the listener set from the panel: the ceiling it is lowered to when the
+    monitor opens (never raised). `None`: never set, `DEFAULT_DEVICE_LIMIT_PCT` applies."""
 
     def __post_init__(self) -> None:
+        if self.volume_control not in VOLUME_CONTROLS:
+            msg = f"volume_control must be one of {', '.join(VOLUME_CONTROLS)}"
+            raise MonitorError(msg)
+        if self.device_volume_pct is not None and not 0.0 <= self.device_volume_pct <= MAX_DEVICE_VOLUME_PCT:
+            msg = "device_volume_pct must be within [0, 100]"
+            raise MonitorError(msg)
         if self.mode not in MODES:
             msg = f"mode must be one of {', '.join(MODES)}"
             raise MonitorError(msg)
@@ -85,10 +158,28 @@ class MonitorSettings:
             msg = "gain_db must be a number"
             raise MonitorError(msg) from exc
         target = data.get("target")
-        return cls(mode=str(data.get("mode", "off")), target=str(target) if target else None, gain_db=gain)
+        pct = data.get("device_volume_pct")
+        try:
+            pct = None if pct is None else float(pct)
+        except (TypeError, ValueError) as exc:
+            msg = "device_volume_pct must be a number"
+            raise MonitorError(msg) from exc
+        return cls(
+            mode=str(data.get("mode", "off")),
+            target=str(target) if target else None,
+            gain_db=gain,
+            volume_control=str(data.get("volume_control", "device")),
+            device_volume_pct=pct,
+        )
 
     def to_json(self) -> dict[str, Any]:
-        return {"mode": self.mode, "target": self.target, "gain_db": float(self.gain_db)}
+        return {
+            "mode": self.mode,
+            "target": self.target,
+            "gain_db": float(self.gain_db),
+            "volume_control": self.volume_control,
+            "device_volume_pct": self.device_volume_pct,
+        }
 
 
 def check_target(settings: MonitorSettings, forbidden: set[str]) -> None:
@@ -161,6 +252,77 @@ def binaural_args(names: list[str], angles: dict[str, float], sink: str, target:
     )
 
 
+def play_channel_map(mode: str, channels: int) -> str:
+    """`pw-play --channel-map`. One name alone is read as a layout and refused ("channels and
+    channel-map incompatible", MEDIDO with pw-play 1.6.9 on HP-O16): a trailing comma makes it a
+    list of one, which a one-speaker binaural monitor needs."""
+    if mode != "binaural":
+        return "FL,FR"
+    names = ",".join(f"AUX{i}" for i in range(channels))
+    return names + "," if channels == 1 else names
+
+
+def _angle_key(angle: float) -> float:
+    """An angle in (-180, 180], to 0.1 degree: the HRTF tables' key."""
+    a = round(float(angle), 1) % 360.0
+    return round(a - 360.0 if a > 180.0 else a, 1) + 0.0  # noqa: PLR2004 - half a turn
+
+
+def _single_gain(table: dict[float, float], angle: float) -> float:
+    """One input's gain at `angle`, interpolated between the measured ones; the HRTF is taken as
+    symmetric (the probe measured both sides: experimentos/18)."""
+    a = abs(_angle_key(angle))
+    keys = sorted(table)
+    return float(np.interp(a, keys, [table[k] for k in keys]))
+
+
+def hrtf_gain_db(sha: str, angles: list[float]) -> float | None:
+    """How much the binaural chain changes the K-weighted loudness, out (L+R) minus in (the N
+    channels, G = 1), for the SOFA file with this SHA-256 and these speaker angles. `None`: never
+    measured for this file.
+
+    A set measured as such (`HRTF_GAIN_DB`, the `auto` layouts) gives its own number; any other set
+    the power mean of each angle's single-input gain (`HRTF_ANGLE_GAIN_DB`): what equal,
+    uncorrelated channels would give (INFERIDO from the measured sets, experimentos/18)."""
+    sets = HRTF_GAIN_DB.get(sha)
+    if sets is None:
+        return None
+    key = tuple(sorted(_angle_key(a) for a in angles))
+    if key in sets:
+        return sets[key]
+    single = HRTF_ANGLE_GAIN_DB.get(sha)
+    if not single or not angles:
+        return None
+    powers = [10 ** (_single_gain(single, a) / 10) for a in angles]
+    return round(10 * math.log10(sum(powers) / len(powers)), 2)
+
+
+@functools.lru_cache(maxsize=4)
+def sofa_sha256(path: str) -> str | None:
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+@dataclass(frozen=True)
+class Levels:
+    """What the monitor needs from the engine for one block.
+
+    `volume_db` is the volume the listener chose (the panel's knob); `digital_db` the digital
+    volume the speakers' blocks **were made with** (`Motor.volumen_del_bloque_db`: per sample while
+    it ramps, and the old value in the block whose cut it jumps at). With the digital volume both
+    are the same; with `volume.avrcp` the speakers carry the knob and the digital one is 0 dB, so
+    the monitor applies the difference to what comes after the chain. Reading the motor's target
+    instead made the last block of the cut that leaves `avrcp` 14 dB too loud (review, 2026-10-05).
+    `hold`: a cut or a calibration, when the speakers do not play the music and the loudness match
+    must not learn from them."""
+
+    volume_db: float = 0.0
+    digital_db: float | np.ndarray = 0.0
+    hold: bool = False
+
+
 def frame(
     mode: str,
     pair: tuple[np.ndarray, np.ndarray] | None,
@@ -168,16 +330,31 @@ def frame(
     names: list[str],
     angles: dict[str, float],
     gain: float,
+    *,
+    volume: float = 1.0,
+    post: float = 1.0,
 ) -> np.ndarray:
-    """What goes out for one block, interleaved as (samples, channels)."""
+    """What goes out for one block, interleaved as (samples, channels). `volume` scales the input
+    pair (`stereo`, which comes before the chain), `post` the speakers' blocks (after it)."""
     n = len(next(iter(blocks.values()))) if blocks else (len(pair[0]) if pair else 0)
     if mode == "stereo":
-        out = np.zeros((n, 2)) if pair is None else np.column_stack(pair)
+        out = np.zeros((n, 2)) if pair is None else np.column_stack(pair) * volume
     elif mode == "mix":
-        out = np.column_stack(fold(blocks, angles))
+        out = np.column_stack(fold(blocks, angles)) * post
     else:
-        out = np.column_stack([blocks.get(name, np.zeros(n)) for name in names])
+        out = np.column_stack([blocks.get(name, np.zeros(n)) for name in names]) * post
     return out * gain
+
+
+def _scaled(x: np.ndarray, db: float | np.ndarray) -> np.ndarray:
+    """`x` (samples, channels) times a gain in dB, one for the block or one per sample."""
+    if isinstance(db, np.ndarray):
+        return x * (10 ** (db / 20))[:, None]
+    return x * 10 ** (db / 20) if db != 0.0 else x
+
+
+def _finite(x: float) -> float | None:
+    return float(x) if x is not None and math.isfinite(x) else None
 
 
 def _write_all(stream: Any, data: bytes) -> None:
@@ -267,17 +444,63 @@ class MonitorOutput:
         self.angles = dict(angles)
         self.rate = rate
         self.sink = sink
-        self._gain = 10 ** (settings.gain_db / 20)
+        # By the device the level is the sink's volume: the software gain stays at 0 dB.
+        self._gain = 10 ** (settings.gain_db / 20) if settings.volume_control == "software" else 1.0
         self._module: subprocess.Popen | None = None
         self._play: subprocess.Popen | None = None
         self.writer: Writer | None = None
         self.cushion = Cushion(block, rate)
         self.pipe_bytes: int | None = None
         """The pipe's real size after asking for room for the cushion; `None` if it could not be set."""
+        self.levels: Callable[[], Levels] = Levels
+        self.match: LoudnessMatch | None = None
+        self.hrtf_gain_db: float | None = None
+        self.match_reason: str | None = None
+        self.loudness_reference: float | None = None
+        """K-weighted short-term loudness (LUFS) of the input at the chosen volume, the reference."""
+        self.loudness_monitor: float | None = None
+        """The same of what the monitor sends, after the makeup and before its own level (`gain_db`)."""
+        self._knob_db: float | None = None
+        """The knob at the end of the last block: a change ramps from it over the next block."""
+        self._reference = LoudnessMeter(rate, 2, history=False)
+        self._candidate = (
+            LoudnessMeter(rate, self.channels, history=False) if settings.mode in {"mix", "binaural"} else None
+        )
 
     @property
     def channels(self) -> int:
         return len(self.names) if self.settings.mode == "binaural" else 2
+
+    @property
+    def gain(self) -> float:
+        """The monitor's own level, linear: `gain_db` by software, 1 (0 dB) by the device."""
+        return self._gain
+
+    def use_software_gain(self) -> None:
+        """From now on, the software gain: the device's volume could not be trusted (the audio
+        went to another sink than the one checked). At most `DEFAULT_GAIN_DB`, whatever
+        `gain_db` is stored (it may be 0 dB), and it only ever lowers the level."""
+        self._gain = min(self._gain, 10 ** (min(self.settings.gain_db, DEFAULT_GAIN_DB) / 20))
+
+    def set_hrtf(self, sha: str | None) -> None:
+        """The binaural chain's gain for the SOFA file with this SHA-256 (`HRTF_GAIN_DB`); without
+        a measurement, none is applied and `match_reason` says so."""
+        self.hrtf_gain_db = hrtf_gain_db(sha, [self.angles.get(n, 0.0) for n in self.names]) if sha else None
+        self.match_reason = UNMEASURED_HRTF if self.hrtf_gain_db is None else None
+
+    def estimate_db(self) -> float:
+        """The makeup a mode never seen starts from."""
+        if self.settings.mode == "mix":
+            return MIX_ESTIMATE_DB.get(len(self.names), 0.0)
+        if self.settings.mode == "binaural" and self.hrtf_gain_db is not None:
+            return -self.hrtf_gain_db
+        return 0.0
+
+    def bind(self, match: LoudnessMatch, levels: Callable[[], Levels]) -> None:
+        """On the engine thread, before the first block: the service's match (it outlives this
+        output, so each mode keeps its makeup) and where the volume and the hold come from."""
+        self.match, self.levels = match, levels
+        match.select(self.settings.mode, self.estimate_db())
 
     def open(self) -> None:
         from aurasync import sonido  # noqa: PLC0415 - sonido pulls the PipeWire helpers, not needed to test the rest
@@ -287,6 +510,7 @@ class MonitorOutput:
             if not Path(SOFA).is_file():
                 msg = f"no HRTF at {SOFA}: install libmysofa"
                 raise MonitorError(msg)
+            self.set_hrtf(sofa_sha256(SOFA))
             self._module = subprocess.Popen(
                 ["pw-cli", "-m", "load-module", "libpipewire-module-filter-chain", self._args()],
                 stdin=subprocess.DEVNULL,
@@ -302,7 +526,6 @@ class MonitorOutput:
                 msg = "the binaural filter did not appear in PipeWire"
                 raise MonitorError(msg)
             target = self.sink
-        positions = [f"AUX{i}" for i in range(self.channels)] if self.settings.mode == "binaural" else ["FL", "FR"]
         self._play = subprocess.Popen(
             [
                 "pw-play",
@@ -313,7 +536,7 @@ class MonitorOutput:
                 "--channels",
                 str(self.channels),
                 "--channel-map",
-                ",".join(positions),
+                play_channel_map(self.settings.mode, self.channels),
                 "--format",
                 "f32",
                 "--latency",
@@ -353,9 +576,54 @@ class MonitorOutput:
     def _args(self) -> str:
         return binaural_args(self.names, self.angles, self.sink, str(self.settings.target))
 
+    def render(self, pair: tuple[np.ndarray, np.ndarray] | None, blocks: dict[str, np.ndarray]) -> np.ndarray:
+        """One block as it goes out: the mode's frame at the chosen volume, times the makeup and
+        the monitor's own level. A knob change and the makeup move as ramps over the block, so no
+        sample jumps. Meters the reference and the candidate for the match. On the engine thread."""
+        lv = self.levels()
+        mode = self.settings.mode
+        body = frame(mode, pair, blocks, self.names, self.angles, 1.0)
+        n = len(body)
+        knob = self._knob_ramp(lv.volume_db, n)
+        digital = lv.digital_db
+        if isinstance(digital, np.ndarray) and len(digital) != n:
+            digital = float(digital[-1]) if len(digital) else 0.0
+        # Stereo comes before the chain: the knob. The others come after it, already at the
+        # digital volume they were made with: the knob minus that.
+        body = _scaled(body, knob if mode == "stereo" else knob - digital)
+        match = self.match
+        if match is None:
+            return body * self._gain
+        reference = _scaled(np.zeros((n, 2)) if pair is None else np.column_stack(pair), knob)
+        self._reference.push(reference)
+        ref_lufs = self._reference.short_term
+        candidate: float | None = ref_lufs
+        if self._candidate is not None:
+            self._candidate.push(body)
+            candidate = self._candidate.short_term
+            if mode == "binaural":
+                candidate = None if self.hrtf_gain_db is None else candidate + self.hrtf_gain_db
+        # The pause is decided on the input, before the volume: at a quiet knob the music is
+        # still music (review, 2026-10-05).
+        gate = self._reference.momentary - lv.volume_db
+        start, end = match.update(ref_lufs, candidate, n / self.rate, hold=lv.hold, gate_lufs=gate)
+        self.loudness_reference = _finite(ref_lufs)
+        self.loudness_monitor = None if candidate is None else _finite(candidate + end)
+        if start == end:
+            return body * (self._gain * 10 ** (end / 20))
+        return _scaled(body * self._gain, start + (end - start) * np.arange(1, n + 1) / n)
+
+    def _knob_ramp(self, volume_db: float, n: int) -> float | np.ndarray:
+        """The knob for each sample of this block (dB): from where the last block ended to
+        `volume_db`, linearly; a float when it did not move."""
+        previous, self._knob_db = self._knob_db, float(volume_db)
+        if previous is None or previous == volume_db or n == 0:
+            return float(volume_db)
+        return previous + (volume_db - previous) * np.arange(1, n + 1) / n
+
     def push(self, pair: tuple[np.ndarray, np.ndarray] | None, blocks: dict[str, np.ndarray]) -> None:
         if self.writer is not None:
-            self.writer.push(frame(self.settings.mode, pair, blocks, self.names, self.angles, self._gain))
+            self.writer.push(self.render(pair, blocks))
 
     @property
     def pid(self) -> int | None:

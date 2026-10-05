@@ -80,7 +80,11 @@ class DecibelRamp:
         self._db.jump()
 
     def block(self, n: int) -> float | np.ndarray:
-        return 10 ** (self._db.block(n) / 20)
+        return 10 ** (self.block_db(n) / 20)
+
+    def block_db(self, n: int) -> float | np.ndarray:
+        """The next `n` values in dB (a float when settled), advancing the state like `block`."""
+        return self._db.block(n)
 
 
 class FadeGate:

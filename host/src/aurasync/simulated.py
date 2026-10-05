@@ -33,6 +33,7 @@ import numpy as np
 
 from aurasync.cushion import Cushion
 from aurasync.dsp import eq, response
+from aurasync.monitor import KEMAR_SHA256, MonitorOutput
 from aurasync.radio import MONITOR_TOPIC, SINK_TOPIC, LogLevel, RadioMonitor
 from aurasync.session import AudioSession
 from aurasync.sources import probe_signal
@@ -301,15 +302,63 @@ class SimulatedSession(AudioSession):
 SIMULATED_BATTERY_PCT = (90, 75, 60, 45)
 
 
+class SimulatedSinkVolume:
+    """The sink volume (`bt_volume.PactlVolume`'s interface) without the system: every sink
+    starts loud, so the monitor's safety at open shows."""
+
+    def __init__(self, start_pct: float = 100.0) -> None:
+        self.start_pct = start_pct
+        self.volumes: dict[str, float] = {}
+
+    def unavailable(self) -> str | None:
+        return None
+
+    def set_percent(self, sink: str, percent: float) -> bool:
+        self.volumes[sink] = percent
+        return True
+
+    def get_percent(self, sink: str) -> float | None:
+        return self.volumes.setdefault(sink, self.start_pct)
+
+
 class SimulatedMonitor:
     """The headphone monitor without PipeWire (monitor.MonitorOutput's shape): it counts what
     it gets and says it reached its target."""
 
-    def __init__(self, settings, names, angles, rate, sink, block=4096) -> None:  # noqa: ARG002 - the factory's signature
+    def __init__(self, settings, names, angles, rate, sink, block=4096) -> None:
         self.settings = settings
         self.cushion = Cushion(block, rate)
         self.pushed = 0
         self.writer = None
+        # The real frame and loudness match, without PipeWire: the panel shows the match as it
+        # would be. Binaural as with libmysofa's measured HRTF.
+        self._render = MonitorOutput(settings, names, angles, rate, sink, block)
+        if settings.mode == "binaural":
+            self._render.set_hrtf(KEMAR_SHA256)
+        self.match = None
+
+    def bind(self, match, levels) -> None:
+        self._render.bind(match, levels)
+        self.match = match
+
+    @property
+    def loudness_reference(self) -> float | None:
+        return self._render.loudness_reference
+
+    @property
+    def loudness_monitor(self) -> float | None:
+        return self._render.loudness_monitor
+
+    @property
+    def match_reason(self) -> str | None:
+        return self._render.match_reason
+
+    @property
+    def gain(self) -> float:
+        return self._render.gain
+
+    def use_software_gain(self) -> None:
+        self._render.use_software_gain()
 
     def open(self) -> None:
         time.sleep(0.05)
@@ -317,8 +366,9 @@ class SimulatedMonitor:
     def where(self) -> str | None:
         return self.settings.target
 
-    def push(self, pair, blocks) -> None:  # noqa: ARG002
+    def push(self, pair, blocks) -> None:
         self.pushed += 1
+        self._render.render(pair, blocks)
 
     def close(self) -> None:
         pass

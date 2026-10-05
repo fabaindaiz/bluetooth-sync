@@ -148,8 +148,14 @@
         <label class="field"><span>Salida</span>
           <select id="monitor-target" aria-label="Salida del monitor"></select>
         </label>
+        <label class="field"><span>Volumen</span>
+          <select id="monitor-volume-control" aria-label="Quién controla el volumen del monitor">
+            <option value="device">del audífono</option>
+            <option value="software">por software</option>
+          </select>
+        </label>
         <label class="field"><span>Nivel <output id="monitor-gain-value"></output></span>
-          <input id="monitor-gain" type="range" min="-40" max="0" step="1" value="-12" aria-label="Nivel del monitor">
+          <input id="monitor-gain" type="range" min="0" max="100" step="1" value="30" aria-label="Nivel del monitor">
         </label>
       </div>
       <p id="monitor-state" class="small mt-2" role="status"></p>
@@ -247,6 +253,7 @@
         <span class="mic-state"><span class="mic-shape" aria-hidden="true"></span><span id="mic-state-text">sin lectura</span></span>
       </div>
       <p id="mic-note" class="muted small mt-1" hidden></p>
+      <button id="mic-recheck" type="button" class="btn btn-ghost mt-1" hidden>Medir el micrófono</button>
       <div id="cal-gate" class="mic-gate" role="alert" hidden></div>
       <ol class="muted small mt-2 flex flex-wrap gap-x-4 gap-y-1">
         <li>1. Calibrar</li><li>2. Aplicar alineación</li><li>3. Ecualizar</li><li>4. Calibrar otra vez para verificar</li>

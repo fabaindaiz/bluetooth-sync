@@ -143,8 +143,41 @@ def test_the_choice_is_kept_in_service_json(tmp_path):
         "mode": "mix",
         "target": "simulated_headphones",
         "gain_db": -6.0,
+        "volume_control": "device",
+        "device_volume_pct": None,
     }
-    assert load_config(config).monitor == {"mode": "mix", "target": "simulated_headphones", "gain_db": -6.0}
+    assert load_config(config).monitor == {
+        "mode": "mix",
+        "target": "simulated_headphones",
+        "gain_db": -6.0,
+        "volume_control": "device",
+        "device_volume_pct": None,
+    }
     again = _service(tmp_path, config_path=config, monitor=load_config(config).monitor)
     assert again.monitor.settings.mode == "mix"
     again.close()
+
+
+def test_the_monitor_follows_the_chosen_volume(tmp_path):
+    """The reference of every monitor mode is the input at the panel's volume, whichever of the
+    two volume modes carries it (brief 2026-10-05, monitor loudness)."""
+    service = _service(tmp_path)
+    try:
+        assert service.monitor.volume is not None
+        service.settings.volume_db = -17.0
+        assert service.monitor.volume() == -17.0
+    finally:
+        service.close()
+
+
+def test_the_simulated_monitor_matches_the_loudness_and_says_so(svc):
+    ok(svc, op="start")
+    ok(svc, op="monitor_set", mode="mix", target="simulated_headphones")
+    view = _monitor(svc, lambda v: v["state"] == "on" and v["loudness_reference"] is not None)
+    assert view["match"] in {"measuring", "locked", "frozen"}
+    assert view["makeup_db"] is not None
+    assert view["loudness_monitor"] is not None
+    assert view["match_reason"] is None
+    ok(svc, op="monitor_set", mode="binaural", target="simulated_headphones")
+    view = _monitor(svc, lambda v: v["state"] == "on" and v["mode"] == "binaural" and v["match"] is not None)
+    assert view["match"] != "unmeasured", "the simulated binaural uses the measured HRTF"

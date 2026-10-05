@@ -373,9 +373,16 @@ def test_closure_for_the_spectrum_equalising_flattens_the_response(svc):
     assert after < before - 2.0, (before, after)
 
 
-def test_the_loop_is_on_by_default_and_a_calibration_pauses_and_resumes_it(svc):
+def test_the_loop_is_off_by_default(svc):
     s = svc()
     ok(s, op="start")
+    assert not ok(s, op="state")["recalibration"]["active"]
+    assert not ok(s, op="state")["global"]["recalibrate"]
+
+
+def test_a_calibration_pauses_and_resumes_the_loop(svc):
+    s = svc()
+    ok(s, op="start", recalibrate=True)
     assert ok(s, op="state")["recalibration"]["active"]
     ok(s, op="calibrate", seconds=5)
     session = s.session
@@ -385,6 +392,73 @@ def test_the_loop_is_on_by_default_and_a_calibration_pauses_and_resumes_it(svc):
         time.sleep(0.2)
     time.sleep(0.5)
     assert session.loop is not None
+
+
+def test_the_microphone_check_opens_on_demand_and_closes_by_itself(svc, monkeypatch):
+    """With the loop off (the default) the panel's microphone check has no reading: it asks for
+    one, and the microphone opens for a few seconds only (it is the laptop's own: privacy)."""
+    from aurasync import session as session_module
+
+    monkeypatch.setattr(session_module, "MIC_CHECK_S", 1.0)
+    s = svc()
+    ok(s, op="start")
+    time.sleep(0.5)
+    state = ok(s, op="state")
+    assert "mic" not in state["meters"]
+    assert state["recalibration"]["mic_check"] is False
+    assert s.session.pids()["microphone"] is None
+    ok(s, op="mic_check")
+    wait(lambda: "mic" in ok(s, op="state")["meters"], timeout=5)
+    assert ok(s, op="state")["recalibration"]["mic_check"] is True
+    assert s.session.pids()["microphone"] is not None
+    # It closes alone, and its reading goes with it.
+    wait(lambda: not ok(s, op="state")["recalibration"]["mic_check"], timeout=5)
+    assert "mic" not in ok(s, op="state")["meters"]
+    assert s.session.pids()["microphone"] is None
+
+
+def test_asking_again_never_keeps_the_microphone_open_longer(svc, monkeypatch):
+    """Privacy: a panel asking every so often must not keep the microphone open for good. One
+    check lasts MIC_CHECK_S from its start; a call while it is open does not extend it; a new
+    check opens only after the previous one closed."""
+    from aurasync import session as session_module
+
+    monkeypatch.setattr(session_module, "MIC_CHECK_S", 1.0)
+    s = svc()
+    ok(s, op="start")
+    opened_at: dict[int, float] = {}
+    last_seen: dict[int, float] = {}
+    end = time.monotonic() + 3.5
+    while time.monotonic() < end:
+        ok(s, op="mic_check")
+        pid = s.session.pids()["microphone"]
+        now = time.monotonic()
+        if pid is not None:
+            opened_at.setdefault(pid, now)
+            last_seen[pid] = now
+        time.sleep(0.1)
+    assert len(opened_at) >= 2, opened_at  # it closed, and a later call opened a new one
+    spans = {pid: last_seen[pid] - opened_at[pid] for pid in opened_at}
+    assert max(spans.values()) <= 1.0 + 0.4, spans
+
+
+def test_the_microphone_check_gives_way_to_the_loop_and_to_a_calibration(svc):
+    s = svc()
+    ok(s, op="start")
+    ok(s, op="mic_check")
+    wait(lambda: ok(s, op="state")["recalibration"]["mic_check"], timeout=5)
+    ok(s, op="calibrate", seconds=5)
+    wait(lambda: not ok(s, op="state")["recalibration"]["mic_check"], timeout=5)
+    ok(s, op="calibrate_cancel")
+    ok(s, op="set", changes={"recalibrate": True})
+    ok(s, op="mic_check")  # the loop already reads the microphone: nothing else opens
+    time.sleep(0.3)
+    assert ok(s, op="state")["recalibration"]["mic_check"] is False
+
+
+def test_the_microphone_check_needs_a_session(svc):
+    s = svc()
+    assert code(s, op="mic_check") == "conflict"
 
 
 def test_switching_the_loop_off_is_a_live_setting(svc):
@@ -399,7 +473,7 @@ def test_switching_the_loop_off_is_a_live_setting(svc):
 
 def test_the_microphone_can_be_changed_live_and_the_loop_follows(svc):
     s = svc()
-    ok(s, op="start")
+    ok(s, op="start", recalibrate=True)
     ok(s, op="microphone_set", node="simulado-2")
     state = ok(s, op="state")
     assert state["recalibration"]["microphone"] == "simulado-2"
@@ -439,7 +513,7 @@ def test_a_loop_measurement_that_cannot_start_falls_back_and_the_audio_goes_on(s
     cannot start (2026-10-02: forkserver and an unguarded main script) never ends the session."""
     s = svc()
     ok(s, op="set", changes={"recalibrate_every_s": 5, "recalibrate_measure_s": 10})
-    ok(s, op="start")
+    ok(s, op="start", recalibrate=True)
     session = s.session
 
     def broken(*_args, **_kwargs):

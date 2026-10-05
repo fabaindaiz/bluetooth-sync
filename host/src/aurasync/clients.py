@@ -93,6 +93,7 @@ CONTROL_OPS = frozenset(
         "recalibrate",
         "calibrate",
         "calibrate_cancel",
+        "mic_check",
         "calibration_apply",
         "measurement_save",
         "eq_apply",
