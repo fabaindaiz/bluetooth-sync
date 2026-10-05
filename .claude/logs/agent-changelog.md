@@ -26,6 +26,11 @@ Después, a pedido: el **modo demo** de la PWA (`web/src/demo/`, `?demo` o «Pro
 con un aviso ámbar y el chip DEMO; su estado lo escribe `scripts/demo_fixture.py` sin nada de un equipo
 real (el parlante cercano del simulado tenía una MAC inventada que la PWA habría rechazado: ahora
 `demo-N`). Publicado en `gh-pages` (`a66ffa1`).
+**Cierre (2026-10-05).** Todo en `main` en GitHub por avance rápido (489fc8a → d93e063), y la copia
+local del usuario al día con `pull --ff-only`; las tres líneas que faltaban del log del experimento 10
+quedaron en `ca7ea17`. `pages.yml` publicó solo la PWA desde d93e063 (`gh-pages` 619e40f), comprobada
+archivo por archivo contra el sitio. El worktree `.claude/worktrees/microcortes-pipeline` queda en
+disco (todo lo suyo ya está en `main`); el servicio de `PC-Ryzen5` corre desde él, con HTTPS.
 **Archivos.** `host/src/aurasync/{access,connection_code,control,clients,service,session,sources,motor,multichannel,probe_ring,contract_types,chain}.py`,
 `host/src/aurasync/panel/{index.html,app.js,tailwind.input.css,tailwind.css,cadena.js}`,
 `host/web/src/{undo.ts,runtime.ts,main.tsx,connect/*,sync/*}`, `.github/workflows/pages.yml`,
