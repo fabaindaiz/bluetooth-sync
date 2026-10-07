@@ -14,7 +14,7 @@ the order agreed on 2026-10-07 (roadmap: panel and diagnostics now, the Auracast
 |---|---|---|
 | Firmware | Zephyr `hci_uart` (compiled from the SDK, not copied) + SoftDevice Controller, NCS v3.4.1, board `promicro_nrf52840/nrf52840/uf2`; one image emits and receives ISO | `firmware/supermini/hci_uart_iso/` |
 | BIG | 4 BIS at 48_4 and 48_2: NSE 2, IRC 2, PTO 0 (one retransmission); 1M PHY leaves none; encryption refused (0x25); identical on boards A and C | exp. 21 §1 |
-| Alignment | 4 BIS aligned at the source (80 starts) and on the air (41 starts + 60 s and 10 min runs) | exp. 21 §2–§3b, §7 |
+| Alignment | 4 BIS aligned at the source (80 starts) and on the air (39 starts + two 60 s runs and a 10 min run) | exp. 21 §2–§3b, §7 |
 | Radio loss | 2 SDUs of 60 055 lost on 2 of 4 BIS in 10 min, boards a few cm apart | exp. 21 §7 |
 | 32 kHz clock | Boards A and C have the crystal: stable to 0.04 ppm; the calibrated RC jumps ±26–32 ppm every ~6 s | exp. 21 §6 |
 | 32 MHz crystal | **Both boards run fast**: C +64 ppm, A +79 ppm against the PC's raw clock (NTP corrects the PC by only ~2 ppm), outside the ±50 ppm Bluetooth LE allows (SUPOSICIÓN on the exact spec figure). Two independent boards → likely the SuperMini design (load capacitors, INFERIDO). Both boards also have the 32 kHz crystal; board-to-board drift 20.5 ppm, matching the per-board numbers within 0.7 ppm | exp. 21 §8, §10 |

@@ -217,6 +217,7 @@ cada arranque, la A crea el BIG y transmite 12 s; la C se sincroniza de cero y r
   alineación. Coincide con la de la fuente (§3b).
 - El periodic advertising (100 ms) y el BIGInfo llegan con el tiempo reservado por defecto (1600 µs).
 
+### 3b · Alineación en la fuente, en arranques repetidos (MEDIDO, placa A)
 
 Las corridas 3b, 4 y 5 se hicieron con el tiempo reservado en 2500 µs, heredado del barrido de F1 (ver
 arriba). Con 4 BIS da el mismo BIG que el valor por defecto: los 128 BIG creados en esas corridas fueron
@@ -234,8 +235,8 @@ la última SDU de cada BIS una vez por segundo, y se termina el BIG.
 
 - **En la fuente, los 4 BIS salieron alineados en los 80 arranques, en los dos modos y con o sin carga.**
   El modo secuencia no está garantizado por la SDC (research/02 §7.2, afirmación 9), y aun así no falló: Bumble
-  escribe las 4 SDU de un cuadro seguidas, y llegan antes del primer evento. **Falta la segunda medición
-  independiente (en el aire, con el receptor, paso 2)** antes de dar la alineación por buena.
+  escribe las 4 SDU de un cuadro seguidas, y llegan antes del primer evento. La segunda medición
+  independiente, en el aire, se hizo después (§2) y también dio 0 desfase.
 - La cola en 0 durante el primer segundo de cada arranque es el arranque mismo (empieza vacía), no una falla.
 
 ### 4 · Deriva de los relojes (MEDIDO, pero **sin un número firme**)
@@ -308,8 +309,9 @@ quiere decir que el reloj lento corre rápido frente al HFXO.
 frente a su HFXO. Su RC calibrado salta igual que el de C: desvío 32 ppm, 146 saltos de más de 20 ppm en
 580 s (`8-clock-rc-raw-unitA.txt`). Un oscilador sin cristal no da 32 768 Hz con 9 ppm de error. Lo que el usuario vio como "una pieza muy
 pequeña, blanca con un cuadrado en medio" es, con toda probabilidad, ese cristal (INFERIDO: base cerámica
-con tapa metálica). **La hipótesis previa de que la SuperMini no lo traía era falsa para esta placa.** La
-placa A no se probó.
+con tapa metálica). **La hipótesis previa de que la SuperMini no lo traía era falsa**, para las dos placas.
+La línea `X` mide 1 s por sondeo justo cuando arranca el cristal, con ±1–2 ppm de error en los bordes: es
+aproximada. Los valores de referencia son los de la medición continua (−9,2 ppm en C).
 
 **El RC calibrado frente al HFXO** (imagen `prj.conf` del clockprobe, la misma recalibración cada 4 s que el
 controlador; 589 s, `datos/21-supermini-iso/6-clock-rc-unitC.txt`):
@@ -366,7 +368,12 @@ en §8: el desvío es del cristal de 32 MHz de la placa, no del PC.** Se separa 
 **La predicción que se está probando:** con el reloj ISO de C unos **+55 ppm** por delante del PC
 (+64 ppm del cristal de 32 MHz, §8, y −9 del cristal de 32 kHz frente a él, §6), el controlador consume 55
 µs por segundo más de lo que el PC entrega, y el colchón de 60 ms se acaba en **~18 min**. Desde ahí deberían
-faltar cuadros, uno cada ~3 min. Una corrida de 26 min está en curso (`7b-open-long-*.jsonl`).
+faltar cuadros, uno cada ~3 min.
+
+**La corrida de 26 min (16:46, `7b-open-long-*.jsonl`) quedó cortada:** el doble reset que el usuario hizo en
+la placa A a las 17:02 detuvo el receptor a los **~16,1 min** (96 534 SDU por BIS), antes del minuto ~18 en
+que se esperaba ver faltar cuadros. Hasta ahí hubo **0 cuadros perdidos por falta de colchón** y 1 pérdida
+de radio en el BIS 1 (inválida y con un salto en el contador). **La predicción sigue sin probar.**
 
 ### 8 · ¿El reloj de quién? El del PC frente al de la placa (MEDIDO)
 
@@ -389,7 +396,7 @@ faltar cuadros, uno cada ~3 min. Una corrida de 26 min está en curso (`7b-open-
   - entre los BIS de un mismo BIG no cambia nada, porque comparten el reloj;
   - el emisor tiene que seguir a la placa, como ya decía §4;
   - **queda abierto si un JBL acepta un emisor 60 ppm desviado** (E3);
-  - **queda abierto si la A tiene el mismo problema**: necesita el clockprobe, es decir, un doble reset.
+  - **la placa A tiene el mismo problema**: su cristal de 32 MHz va a +79 ppm (ver abajo).
 - **Para las sondas siguientes:** sellar con `CLOCK_MONOTONIC_RAW` (`readclock.py` ya lo hace) y leer la
   corrección de NTP antes y después.
 
@@ -411,7 +418,7 @@ punta (un tono por BIS, decodificado en la otra placa) está más abajo.
 
 **El emisor autónomo** (`probes/21-supermini-iso/standalone_tx/`): un firmware que arma **solo**, sin PC,
 el mismo BIG de las sondas (4 BIS, 120 B cada 10 ms, dirección F2:00:00:00:00:21, SID 3, contador en cada
-SDU), con el cristal de 32 kHz, un LED que parpadea al transmitir y el toque a 1200 baudios. Sirve para
+SDU), con el cristal de 32 kHz, un LED que cambia de estado cada segundo al transmitir (0,5 Hz) y el toque a 1200 baudios. Sirve para
 alejar la placa con un cargador y medir alcance y pérdidas.
 
 - **Lo que salió mal primero:** la primera versión no configuraba la **ruta de datos HCI** de cada BIS
@@ -448,7 +455,8 @@ positivo cuando el emisor es el más lento.
 
 - **Con 20 ms de colchón, el host llega justo**: 6 veces en un minuto, la SDC se quedó sin la siguiente SDU
   de algún BIS en la cola cuando el host volvió a escribir. Si eso dejó un evento vacío (un corte audible) no
-  se ve desde el emisor: lo dice el receptor (INFERIDO hasta el paso 2). **Con 40 ms nunca bajó de 3.**
+  se ve desde el emisor; el receptor no estaba escuchando en esa corrida, así que sigue sin medirse en el aire
+  (INFERIDO). **Con 40 ms nunca bajó de 3.**
   Esto pide un colchón de ≥ 40 ms en el emisor, del mismo tipo que el de los parlantes virtuales.
 
 ## Cómo reproducirlo

@@ -156,7 +156,7 @@ Esa validación concluye que sirven con un BIG sin cifrar, los búferes ISO subi
 **E1 en la SuperMini, hecho (2026-10-07, [experimentos/21](research/experimentos/21-f1-iso-en-la-supermini.md)):
 SÍ.** En las placas A y C, la SDC crea el BIG de 4 BIS en 48_4 y 48_2, con NSE 2 e IRC 2 (una
 retransmisión), y rechaza el cifrado. La otra placa lo recibe entero, y los 4 BIS van alineados en la fuente
-y en el aire (80 + 41 arranques). El emisor necesita ≥ 40 ms de colchón y seguir el reloj del controlador.
+(80 arranques) y en el aire (39 arranques, y 2 corridas de 60 s y una de 10 min). El emisor necesita ≥ 40 ms de colchón y seguir el reloj del controlador.
 La placa C tiene cristal de 32 kHz (estable a 0,04 ppm; con el RC, ±26 ppm) y su controlador ya lo usa.
 La placa A también tiene cristal. **El cristal de 32 MHz de las dos placas corre rápido** (A +79 ppm, C +64 ppm),
 fuera de los ±50 ppm de BLE: queda abierto si un JBL lo acepta (E3). El emisor autónomo para la prueba de
@@ -1748,6 +1748,24 @@ Falta unir las dos cosas en una medición dentro de la sesión, con su informe.
   con otros procesos corriendo tests en paralelo (MEDIDO). Al principio se lo atribuí a la batería,
   y era falso: el adaptador estaba conectado. Un informe de rendimiento que no registra la carga del
   equipo no se puede comparar entre sesiones, y ese test necesita más margen o correr aislado.
+
+### Igualación del render direct: lo que encontró la revisión de la rama · i-7c8794-353aff
+**Estado: Planificado (2026-10-07).** La revisión de la rama `auracast-supermini-f1`, en un contexto limpio
+antes del merge, dio "OK para el merge", sin bloqueantes. Hay que arreglar, en un cambio aparte:
+- **P1** (`render_match.py`, la clave de la referencia): la clave no incluye la ganancia de cada parlante.
+  Si el usuario sube un parlante en `direct`, la igualación baja el makeup de todos y deshace en parte el
+  ajuste. Se arregla con las ganancias redondeadas dentro de la clave, o sacándolas de la medición, como el
+  volumen.
+- **P2:** al cambiar la clave (silenciar, o P1), la referencia adopta la ventana de 3 s que todavía es del
+  estado anterior. Silenciar y cambiar de modo a los 2 s deja `direct` guardado ~1,4 dB alto. Se arregla
+  reiniciando la ventana al cambiar la clave.
+- **Menores:**
+  - P3: la primera visita a `direct`, o una sesión que arranca en `direct`, suena sin igualar mientras el
+    panel dice "mismo volumen"; hay que mostrar `unmeasured` o sembrar una estimación;
+  - P4: en `direct`, las métricas de decorrelate/diffuse/bass siguen diciendo `active`, y falta documentar
+    `spatial {render, makeup_db}` en `control-api.md`;
+  - P5: los tonos de identificación se miden como parte del modo; hay que usar `hold` mientras suenan;
+  - P6: nada del producto llama todavía a `bumble_fixes.apply()`; el backend Auracast tiene que hacerlo.
 
 ### Estabilizar el test de costo de la lectura sinc · i-7c8794-a439a5
 **Estado: Hecho (2026-10-07).**

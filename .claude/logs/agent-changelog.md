@@ -356,6 +356,11 @@ todavía.
   5. el registro con las decisiones.
 
   Después, revisión de la rama y merge a main.
+- **La revisión de la rama** (subagente en contexto limpio, `main..HEAD`) dio **"OK para el merge"**:
+  - hallazgos P1–P6 en la igualación del render direct, para un cambio aparte (i-7c8794-a439a5 cerrado;
+    nuevo i-7c8794-353aff);
+  - D1–D3: documentos que se contradecían (frases viejas del experimento 21 frente a sus resultados
+    nuevos, "41 arranques" que eran 39, "se compraron 5"), corregidos antes del merge.
 
 ---
 
