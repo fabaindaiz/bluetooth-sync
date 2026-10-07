@@ -64,20 +64,29 @@ def test_integer_positions_are_the_samples_themselves(data, engine):
 def test_it_costs_far_less_than_the_formula(data):
     """The direct formula cost 7.3 ms per block and speaker on the Mac (2026-10-02): with
     three speakers, a quarter of the 85 ms block, and the engine missed its deadline under
-    load (experimentos/12). The still case must be at least 8x cheaper, a ramp at least 2x.
+    load (experimentos/12). Idle on HP-O16 the still case is ~10x cheaper and a ramp ~3x
+    (2026-10-07); under the full parallel suite the still ratio fell to 6.3-7.6x and the
+    old 8x threshold failed at random (roadmap i-7c8794-a439a5). The two functions are now
+    timed interleaved, so both see the same load, and the test asks for 5x still and 1.5x on
+    a ramp: far from the formula's 1x. The exact figure belongs to probes/18, not to a test.
     1e-10 is -200 dB: four orders under the golden's 1e-9 and far under SBC's 16 bits."""
 
-    def cost(f, position, n=7):
-        # The fastest of several runs: other processes only ever add time.
-        f(data, position)
-        times = []
-        for _ in range(n):
+    def ratio(position, rounds=15):
+        # Interleaved and the fastest of each: other processes only ever add time, and
+        # alternating makes the two functions share whatever load there is.
+        interpolation.read(data, position)
+        reference(data, position)
+        fast, slow = [], []
+        for _ in range(rounds):
             start = time.perf_counter()
-            f(data, position)
-            times.append(time.perf_counter() - start)
-        return min(times)
+            interpolation.read(data, position)
+            fast.append(time.perf_counter() - start)
+            start = time.perf_counter()
+            reference(data, position)
+            slow.append(time.perf_counter() - start)
+        return min(slow) / min(fast)
 
     still = np.arange(4096) + 40 + 0.37
     ramp = still + np.linspace(0.0, 1.7, 4096)
-    assert cost(interpolation.read, still) * 8 < cost(reference, still)
-    assert cost(interpolation.read, ramp) * 2 < cost(reference, ramp)
+    assert ratio(still) > 5
+    assert ratio(ramp) > 1.5

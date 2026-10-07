@@ -79,6 +79,15 @@ class Request:
         }
 
 
+def _request_id() -> str:
+    """A url-safe id that never starts with '-': `aurasync clients approve <id>` would read it as
+    an option (1 in 64 ids did)."""
+    while True:
+        request_id = secrets.token_urlsafe(18)
+        if not request_id.startswith("-"):
+            return request_id
+
+
 class PairingDesk:
     def __init__(
         self,
@@ -165,7 +174,7 @@ class PairingDesk:
                 del self._requests[old.id]
             if sum(r.status == "pending" for r in self._requests.values()) >= MAX_PENDING:
                 raise ContractError("busy", f"{MAX_PENDING} pairing requests are pending already")
-            req = Request(secrets.token_urlsafe(18), name, ip, scope, f"{secrets.randbelow(10**4):04d}", now)
+            req = Request(_request_id(), name, ip, scope, f"{secrets.randbelow(10**4):04d}", now)
             self._requests[req.id] = req
             wrong_code = False
             if self.window_remaining() > 0:

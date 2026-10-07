@@ -232,6 +232,18 @@ def test_the_first_request_in_the_window_is_approved_as_admin_and_only_the_first
     assert not d.status()["window"]["open"]
 
 
+def test_a_request_id_never_starts_with_a_dash(tmp_path, monkeypatch):
+    """1 in 64 urlsafe ids started with '-', and `aurasync clients approve <id>` read it as an
+    option: the CLI could not approve that request (and test_clients_cli failed at random)."""
+    import aurasync.pairing as pairing_module
+
+    ids = iter(["-starts-with-a-dash", "no-dash-here"])
+    monkeypatch.setattr(pairing_module.secrets, "token_urlsafe", lambda _n: next(ids))
+    d, _, _ = desk(tmp_path, window_s=0)
+    view, _ = d.request("guest", "192.168.1.9")
+    assert view["id"] == "no-dash-here"
+
+
 def test_the_token_is_handed_over_once(tmp_path):
     d, _, _ = desk(tmp_path)
     view, _ = d.request("owner", "ip")
