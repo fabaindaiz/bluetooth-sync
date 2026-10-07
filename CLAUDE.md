@@ -14,15 +14,16 @@ SuperMini, el panel como PWA independiente) se suman después, por iteraciones, 
 la puerta: el motor se mantiene separado del emisor
 (`docs/research/13-dispositivos-pi-pico-y-panel-independiente.md`).
 
-**Estado (2026-10-02): el núcleo con A2DP está construido y en uso** (d-7c8794-9afee2):
-servicio de control, panel, la cadena con todas sus perillas (d-7c8794-114c9c), las etapas
-nuevas de graves, dinámica y difusión apagadas hasta medirlas (d-7c8794-d1118c), y las
-métricas de calidad. Auracast sigue abierto: E4 espera las SuperMini. **Lo próximo:** en
-`PC-Ryzen5` con los 3 Go 4, el protocolo de los microcortes
-(`docs/research/experimentos/12-…`), que ahora separa la radio, el motor y el reloj; después
-los experimentos 14 (graves y volumen) y 15 (calidad con micrófono), y la prueba de concepto
-de E/S nativa en Rust (`experimentos/13-…`). El plan entero está en `docs/roadmap.md`,
-"Plan desde el 2026-10-02".
+**Estado (2026-10-07): el núcleo con A2DP está construido y en uso** (d-7c8794-9afee2):
+servicio de control, panel, la cadena con todas sus perillas (d-7c8794-114c9c), parlantes
+virtuales y monitor de audífonos (fases 1 y 2), y un motor en Rust por etapas. **Auracast avanzó:**
+las SuperMini sirven como controlador de 4 BIS (`experimentos/21`, E1 = sí), con cristal de 32 kHz,
+pero su cristal de 32 MHz corre rápido (+64/+79 ppm); falta E2–E4 con los JBL. **Lo próximo, en el
+orden acordado (roadmap, 2026-10-07):** el grupo 1 de la auditoría del panel (research/10 §10), luego
+el modo simple (spec con §7), el diagnóstico de la radio Auracast y el rendimiento del motor; en
+paralelo, la base del controlador de las placas (d-7c8794-507516) y la revisión del reloj de las
+placas B y D. El emisor Auracast entra al servicio solo si E4 sale bien. El plan anterior sigue en
+`docs/roadmap.md`, "Plan desde el 2026-10-02".
 
 Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
 solo el BIS de Auracast que les corresponde) solo se responde con los parlantes en la
@@ -127,8 +128,18 @@ es lo único que avisa a la siguiente.
   se mantiene su idioma y la lógica nueva va, si se puede, a un módulo nuevo en inglés.
 - **Hay tres equipos** (`docs/research/experimentos/00-inventario-*.md`): el Mac,
   `PC-Ryzen5` (el de las pruebas con parlantes, con el micrófono fifine) y el portátil
-  `HP-O16` (mismo AX210; por ahora solo desarrollo, sin pruebas de audio). Cada
-  medición anota en qué equipo se hizo.
+  `HP-O16` (mismo AX210). Desde el 2026-10-05, `HP-O16` corre el servicio en uso real con los
+  audífonos WH-CH520 (no `--simular` sin preguntar), y desde el 2026-10-07 es el banco de las
+  SuperMini y de Auracast (E1–E5). Antes de tocar el perfil de los audífonos, `rfkill`, los
+  emparejamientos o PipeWire, se pregunta: pueden estar en una llamada. Cada medición anota en qué
+  equipo se hizo.
+- **Todo cambio físico en las placas** (doble reset, conectar, desconectar, cambiar de puerto,
+  alejarlas) se pide con una pregunta explícita, con opciones del tipo "Ya lo hice" y "Explícame
+  más", no como una línea dentro de un mensaje mientras se espera la placa (usuario, 2026-10-07). Hay
+  solo 2 puertos USB a la vez. Para regrabar, se prefiere el toque a 1200 baudios a un doble reset.
+- **Nunca `pkill -f`/`pgrep -f` con un patrón que aparece en la propia línea de comandos**: mata el shell
+  que lo corre. Pasó 5 veces en 4 sesiones (contado en el registro el 2026-10-07). Se busca el PID con
+  `pgrep -af` en una llamada aparte y se mata por número.
 - Explicar los trade-offs y preguntar antes de cambios estructurales o de gastos
   (hardware). Extender un documento existente antes de crear otro.
 

@@ -114,8 +114,8 @@ corresponde.
   A2DP y CIS. Ningún JBL emparejado todavía, el Bluetooth está bloqueado por `rfkill` y
   no hay micrófono USB. Lo que aporta es que **se puede llevar al centro de la pieza**.
 - Este Mac (Apple Silicon, macOS 27), que es la estación de trabajo.
-- **5× SuperMini nRF52840** (clon de nice!nano), compradas el 2026-09-26 y aún no
-  recibidas (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
+- **4× SuperMini nRF52840** (clon de nice!nano), compradas el 2026-09-26 (el usuario corrigió
+  el 2026-10-07: eran 4, no 5) y **recibidas el 2026-10-07** (d-7c8794-b82ee9). Van con `hci_uart` como controlador para Bumble; se flashean con
   el target `promicro_nrf52840`. En cada medición hay que anotar qué unidad y qué
   fuente de reloj de 32 kHz se usó ([06](research/06-opcion-c-nrf5340.md) §1).
 - **1× Raspberry Pi Pico 2 W** (RP2350 + CYW43439), que el usuario ya tenía
@@ -148,12 +148,59 @@ transmitir, en este orden por relación información/costo:
    Charge 6), que no necesitan LE Audio.
 
 Lo que espera a las SuperMini: E2, E3, E4 y E5.
+**Actualización del 2026-10-07:** las 4 SuperMini llegaron. E1 (en la SuperMini) y E2 a E5 quedan
+desbloqueados, con su plan en `docs/superpowers/plans/2026-10-07-auracast-supermini-e1-e5.md` y la
+validación del hardware con fuentes primarias en [research/02](research/02-le-audio-auracast-linux.md) §7.
+Esa validación concluye que sirven con un BIG sin cifrar, los búferes ISO subidos y un RTN efectivo de
+1–2. Los caminos alternativos están en §7.1.
+**E1 en la SuperMini, hecho (2026-10-07, [experimentos/21](research/experimentos/21-f1-iso-en-la-supermini.md)):
+SÍ.** En las placas A y C, la SDC crea el BIG de 4 BIS en 48_4 y 48_2, con NSE 2 e IRC 2 (una
+retransmisión), y rechaza el cifrado. La otra placa lo recibe entero, y los 4 BIS van alineados en la fuente
+y en el aire (80 + 41 arranques). El emisor necesita ≥ 40 ms de colchón y seguir el reloj del controlador.
+La placa C tiene cristal de 32 kHz (estable a 0,04 ppm; con el RC, ±26 ppm) y su controlador ya lo usa.
+La placa A también tiene cristal. **El cristal de 32 MHz de las dos placas corre rápido** (A +79 ppm, C +64 ppm),
+fuera de los ±50 ppm de BLE: queda abierto si un JBL lo acepta (E3). El emisor autónomo para la prueba de
+distancia está listo y la prueba quedó para otra sesión.
+El sniffer está preparado (research/02 §8, experimentos S0–S5).
+**Orden acordado con el usuario (2026-10-07, noche) para llevar esto al servicio:**
+- el panel y el diagnóstico van ya; el **backend emisor Auracast espera a E4**;
+- dentro del panel, el orden es:
+  1. una **auditoría del panel** contra las apps del rubro y los estándares de UI, con prioridad en PC
+     (medida con Playwright y axe, y un guion SUS para el usuario), que se escribe en
+     [research/10](research/10-panel-de-control.md);
+  2. el **modo simple** con antes/después (i-7c8794-0ad844), ajustado por la auditoría;
+  3. el **diagnóstico de la radio Auracast** en el servicio y el panel: el controlador, el reloj, el BIG y
+     lo que anuncian los JBL, con el molde de `RadioMonitor`;
+  4. el **informe de rendimiento del motor** (i-7c8794-be46cb).
+- Cada uno lleva su propia spec y su propio plan.
+- **1. La auditoría, hecha (2026-10-07):** está en [research/10](research/10-panel-de-control.md) §9–§10 (las apps del
+  rubro y los estándares, con la lista priorizada) y en [experimentos/22](research/experimentos/22-auditoria-medida-del-panel.md)
+  (lo medido con Playwright y axe). Siguiente:
+  - el grupo 1 de §10 (defectos medidos y baratos: el nombre del volumen, el foco que se pierde en
+    Parlantes, las ayudas `(?)`, el contraste, las regiones vivas, el deshacer) como un cambio chico antes del
+    modo simple;
+  - revisar la spec del modo simple con los puntos 10 y 11.
+  - **Decidido por el usuario (2026-10-07):**
+    - el grupo 1 va **antes** del modo simple;
+    - **menú lateral en PC** como `?layout=lateral` de acceso anticipado (d-7c8794-b7cdbd);
+    - **axe-core** como dependencia de desarrollo de los tests (d-7c8794-a5f3ba);
+    - copiar el **SUS en español** con su cita (pendiente: traer los ítems de la fuente);
+    - la spec del modo simple suma el **desvío rápido no ciego** y la **luz de estado de la cadena**.
+- **El plan de mejora del controlador** de las SuperMini (lo requerido y lo deseado, y cómo entra en
+  aurasync) quedó **aprobado en su orden** (d-7c8794-507516):
+  - primero la base: R5, R3, R4 y R7;
+  - después los comandos propios (D1) y la telemetría del reloj dentro del controlador (D2);
+  - las placas B y D se miden antes de elegir el emisor, y la de peor reloj va al sniffer.
+
+  **Sniffer:** Wireshark más adelante; hay un teléfono Android para S5.
+  **E5:** en `PC-Ryzen5` con el fifine, con tolerancia < 5 ms adelante y < 20 ms atrás (d-7c8794-910d28).
+  [superpowers/specs/2026-10-07-supermini-controller-improvements-design.md](superpowers/specs/2026-10-07-supermini-controller-improvements-design.md).
 
 Etapas del plan:
 
 ```
 Fase 1 · Factibilidad (probes, sin producto)            ← en curso
-  inventario ✔ → E1 ✔ (NO: el AX210 no transmite)
+  inventario ✔ → E1 ✔ (NO: el AX210 no transmite) → E1 en la SuperMini ✔ (SÍ: BIG de 4 BIS, experimentos/21)
                    └─ E2 → E3 → E4 ──► decisión de seguir o no
                       ↑ los cuatro esperan las SuperMini nRF52840
   se puede hacer ya, sin transmitir:
@@ -215,7 +262,10 @@ la fecha.
 **El resultado va a:** `docs/research/experimentos/00-inventario-linux.md`.
 
 ### E1: ¿el controlador puede transmitir por ISO? · i-7c8794-3f730a
-**Estado: Hecho (2026-09-28). La respuesta es NO**, medida por dos caminos
+**Estado (2026-10-07): Hecho también en la SuperMini, y ahí la respuesta es SÍ**
+([experimentos/21](research/experimentos/21-f1-iso-en-la-supermini.md)): un BIG de 4 BIS con NSE 2 e IRC 2,
+sin cifrar, recibido por otra SuperMini, y alineado.
+**Estado: Hecho (2026-09-28) en el AX210. La respuesta es NO**, medida por dos caminos
 independientes: los bits de LE Features (`ff 59 01 3c ae 00 00 00`) y la lista de
 Supported Commands en una traza de `btmon`. El resultado está en
 [experimentos/03](research/experimentos/03-e1-iso-en-el-ax210.md).
@@ -1573,9 +1623,15 @@ abandono tras 3 rellenos que no recuperaron el nivel.
 construidas y revisadas, sin commit, en el árbol de trabajo de `main`, junto con la igualación de
 volumen del monitor y el volumen por el audífono (ya integrados y revisados). La tarea 12 no empezó.
 
+**Lo hecho (tarea 12, 2026-10-06, en `HP-O16`, solo con tests y `--simular`):** el render `direct`
+(estéreo puro alineado: sin ambiente, decorrelación, EQ, graves, cola ni Haas; mantiene alineación,
+ganancia, silencio, volumen y limitador) y la igualación de volumen entre renders (`render_match.py`
+sobre `loudness_match.py`). La referencia es `classic`, recordada; la corrección es lenta y con tope de
+±12 dB; se congela con silencio, en un corte, en una calibración y durante un A/B ciego. Así los renders
+quedan pre-igualados, y un A/B entre renders compara a igual sonoridad. **La fase 2 está completa.**
+
 **Lo que falta:**
-1. **Tarea 12 del plan** (render `direct` de los parlantes y su igualación de volumen), que el modo
-   simple (i-7c8794-0ad844) necesita.
+1. **Validar con parlantes** (experimento 19 en `PC-Ryzen5`) y escuchar `direct` frente a `classic`.
 2. **Experimento 18** ([experimentos/18](research/experimentos/18-parlantes-virtuales-y-monitor-en-hp-o16.md)),
    en `HP-O16`: bloques en tiempo real con todo virtual, cortes del monitor por minuto y ningún
    `pw-play` hacia un parlante. Necesita que el usuario permita los audífonos WH-CH520 en A2DP.
@@ -1692,6 +1748,28 @@ Falta unir las dos cosas en una medición dentro de la sesión, con su informe.
   con otros procesos corriendo tests en paralelo (MEDIDO). Al principio se lo atribuí a la batería,
   y era falso: el adaptador estaba conectado. Un informe de rendimiento que no registra la carga del
   equipo no se puede comparar entre sesiones, y ese test necesita más margen o correr aislado.
+
+### Estabilizar el test de costo de la lectura sinc · i-7c8794-a439a5
+**Estado: Hecho (2026-10-07).**
+- **Qué se hizo:** las dos funciones se miden intercaladas (mínimo de 15 rondas), y el test pide ≥ 5× en
+  quieto y ≥ 1,5× en rampa.
+- **Por qué esos umbrales:** con el equipo tranquilo, en `HP-O16`, se midió 9,5–10,1× y 2,8–3,2×.
+- **El número exacto** queda para `probes/18`.
+- **El otro test que fallaba al azar en el mismo cierre**, `test_clients_cli`, era un **defecto del producto**:
+  el id de la solicitud de emparejamiento (`secrets.token_urlsafe`) empezaba con `-` una de cada 64 veces, y
+  `aurasync clients approve <id>` lo leía como una opción. Ahora el id nunca empieza con `-`
+  (`pairing._request_id`), con su test.
+
+**Antes (2026-10-07):** `tests/test_interpolation.py::test_it_costs_far_less_than_the_formula`
+falla cuando el equipo está cargado: compara un tiempo contra un umbral (8×). **Contado en el registro de
+sesiones el 2026-10-07: se menciona 6 veces**, en sesiones del 03, 04, 05 y 07 de octubre. El 2026-10-07 dio 1
+fallo de 1513 con dos subagentes trabajando en paralelo, y corrido solo pasó 2 de 3 con load 7,9. Cada vez
+cuesta una explicación en el cierre y oculta si un fallo es real.
+
+**Opciones** (se decide al hacerlo):
+- comparar el mínimo de varias repeticiones en vez de una sola medición;
+- bajar el umbral a lo que se mide con carga (~6×) y dejar el 8× para `probes/18`;
+- marcarlo como test de rendimiento y correrlo aislado en `check.sh`.
 
 ### Estimador base de sincronía alimentado por mediciones continuas y puntuales de varios micrófonos · i-7c8794-737d4e
 **Estado: A medias (2026-10-03). Pasos 1 y 2 hechos en simulación, en `PC-Ryzen5`**; los pasos 3 a 5

@@ -159,6 +159,204 @@ a llamar `_follow` fuera de la guarda. El motor por defecto es numpy, así que n
 Arreglo propuesto: que la construcción falle blando (cualquier excepción → `backend._fail`), con un test
 de un `set_state` que levanta `ValueError`.
 
+**2026-10-06: tarea 12, la fase 2 completa.** El render `direct` y la igualación de volumen entre renders
+(`render_match.py`). La revisión encontró dos fallas y se corrigieron:
+- la compensación del A/B se colaba en la referencia; ahora la igualación se congela durante un A/B y los
+  renders quedan pre-igualados;
+- al salir de `direct` se repetía la cola difusa vieja (pico de 0,0349); ahora se reconstruye.
+
+Decidido: `direct` se salta la protección de graves, porque no es una etapa de seguridad y el limitador
+la acota. `check.sh`: ok (1510). Encontrado: `test_clients_cli::test_list_approve_and_revoke_through_the_service`
+falla al azar cuando el token del cliente empieza con `-` (argparse lo lee como opción). Sin commit
+todavía.
+
+**2026-10-07: llegaron las SuperMini.**
+- **Hardware recibido:** 4 SuperMini nRF52840; el usuario corrigió que eran 4 y no 5. Lo registré en el
+  roadmap, `decisions.md`, `firmware/README.md` y el inventario de `HP-O16`.
+- **Plan de E1 a E5** en `HP-O16`: `docs/superpowers/plans/2026-10-07-auracast-supermini-e1-e5.md`, con
+  criterios de terminado que el roadmap no tenía.
+- **Validación de 14 afirmaciones** sobre el hardware con fuentes primarias (sdk-nrfxlib, sdk-nrf,
+  Zephyr, bluekitchen, pico-examples, TinyUSB, datasheets), escrita en `research/02` §7 (nRF52840) y
+  `research/13` §2.5 (Pico 2 W), con los caminos alternativos en `research/02` §7.1.
+- **Lo que cambió del plan:**
+  - el BIG va sin cifrar;
+  - `BT_ISO_TX_BUF_COUNT` vale 1 por defecto, no 5;
+  - ~96 kbps es el preset 48_4 y no el 48_2, y con RTN 4 no cabe en 10 ms;
+  - el fork de bluekitchen no hace falta (VS 0xfd17);
+  - la placa `promicro` ya trae CDC-ACM;
+  - el cristal de 32 kHz se comprueba antes de nada;
+  - el LC3 de 4 canales en un solo RP2350 es dudoso.
+- **No se pudieron leer:** el product specification del nRF52840, la sección del Core Spec sobre el SCA,
+  la página del vendedor de la SuperMini y DevZone de forma directa.
+- **Pendiente:** el usuario aprueba el toolchain de NCS, decide el micrófono para E5 y confirma su
+  tolerancia.
+
+**2026-10-07 (tarde): experimento 21 con las placas, en la rama `auracast-supermini-f1`.**
+- **Instalación:** el usuario instaló `nrfutil` 8.2.0 por paru y NCS v3.4.1 con `nrfutil sdk-manager`.
+  Registrado en el §0 del plan, con cómo revertirlo.
+- **Firmware:** `firmware/supermini/hci_uart_iso/` (`iso.conf` para emitir y recibir en una sola imagen, y
+  `rc.conf`). Las sondas, desechables, están en `probes/21-supermini-iso/`.
+- **Medido:**
+  - el BIG de 4 BIS en 48_4 y 48_2 da NSE 2 / IRC 2 / PTO 0 (una retransmisión);
+  - `Encryption=1` se rechaza con 0x25;
+  - en 1M no hay retransmisiones;
+  - en la fuente, los 4 BIS salieron alineados en 80 arranques, en los modos secuencia y timestamp, con y
+    sin carga;
+  - el RC de la unidad A corre a +80 ppm frente al PC;
+  - con carga, un colchón de 20 ms no alcanza y uno de 40 ms sí.
+- **Encontrado:**
+  - Bumble 0.0.235 lee mal `LE Read ISO TX Sync` (`Time_Offset` de 4 octetos en vez de 3): se usó el VS
+    0xfd17;
+  - el VS 0xfd18 (tiempo reservado) sobrevive al HCI Reset, y la primera pasada de F1 heredó un valor (lo
+    delató la repetición);
+  - la SDC no garantiza la alineación en modo secuencia (research/02 §7.2).
+- **Qué salió mal:**
+  - la placa C (llamada "B" mientras se medía; el usuario la rotuló C) no se enumera con la misma imagen
+    que funcionó en la A, y el kernel desistió. Hace falta
+    desconectarla y, si sigue igual, hacerle doble reset;
+  - un barrido salió vacío porque el shell es zsh y no separa `$a` en palabras: se volvió a correr con bash.
+- **Después:**
+  - la C funcionó al desconectarla y volver a conectarla (el cuelgue fue en el reinicio en caliente
+    posterior a grabar);
+  - F1 en la C dio lo mismo que en la A;
+  - en el aire, de A a C y de C a A: 0 huecos y los 4 BIS alineados, en 2 corridas de 60 s y en 20 + 19
+    arranques.
+- **Veredicto:** E1 en la SuperMini da **SÍ**. Actualizados el roadmap, el plan y el README del firmware.
+- **Qué salió mal:** la deriva entre placas dio −6,2 y −21,6 ppm al invertir los papeles, cuando el signo
+  debería haberse invertido: no se da por buena. Lo mismo la deriva frente al PC (+48 a +142 ppm según la
+  corrida). El primer intento de `check.sh` usó `python3.12`, que este equipo no tiene: con `PY=python3`
+  (3.14) dio ok, 1510 tests.
+- **Pendiente:**
+  - el cristal de 32 kHz: grabar la imagen `xtal` en una placa con el usuario presente, porque si se
+    cuelga hace falta el doble reset;
+  - la deriva con un método mejor (≥ 30 min, timestamps de las completaciones);
+  - el error de Bumble **no se reporta**: el usuario pidió corregirlo dentro del proyecto. Quedó en
+    `aurasync.bumble_fixes` con su test (d-7c8794-570a77), verificado con la placa A (40 de 40 lecturas
+    coherentes con el VS 0xfd17);
+  - borrar `probes/21-supermini-iso/` una vez cerrado el experimento.
+- Sin commit.
+
+**2026-10-07 (noche): relojes, el arreglo de Bumble y el sniffer.**
+- **Los nombres de las placas:** el usuario rotuló C a la segunda placa, que hasta ahí se llamaba B. Se
+  corrigió en los documentos; los archivos de datos conservan `unitB`/`AtoB`/`BtoA`.
+- **Hay solo 2 puertos USB**, así que A queda fija y C rota.
+- **Bumble:**
+  - el usuario pidió no reportar upstream el error de `LE Read ISO TX Sync` y arreglarlo dentro del
+    proyecto (d-7c8794-570a77);
+  - el arreglo es `host/src/aurasync/bumble_fixes.py`, con `tests/test_bumble_fixes.py`, que usa la
+    respuesta real de la SDC;
+  - verificado con la placa A: 40 de 40 lecturas coherentes con el VS 0xfd17.
+- **El firmware de prueba del reloj** (`probes/21-supermini-iso/clockprobe/`):
+  - **la placa C sí tiene cristal de 32 kHz**: arranca en 360–373 ms y mide −8,7 ppm frente al cristal de
+    32 MHz, en dos arranques;
+  - el RC calibrado varía ±26 ppm, con un salto de más de 20 ppm cada ~6 s, lo que explica la deriva
+    inconsistente de la tarde;
+  - el cristal de 32 kHz es estable a ±0,06 ppm;
+  - el cristal de 32 MHz de C va a +67,6 ppm frente al PC, y queda abierto de quién es ese desfase.
+- **Entrada al bootloader por software:**
+  - el clockprobe y el controlador nuevo (`firmware/supermini/hci_uart_iso/`, que ahora es una app que
+    compila el `main.c` del sample desde el SDK más `src/uf2_touch.c`) entran al bootloader cuando el PC
+    pone el puerto a 1200 baudios (`GPREGRET=0x57`);
+  - medido en C: 4 s y sin tocar la placa.
+- **Sniffer** (tarea paralela, sin hardware):
+  - el nRF Sniffer 4.1.1, en su build del dongle, corre detrás del bootloader nice!nano (código de
+    Adafruit 0.6.0) y se convierte a UF2 sin relinkear;
+  - está documentado en `research/02` §8, con los experimentos S0–S5, y hay una sonda en
+    `probes/22-sniffer-jbl/`;
+  - se ajustó para dedicarle una placa sin estrenar, porque el sniffer no vuelve al bootloader por software.
+- **Qué salió mal:**
+  - el doble reset a mano falló 3 de 4 veces: los toques llegaban muy separados, o hubo uno de más;
+  - el usuario pidió que las acciones físicas se pidan siempre con una pregunta explícita (está en la
+    memoria);
+  - la primera versión de `clock_stats.py` ajustó el cristal de 32 MHz contra el PC incluyendo la ráfaga
+    de líneas que llega al abrir el puerto, y dio 27 305 ppm; se arregló descartando esas líneas.
+- **Pendiente:**
+  - si la placa A tiene cristal (necesita un doble reset para recibir el firmware nuevo);
+  - si los +67 ppm son del cristal de 32 MHz o del PC;
+  - las decisiones del sniffer: instalar Wireshark, qué placa, la licencia de auracast-hackers-toolkit y
+    un teléfono Android.
+
+**2026-10-07 (noche, 2): la auditoría del panel, el plan del controlador y los relojes corregidos.**
+- **Orden acordado:** el panel y el diagnóstico van ya, y el emisor Auracast después de E4. Dentro del
+  panel: auditoría, modo simple, diagnóstico de la radio Auracast y rendimiento. Está en el roadmap.
+- **Auditoría del panel (PC primero), en dos tareas paralelas:**
+  - la investigación (10 apps del rubro, WCAG 2.2, evaluación) está en `research/10` §9;
+  - lo medido con Playwright y axe en modo simulado es el experimento 22;
+  - la lista priorizada y el guion SUS para el usuario están en `research/10` §10;
+  - axe-core y las capturas que no se guardaron quedaron fuera del repositorio.
+- **El plan de mejora del controlador** quedó como propuesta para revisión en
+  `docs/superpowers/specs/2026-10-07-supermini-controller-improvements-design.md`:
+  - R1–R7 y D1–D7, más lo que se integra en aurasync;
+  - NCS permite comandos HCI propios (`hci_internal_user_cmd_handler_register`).
+- **Relojes, medido:**
+  - **el cristal de 32 MHz de C va +64 ppm** frente a `CLOCK_MONOTONIC_RAW`, en tres corridas;
+  - NTP mueve el reloj del PC solo entre 2 y 3 ppm, y `CLOCK_MONOTONIC` frente al raw da −1,0 ppm;
+  - el desvío es de la placa y queda fuera de los ±50 ppm de BLE.
+- **El LC3** cuesta menos del 2 % de un núcleo para 4 canales.
+- **A lazo abierto, 10 min:** sin cuadros perdidos salvo 2 + 2 pérdidas de radio; la corrida de 26 min que
+  prueba la falta predicha a los ~18 min está en curso.
+- **Qué salió mal:**
+  - le dije al usuario que el culpable era el reloj del PC (por NTP) antes de medirlo; era la placa;
+  - el "−1,7 ppm" a lazo abierto era circular, porque el número de secuencia lo avanza el PC; el
+    contador de underruns del emisor tampoco servía, porque la SDC completa al pasar la SDU a su búfer;
+  - las dos lecturas están marcadas como inválidas en el experimento 21 §7;
+  - `scripts/check.sh` dio 1 fallo: el flake conocido de `test_interpolation` con el equipo cargado;
+    corrido solo, pasó 2 de 3.
+- **Pendiente:**
+  - el resultado de la corrida de 26 min;
+  - la prueba LC3 de punta a punta;
+  - la placa A (doble reset);
+  - las decisiones de la auditoría y del plan del controlador.
+
+**2026-10-07 (cierre): la placa A, el emisor autónomo y el cierre pedido por el usuario.**
+- **Placa A:** el usuario le hizo el doble reset. Tiene cristal de 32 kHz y su cristal de 32 MHz va a
+  +79 ppm. Las dos placas corren rápido (C +64), probablemente por el diseño. A quedó con el controlador
+  con cristal y el toque.
+- **El emisor autónomo** (`probes/21-supermini-iso/standalone_tx/`) arma el BIG sin PC:
+  - en la mesa, 4020 SDU por BIS sin cuadros perdidos;
+  - la deriva entre placas con cristal es 20,5 ppm, y cuadra en 0,7 ppm con los relojes medidos por
+    separado;
+  - la C quedó con este firmware.
+- **La prueba de distancia** con la C en un cargador quedó para otra sesión, por pedido del usuario.
+- **El cierre** siguió las reglas globales:
+  - lo que vivía solo en la memoria local (el uso real de `HP-O16` y pedir las acciones físicas con una
+    pregunta) pasó al CLAUDE.md;
+  - se contaron las fricciones en este registro: `pkill -f` que se mata a sí mismo, 5 veces en 4 sesiones,
+    ahora es una regla del CLAUDE.md; el flake de `test_interpolation`, 6 menciones, es el pendiente
+    i-7c8794-a439a5 del roadmap.
+- **Qué salió mal:**
+  - el reset de A a las 17:02 cortó la corrida de 26 min a los 16,7 min, antes del minuto ~18 en que se
+    esperaba que faltaran cuadros: la predicción sigue sin probar;
+  - la primera versión del emisor autónomo no configuraba la ruta de datos HCI, y la SDC descartaba las
+    SDU sin error;
+  - un `pkill -f` se mató a sí mismo, otra vez.
+- **Decisiones del usuario en la revisión interactiva del cierre:**
+  - el panel en PC pasa a menú lateral como acceso anticipado (d-7c8794-b7cdbd);
+  - axe-core entra como dependencia de los tests (d-7c8794-a5f3ba);
+  - el grupo 1 de la auditoría va antes del modo simple;
+  - se copia el SUS en español;
+  - el modo simple suma el desvío rápido y la luz de estado (spec §7);
+  - el plan del controlador queda aprobado en su orden, con D2 dentro del controlador, y B y D se miden
+    antes de elegir el emisor (d-7c8794-507516);
+  - el sniffer, más adelante; hay un Android;
+  - E5 se mide en `PC-Ryzen5` con < 5 ms y < 20 ms (d-7c8794-910d28).
+- **El primer intento de commit lo frenó el chequeo:** falló el flake conocido de
+  `test_clients_cli::test_list_approve_and_revoke_through_the_service`, cuyo token aleatorio puede empezar
+  con `-`; no se commiteó nada.
+- **El segundo intento lo frenó el otro flake**, `test_interpolation`. Hoy el chequeo había pasado 1 de 4
+  veces. Con el visto bueno del usuario, se arreglaron los dos:
+  - el test de costo mide intercalado y con un umbral realista (i-7c8794-a439a5, hecho);
+  - el de `clients_cli` destapó un **defecto real**: el id de una solicitud de emparejamiento podía
+    empezar con `-`, y el CLI no podía aprobarla. Se corrigió en `pairing.py`, con su test.
+- **Commits en `auracast-supermini-f1`:**
+  1. la tarea 12;
+  2. Auracast con las SuperMini;
+  3. la auditoría del panel;
+  4. los tests inestables;
+  5. el registro con las decisiones.
+
+  Después, revisión de la rama y merge a main.
+
 ---
 
 ## 2026-10-04 · s-7c8794-a1da58 — Los pendientes sin parlantes y las pruebas de usabilidad por flujos
