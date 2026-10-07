@@ -1,0 +1,43 @@
+{
+ "tab": {
+  "id": "cal-run",
+  "fv": true,
+  "hover": false,
+  "outline": "solid 2px oklab(0.999994 0.0000455678 0.0000200868)",
+  "cls": "btn btn-primary",
+  "title": "",
+  "disabled": false
+ },
+ "rules": [
+  {
+   "sel": ":focus-visible",
+   "props": [
+    "outline-color:-webkit-focus-ring-color",
+    "outline-style:auto",
+    "outline-width:1px"
+   ]
+  },
+  {
+   "sel": ".btn:focus-visible, .input:focus-visible, .seg:focus-visible, .nav-tab:focus-visible, input:focus-visible, select:focus-",
+   "props": [
+    "outline-style:var(--tw-outline-style)",
+    "outline-offset:2px",
+    "outline-width:2px",
+    "outline-color:var(--color-sky-600)",
+    "outline-style:var(--tw-outline-style)",
+    "outline-offset:2px",
+    "outline-width:2px",
+    "outline-color:var(--color-sky-600)"
+   ]
+  }
+ ],
+ "after_mouse_focus_call": {
+  "id": "cal-run",
+  "fv": true,
+  "hover": false,
+  "outline": "solid 2px oklab(0.590875 -0.0737407 -0.138488)",
+  "cls": "btn btn-primary",
+  "title": "",
+  "disabled": false
+ }
+}

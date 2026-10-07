@@ -1,0 +1,139 @@
+- banner:
+  - text: aurasync SIMULADO
+  - status "Recibe el estado y los niveles por stream": En vivo
+  - text: cambios sin guardar
+  - button "Guardar instalación"
+  - region "Reproducción":
+    - button "Detener"
+    - text: Volumen
+    - status "Volumen": "-20 dB"
+    - slider: "-20"
+    - combobox "Fuente":
+      - 'option "Fuente: todo el sistema"'
+      - 'option "Fuente: una aplicación"'
+      - 'option "Fuente: un archivo"'
+      - 'option "Fuente: señal de prueba" [selected]'
+      - 'option "Fuente: render multicanal"'
+    - combobox "Cómo se reparte el sonido entre los parlantes":
+      - 'option "Modo: clásico" [selected]'
+      - 'option "Modo: espacial"'
+      - 'option "Modo: frente intacto"'
+      - 'option "Modo: directo"'
+    - button "Sin cortes"
+    - text: "Latencia -27 ms Preset: amplio"
+- main:
+  - region "Calibración y ecualización":
+    - heading "Calibración y ecualización" [level=2]
+    - text: Micrófono
+    - combobox "Micrófono de calibración":
+      - option "ninguno"
+      - option "Micrófono simulado" [selected]
+      - option "Otro micrófono simulado"
+    - text: Segundos
+    - spinbutton "Segundos": "10"
+    - text: Amplitud (máx. 0,2)
+    - spinbutton "Amplitud (máx. 0,2)": "0.1"
+    - button "Calibrar"
+    - button "Aplicar alineación"
+    - button "Ecualizar"
+    - button "Quitar ecualización" [disabled]
+    - text: Micrófono
+    - meter "Nivel del micrófono"
+    - text: "-36 dBFS en la ventana"
+    - list:
+      - listitem: 1. Calibrar
+      - listitem: 2. Aplicar alineación
+      - listitem: 3. Ecualizar
+      - listitem: 4. Calibrar otra vez para verificar
+    - paragraph: SIMULADO · Medido 2026-10-07T16:30:38-03:00. Confiable.
+    - paragraph: "Fuera de la calibración (no suenan): Virtual 1 (virtual)."
+    - table:
+      - rowgroup:
+        - row "Parlante Retardo (ms) Ganancia (dB) Estabilidad (ms) Banda útil (−10 dB)":
+          - columnheader "Parlante"
+          - columnheader "Retardo (ms)"
+          - columnheader "Ganancia (dB)"
+          - columnheader "Estabilidad (ms)"
+          - columnheader "Banda útil (−10 dB)"
+          - columnheader
+      - rowgroup:
+        - row "JBL Go 4 Red 9,00 -4,2 0,00 99 Hz–10 kHz":
+          - cell "JBL Go 4 Red"
+          - cell "9,00"
+          - cell "-4,2"
+          - cell "0,00"
+          - cell "99 Hz–10 kHz"
+          - cell
+        - row "JBL Go 4 Black 4,50 -2,4 0,00 99 Hz–10 kHz":
+          - cell "JBL Go 4 Black"
+          - cell "4,50"
+          - cell "-2,4"
+          - cell "0,00"
+          - cell "99 Hz–10 kHz"
+          - cell
+        - row "JBL Go 4 Blue 0,00 0,0 0,00 99 Hz–10 kHz":
+          - cell "JBL Go 4 Blue"
+          - cell "0,00"
+          - cell "0,0"
+          - cell "0,00"
+          - cell "99 Hz–10 kHz"
+          - cell
+    - textbox "Nota para la medición (opcional)"
+    - button "Guardar medición" [disabled]
+  - region "Respuesta en frecuencia":
+    - heading "Respuesta en frecuencia" [level=2]
+    - text: "en el micrófono · ±2 dB · bajo 100 Hz orientativa · punteada: ecualización · tenue: poco confiable"
+    - img "Respuesta en frecuencia por parlante": "-30 -20 -10 0 10 20 Hz 50 Hz 100 Hz 200 Hz 500 Hz 1,0 kHz 2,0 kHz 5,0 kHz 10 kHz 20 kHz"
+    - button "JBL Go 4 Red" [pressed]
+    - button "JBL Go 4 Black" [pressed]
+    - button "JBL Go 4 Blue" [pressed]
+    - text: "línea llena: medida · punteada: ecualización · gris: 0 dB · tenue: coherencia baja (γ² < 0,5), poco confiable"
+  - region "Sincronía sugerida":
+    - heading "Sincronía sugerida" [level=2]
+    - paragraph: Junta las mediciones de todos los micrófonos y sugiere un retardo por parlante. No cambia nada hasta que aplicas.
+    - paragraph
+    - table:
+      - rowgroup:
+        - row "Parlante Ahora (ms) Sugerido (ms) Cambio (ms) ± (ms)":
+          - columnheader "Parlante"
+          - columnheader "Ahora (ms)"
+          - columnheader "Sugerido (ms)"
+          - columnheader "Cambio (ms)"
+          - columnheader "± (ms)"
+      - rowgroup:
+        - row "JBL Go 4 Black 4.50 4.50 -0.00 0.00":
+          - cell "JBL Go 4 Black"
+          - cell "4.50"
+          - cell "4.50"
+          - cell "-0.00"
+          - cell "0.00"
+        - row "JBL Go 4 Blue 0.00 0.00 +0.00 0.00":
+          - cell "JBL Go 4 Blue"
+          - cell "0.00"
+          - cell "0.00"
+          - cell "+0.00"
+          - cell "0.00"
+        - row "JBL Go 4 Red 9.00 9.00 +0.00 0.00":
+          - cell "JBL Go 4 Red"
+          - cell "9.00"
+          - cell "9.00"
+          - cell "+0.00"
+          - cell "0.00"
+    - paragraph: "Desalineación estimada ahora: 0.00 ms · después de aplicar: ±0.00 ms · alineado para «server» · 1 mediciones."
+    - button "Aplicar sugerencia"
+    - heading "Medir desde este dispositivo" [level=3]
+    - paragraph: "Graba 8 s con el micrófono de este teléfono o computador, donde estés escuchando, y mide contra la sonda (tiene que estar encendida, en Ajustes). La grabación se procesa acá: al equipo solo van los tiempos de llegada."
+    - text: Esta medición
+    - combobox "Qué pesa esta medición":
+      - option "Fija la sincronía para este lugar" [selected]
+      - option "Vota junto con las demás"
+    - button "Medir desde aquí"
+    - status
+    - group: Configuración y qué cambia en el sonido
+- navigation "Secciones":
+  - button "Escuchar"
+  - button "Cadena"
+  - button "Parlantes"
+  - button "Calibrar"
+  - button "Diagnóstico"
+  - button "Ajustes"

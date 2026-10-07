@@ -1,0 +1,462 @@
+- banner:
+  - text: aurasync SIMULADO
+  - status "Recibe el estado y los niveles por stream": En vivo
+  - text: cambios sin guardar
+  - button "Guardar instalación"
+  - region "Reproducción":
+    - button "Detener"
+    - text: Volumen
+    - status "Volumen": "-20 dB"
+    - slider: "-20"
+    - combobox "Fuente":
+      - 'option "Fuente: todo el sistema"'
+      - 'option "Fuente: una aplicación"'
+      - 'option "Fuente: un archivo"'
+      - 'option "Fuente: señal de prueba" [selected]'
+      - 'option "Fuente: render multicanal"'
+    - combobox "Cómo se reparte el sonido entre los parlantes":
+      - 'option "Modo: clásico" [selected]'
+      - 'option "Modo: espacial"'
+      - 'option "Modo: frente intacto"'
+      - 'option "Modo: directo"'
+    - button "Sin cortes"
+    - text: "Latencia -27 ms Preset: amplio"
+- main:
+  - region "Salud":
+    - heading "Salud" [level=2]
+    - text: "Cortes en la salida (xruns) midiendo… se lee de pw-top cada pocos segundos Entrada recibe audio lo que suena en la salida «aurasync» Motor 6,32 ms por bloque de 85.3 ms · 13× tiempo real Motor del DSP numpy la lectura del retardo de cada parlante Margen de la salida — audio esperando en la tubería; bajo 20 ms el parlante se queda sin nada Ruteo en orden 0 stream(s) devuelto(s) a su parlante Recalibración encendida descartado: waiting for a second agreeing measurement (JBL Go 4 Black, JBL Go 4 Blue, JBL Go 4 Red) Retardo que aplica el lazo, por parlante (ms)"
+    - img "Retardo por parlante, entre 0,0 y 9,0 ms": 0,0 9,0
+    - text: JBL Go 4 Red JBL Go 4 Black JBL Go 4 Blue Virtual 1
+    - table "Latencia por tramo":
+      - caption: Latencia por tramo
+      - rowgroup:
+        - row "Entrada (un bloque) 85,3 ms":
+          - cell "Entrada (un bloque)"
+          - cell "85,3 ms"
+        - row "Tubería hacia pw-play (dos bloques) 220,7 ms":
+          - cell "Tubería hacia pw-play (dos bloques)"
+          - cell "220,7 ms"
+        - row "Extractor de ambiente 42,7 ms":
+          - cell "Extractor de ambiente"
+          - cell "42,7 ms"
+        - row "Buffer de pw-play 50,0 ms":
+          - cell "Buffer de pw-play"
+          - cell "50,0 ms"
+        - row "A2DP y el parlante sin medir":
+          - cell "A2DP y el parlante"
+          - cell "sin medir"
+        - row "Conocido ≥ 398,7 ms":
+          - cell "Conocido"
+          - cell "≥ 398,7 ms"
+        - row "Medida (última calibración, de escrito a oído) -27 ms":
+          - cell "Medida (última calibración, de escrito a oído)"
+          - cell "-27 ms"
+  - region "Cortes":
+    - heading "Cortes" [level=2]
+    - text: ninguno en 10 min
+    - img "Cortes de los últimos 10 minutos"
+    - text: hace 10 min hace 5 ahora falla PipeWire / Bluetooth la fuente corte intencional la radio descartó un paquete
+    - heading "Radio, por parlante (paquetes que el enlace Bluetooth descartó)" [level=3]
+    - button "Activar registro de radio"
+    - paragraph:
+      - text: "Es un cambio de sistema (el registro de bluez5 en WirePlumber): se anota antes con cómo revertirlo en"
+      - code: cambios-de-sistema.txt
+      - text: ", y se revierte al desactivarlo o al detener el servicio ("
+      - code: aurasync radio-log off
+      - text: ).
+    - status: "no llegó ninguna línea de bluez5 en 67 s: el registro de radio está apagado o no suena nada"
+    - table:
+      - rowgroup:
+        - row "Hora Dónde Qué pasó Detalle Mientras":
+          - columnheader "Hora"
+          - columnheader "Dónde"
+          - columnheader "Qué pasó"
+          - columnheader "Detalle"
+          - columnheader "Mientras"
+      - rowgroup:
+        - row "16:30:39 — corte intencional calibration_apply después de «calibration_apply»":
+          - cell "16:30:39"
+          - cell "—"
+          - cell "corte intencional"
+          - cell "calibration_apply"
+          - cell "después de «calibration_apply»"
+    - paragraph: "Cada corte queda con lo que el motor sabía en ese momento: si el lazo medía, si Bluetooth buscaba dispositivos, qué orden acababa de ejecutarse. Los intencionales (cargar un preset, aplicar una calibración) se listan para no confundirlos con fallas."
+  - region "Servicios":
+    - heading "Servicios" [level=2]
+    - text: "clic en un servicio: solo sus logs"
+    - table:
+      - rowgroup:
+        - row "Servicio Estado PID Activo Reinicios Detalle":
+          - columnheader "Servicio"
+          - columnheader "Estado"
+          - columnheader "PID"
+          - columnheader "Activo"
+          - columnheader "Reinicios"
+          - columnheader "Detalle"
+          - columnheader
+      - rowgroup:
+        - row "Sesión de audio session · tarea · depende de pipewire, bluetoothd corriendo — 1 min 4 s 0 4 parlantes · bloque 4096 Detener Reiniciar":
+          - cell "Sesión de audio session · tarea · depende de pipewire, bluetoothd":
+            - button "Sesión de audio"
+            - text: session · tarea · depende de pipewire, bluetoothd
+          - cell "corriendo"
+          - cell "—"
+          - cell "1 min 4 s"
+          - cell "0"
+          - cell "4 parlantes · bloque 4096"
+          - cell "Detener Reiniciar":
+            - button "Detener"
+            - button "Reiniciar"
+        - row "Entrada virtual (pw-record) sink · proceso · depende de session corriendo 41003 1 min 4 s 0 aurasync · recibe audio":
+          - cell "Entrada virtual (pw-record) sink · proceso · depende de session":
+            - button "Entrada virtual (pw-record)"
+            - text: sink · proceso · depende de session
+          - cell "corriendo"
+          - cell "41003"
+          - cell "1 min 4 s"
+          - cell "0"
+          - cell "aurasync · recibe audio"
+          - cell
+        - row "JBL Go 4 Red (pw-play) player:JBL Go 4 Red · proceso · depende de session corriendo 41000 1 min 4 s 0 un stream mono por parlante":
+          - cell "JBL Go 4 Red (pw-play) player:JBL Go 4 Red · proceso · depende de session":
+            - button "JBL Go 4 Red (pw-play)"
+            - text: player:JBL Go 4 Red · proceso · depende de session
+          - cell "corriendo"
+          - cell "41000"
+          - cell "1 min 4 s"
+          - cell "0"
+          - cell "un stream mono por parlante"
+          - cell
+        - row "JBL Go 4 Black (pw-play) player:JBL Go 4 Black · proceso · depende de session corriendo 41001 1 min 4 s 0 un stream mono por parlante":
+          - cell "JBL Go 4 Black (pw-play) player:JBL Go 4 Black · proceso · depende de session":
+            - button "JBL Go 4 Black (pw-play)"
+            - text: player:JBL Go 4 Black · proceso · depende de session
+          - cell "corriendo"
+          - cell "41001"
+          - cell "1 min 4 s"
+          - cell "0"
+          - cell "un stream mono por parlante"
+          - cell
+        - row "JBL Go 4 Blue (pw-play) player:JBL Go 4 Blue · proceso · depende de session corriendo 41002 1 min 4 s 0 un stream mono por parlante":
+          - cell "JBL Go 4 Blue (pw-play) player:JBL Go 4 Blue · proceso · depende de session":
+            - button "JBL Go 4 Blue (pw-play)"
+            - text: player:JBL Go 4 Blue · proceso · depende de session
+          - cell "corriendo"
+          - cell "41002"
+          - cell "1 min 4 s"
+          - cell "0"
+          - cell "un stream mono por parlante"
+          - cell
+        - row "Virtual 1 (pw-play) player:Virtual 1 · proceso · depende de session detenido — — 0 un stream mono por parlante":
+          - cell "Virtual 1 (pw-play) player:Virtual 1 · proceso · depende de session":
+            - button "Virtual 1 (pw-play)"
+            - text: player:Virtual 1 · proceso · depende de session
+          - cell "detenido"
+          - cell "—"
+          - cell "—"
+          - cell "0"
+          - cell "un stream mono por parlante"
+          - cell
+        - 'row "Lazo de recalibración recalibration · tarea · depende de session corriendo 41008 — 0 descartado: waiting for a second agreeing measurement (JBL Go 4 Black, JBL Go 4 Blue, JBL Go 4 Red) Detener Reiniciar"':
+          - cell "Lazo de recalibración recalibration · tarea · depende de session":
+            - button "Lazo de recalibración"
+            - text: recalibration · tarea · depende de session
+          - cell "corriendo"
+          - cell "41008"
+          - cell "—"
+          - cell "0"
+          - 'cell "descartado: waiting for a second agreeing measurement (JBL Go 4 Black, JBL Go 4 Blue, JBL Go 4 Red)"'
+          - cell "Detener Reiniciar":
+            - button "Detener"
+            - button "Reiniciar"
+        - row "Fuente source · proceso · depende de session corriendo 41004 1 min 4 s 0 tone Detener Reiniciar":
+          - cell "Fuente source · proceso · depende de session":
+            - button "Fuente"
+            - text: source · proceso · depende de session
+          - cell "corriendo"
+          - cell "41004"
+          - cell "1 min 4 s"
+          - cell "0"
+          - cell "tone"
+          - cell "Detener Reiniciar":
+            - button "Detener"
+            - button "Reiniciar"
+        - row "Panel y API panel · tarea corriendo 342163 1 min 6 s 0 este proceso":
+          - cell "Panel y API panel · tarea":
+            - button "Panel y API"
+            - text: panel · tarea
+          - cell "corriendo"
+          - cell "342163"
+          - cell "1 min 6 s"
+          - cell "0"
+          - cell "este proceso"
+          - cell
+        - 'row "bluetoothd bluetoothd · sistema (solo se observa) corriendo 812 4 h 47 min 0 systemd: active"':
+          - cell "bluetoothd bluetoothd · sistema (solo se observa)":
+            - button "bluetoothd"
+            - text: bluetoothd · sistema (solo se observa)
+          - cell "corriendo"
+          - cell "812"
+          - cell "4 h 47 min"
+          - cell "0"
+          - 'cell "systemd: active"'
+          - cell
+        - 'row "PipeWire pipewire · sistema (solo se observa) corriendo 1425 4 h 47 min 0 systemd: active"':
+          - cell "PipeWire pipewire · sistema (solo se observa)":
+            - button "PipeWire"
+            - text: pipewire · sistema (solo se observa)
+          - cell "corriendo"
+          - cell "1425"
+          - cell "4 h 47 min"
+          - cell "0"
+          - 'cell "systemd: active"'
+          - cell
+        - 'row "WirePlumber wireplumber · sistema (solo se observa) corriendo 1431 4 h 47 min 0 systemd: active"':
+          - cell "WirePlumber wireplumber · sistema (solo se observa)":
+            - button "WirePlumber"
+            - text: wireplumber · sistema (solo se observa)
+          - cell "corriendo"
+          - cell "1431"
+          - cell "4 h 47 min"
+          - cell "0"
+          - 'cell "systemd: active"'
+          - cell
+  - region "Logs":
+    - heading "Logs" [level=2]
+    - text: 70 de 70 líneas Servicio
+    - combobox "Servicio":
+      - option "todos" [selected]
+      - option "panel"
+      - option "session"
+      - option "calibration"
+      - option "monitor"
+      - option "recalibration"
+    - text: Nivel mínimo
+    - combobox "Nivel mínimo":
+      - option "debug"
+      - option "info" [selected]
+      - option "warning"
+      - option "error"
+    - text: Buscar
+    - textbox "Buscar"
+    - button "Pausar"
+    - button "Limpiar vista"
+    - button "Descargar .log"
+    - list:
+      - listitem:
+        - time: 16:30:25.190
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:30:25.229
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:25.991
+        - text: info session added virtual speaker Virtual 1 as RL
+      - listitem:
+        - time: 16:30:25.991
+        - text: "info panel speaker_add_virtual: ok · by master token"
+      - listitem:
+        - time: 16:30:26.022
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:27.066
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:27.676
+        - text: "info session session open: 4 speakers, block 4096, pw-play buffer 50 ms, recalibration off"
+      - listitem:
+        - time: 16:30:27.676
+        - text: "info panel start: ok · by master token"
+      - listitem:
+        - time: 16:30:28.114
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:28.459
+        - text: "info session micrófono: abierto para medir su nivel, 8 s"
+      - listitem:
+        - time: 16:30:28.459
+        - text: "info panel mic_check: ok · by master token"
+      - listitem:
+        - time: 16:30:28.916
+        - text: "info calibration calibración: 5 s a amplitud 0.1, con simulado; quedan fuera (no suenan): Virtual 1"
+      - listitem:
+        - time: 16:30:28.916
+        - text: "info panel calibrate: ok {\"seconds\": 5.0, \"amplitude\": 0.1} · by master token"
+      - listitem:
+        - time: 16:30:29.131
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:30.156
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:31.178
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:38.078
+        - text: "info calibration calibración: terminada: done"
+      - listitem:
+        - time: 16:30:39.038
+        - text: "info session micrófono: abierto para medir su nivel, 8 s"
+      - listitem:
+        - time: 16:30:39.038
+        - text: "info panel mic_check: ok · by master token"
+      - listitem:
+        - time: 16:30:39.122
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:30:39.211
+        - text: info calibration calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+      - listitem:
+        - time: 16:30:39.211
+        - text: "info panel calibration_apply: ok · by master token"
+      - listitem:
+        - time: 16:30:40.403
+        - text: "info panel preset_save: ok {\"name\": \"cerrado\"} · by master token"
+      - listitem:
+        - time: 16:30:40.999
+        - text: "info panel preset_save: ok {\"name\": \"amplio\"} · by master token"
+      - listitem:
+        - time: 16:30:41.513
+        - text: "info monitor monitor: binaural → simulated_headphones"
+      - listitem:
+        - time: 16:30:41.513
+        - text: "info panel monitor_set: ok {\"mode\": \"binaural\", \"target\": \"simulated_headphones\"} · by master token"
+      - listitem:
+        - time: 16:30:41.517
+        - text: "info recalibration lazo: recalibración encendida, con simulado"
+      - listitem:
+        - time: 16:30:41.517
+        - text: "info panel set: ok {\"changes\": {\"recalibrate\": true}} · by master token"
+      - listitem:
+        - time: 16:30:49.450
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:31:02.845
+        - text: "info recalibration descartado: fewer than two speakers were measured reliably (la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue)"
+      - listitem:
+        - time: 16:31:05.404
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:31:05.491
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:31:08.306
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:31:20.685
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:30:25.190
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:30:25.229
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:25.991
+        - text: info session added virtual speaker Virtual 1 as RL
+      - listitem:
+        - time: 16:30:25.991
+        - text: "info panel speaker_add_virtual: ok · by master token"
+      - listitem:
+        - time: 16:30:26.022
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:27.066
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:27.676
+        - text: "info session session open: 4 speakers, block 4096, pw-play buffer 50 ms, recalibration off"
+      - listitem:
+        - time: 16:30:27.676
+        - text: "info panel start: ok · by master token"
+      - listitem:
+        - time: 16:30:28.114
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:28.459
+        - text: "info session micrófono: abierto para medir su nivel, 8 s"
+      - listitem:
+        - time: 16:30:28.459
+        - text: "info panel mic_check: ok · by master token"
+      - listitem:
+        - time: 16:30:28.916
+        - text: "info calibration calibración: 5 s a amplitud 0.1, con simulado; quedan fuera (no suenan): Virtual 1"
+      - listitem:
+        - time: 16:30:28.916
+        - text: "info panel calibrate: ok {\"seconds\": 5.0, \"amplitude\": 0.1} · by master token"
+      - listitem:
+        - time: 16:30:29.131
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:30.156
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:31.178
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:30:38.078
+        - text: "info calibration calibración: terminada: done"
+      - listitem:
+        - time: 16:30:39.038
+        - text: "info session micrófono: abierto para medir su nivel, 8 s"
+      - listitem:
+        - time: 16:30:39.038
+        - text: "info panel mic_check: ok · by master token"
+      - listitem:
+        - time: 16:30:39.122
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:30:39.211
+        - text: info calibration calibration applied to JBL Go 4 Red, JBL Go 4 Black, JBL Go 4 Blue
+      - listitem:
+        - time: 16:30:39.211
+        - text: "info panel calibration_apply: ok · by master token"
+      - listitem:
+        - time: 16:30:40.403
+        - text: "info panel preset_save: ok {\"name\": \"cerrado\"} · by master token"
+      - listitem:
+        - time: 16:30:40.999
+        - text: "info panel preset_save: ok {\"name\": \"amplio\"} · by master token"
+      - listitem:
+        - time: 16:30:41.513
+        - text: "info monitor monitor: binaural → simulated_headphones"
+      - listitem:
+        - time: 16:30:41.513
+        - text: "info panel monitor_set: ok {\"mode\": \"binaural\", \"target\": \"simulated_headphones\"} · by master token"
+      - listitem:
+        - time: 16:30:41.517
+        - text: "info recalibration lazo: recalibración encendida, con simulado"
+      - listitem:
+        - time: 16:30:41.517
+        - text: "info panel set: ok {\"changes\": {\"recalibrate\": true}} · by master token"
+      - listitem:
+        - time: 16:30:49.450
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:31:02.845
+        - text: "info recalibration descartado: fewer than two speakers were measured reliably (la medición no es estable en: JBL Go 4 Black, JBL Go 4 Blue)"
+      - listitem:
+        - time: 16:31:05.404
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:31:05.491
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:31:08.306
+        - text: "info panel chain: ok · by master token"
+      - listitem:
+        - time: 16:31:20.766
+        - text: "info panel spatial_explain: ok · by master token"
+      - listitem:
+        - time: 16:31:22.898
+        - text: "info recalibration descartado: waiting for a second agreeing measurement (JBL Go 4 Black, JBL Go 4 Blue, JBL Go 4 Red)"
+      - listitem:
+        - time: 16:31:23.494
+        - text: "info panel chain: ok · by master token"
+- navigation "Secciones":
+  - button "Escuchar"
+  - button "Cadena"
+  - button "Parlantes"
+  - button "Calibrar"
+  - button "Diagnóstico"
+  - button "Ajustes"

@@ -1,0 +1,16 @@
+[   3.5s] playing
+[  14.1s] calibrated
+monitor: simulated_headphones was at 100 %, lowering it to 30 % before opening
+[  19.7s] state ready
+[  24.0s] replaced escuchar: 0/60
+[  28.3s] replaced cadena: 0/88
+[  32.5s] replaced parlantes: 13/74
+[  36.8s] replaced calibrar: 0/25
+[  41.1s] replaced diagnostico: 0/37
+[  45.3s] replaced ajustes: 0/32
+[  76.8s] focus loss done
+[  85.0s] cadena live done
+[ 109.6s] undo done
+[ 136.4s] light primary focus done
+[ 146.9s] dark primary focus done
+[ 149.8s] service stopped

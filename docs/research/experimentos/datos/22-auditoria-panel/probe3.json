@@ -1,0 +1,1088 @@
+{
+ "1440": {
+  "escuchar": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 546,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 9.1
+   },
+   {
+    "name": "Nivel del monitor",
+    "card": "monitor",
+    "w": 129,
+    "h": 28,
+    "steps": 100,
+    "pxPerStep": 1.29
+   }
+  ],
+  "parlantes": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 546,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 9.1
+   },
+   {
+    "name": "Pan de JBL Go 4 Red",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Red",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de JBL Go 4 Red",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Pan de JBL Go 4 Black",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Black",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de JBL Go 4 Black",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Pan de JBL Go 4 Blue",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Blue",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de JBL Go 4 Blue",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Pan de Virtual 1",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de Virtual 1",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de Virtual 1",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Carácter",
+    "card": "spatial",
+    "w": 210,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 10.5
+   }
+  ],
+  "cadena": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 546,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 9.1
+   },
+   {
+    "name": "Cantidad de ambiente",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Memoria",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 49,
+    "pxPerStep": 4
+   },
+   {
+    "name": "Umbral",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Pendiente",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 19,
+    "pxPerStep": 10.32
+   },
+   {
+    "name": "Energía mínima",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Velocidad de los cambios",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 19,
+    "pxPerStep": 10.32
+   },
+   {
+    "name": "Pan de JBL Go 4 Red",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Red",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Pan de JBL Go 4 Black",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Black",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Pan de JBL Go 4 Blue",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Blue",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Pan de Virtual 1",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de Virtual 1",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Retardo medio",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 30,
+    "pxPerStep": 6.53
+   },
+   {
+    "name": "Variación",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Largo del filtro",
+    "card": "chain",
+    "w": 175,
+    "h": 28,
+    "steps": 6,
+    "pxPerStep": 29.22
+   },
+   {
+    "name": "Semilla",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 9999,
+    "pxPerStep": 0.02
+   },
+   {
+    "name": "Retardo de los traseros",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 100,
+    "pxPerStep": 1.96
+   },
+   {
+    "name": "Velocidad de las correcciones",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 49,
+    "pxPerStep": 4
+   },
+   {
+    "name": "Realce máximo",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 12,
+    "pxPerStep": 16.33
+   },
+   {
+    "name": "Banda muerta",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 6,
+    "pxPerStep": 32.67
+   },
+   {
+    "name": "Presupuesto de realce",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 24,
+    "pxPerStep": 8.17
+   },
+   {
+    "name": "Tope en agudos",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 12,
+    "pxPerStep": 16.33
+   },
+   {
+    "name": "Volumen",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 3.27
+   },
+   {
+    "name": "Velocidad del volumen",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 23,
+    "pxPerStep": 8.52
+   },
+   {
+    "name": "Velocidad de la ganancia",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 29,
+    "pxPerStep": 6.76
+   },
+   {
+    "name": "Fundido del silencio",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 49,
+    "pxPerStep": 4
+   },
+   {
+    "name": "Ganancia de JBL Go 4 Red",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Ganancia de JBL Go 4 Black",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Ganancia de JBL Go 4 Blue",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Ganancia de Virtual 1",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Techo",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 12,
+    "pxPerStep": 16.33
+   },
+   {
+    "name": "Recuperación",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 198,
+    "pxPerStep": 0.99
+   }
+  ],
+  "services_overflow": {
+   "tableW": 609,
+   "wrapW": 582,
+   "overflowX": "auto",
+   "clippedButtons": [
+    "Reiniciar",
+    "Reiniciar"
+   ]
+  }
+ },
+ "1920": {
+  "escuchar": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 546,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 9.1
+   },
+   {
+    "name": "Nivel del monitor",
+    "card": "monitor",
+    "w": 129,
+    "h": 28,
+    "steps": 100,
+    "pxPerStep": 1.29
+   }
+  ],
+  "parlantes": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 546,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 9.1
+   },
+   {
+    "name": "Pan de JBL Go 4 Red",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Red",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de JBL Go 4 Red",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Pan de JBL Go 4 Black",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Black",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de JBL Go 4 Black",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Pan de JBL Go 4 Blue",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Blue",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de JBL Go 4 Blue",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Pan de Virtual 1",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 0.83
+   },
+   {
+    "name": "Ambiente de Virtual 1",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Volumen de Virtual 1",
+    "card": "speakers",
+    "w": 33,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 0.36
+   },
+   {
+    "name": "Carácter",
+    "card": "spatial",
+    "w": 210,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 10.5
+   }
+  ],
+  "cadena": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 546,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 9.1
+   },
+   {
+    "name": "Cantidad de ambiente",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Memoria",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 49,
+    "pxPerStep": 4
+   },
+   {
+    "name": "Umbral",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Pendiente",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 19,
+    "pxPerStep": 10.32
+   },
+   {
+    "name": "Energía mínima",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Velocidad de los cambios",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 19,
+    "pxPerStep": 10.32
+   },
+   {
+    "name": "Pan de JBL Go 4 Red",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Red",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Pan de JBL Go 4 Black",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Black",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Pan de JBL Go 4 Blue",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de JBL Go 4 Blue",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Pan de Virtual 1",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 40,
+    "pxPerStep": 3.65
+   },
+   {
+    "name": "Ambiente de Virtual 1",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 7.3
+   },
+   {
+    "name": "Retardo medio",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 30,
+    "pxPerStep": 6.53
+   },
+   {
+    "name": "Variación",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 20,
+    "pxPerStep": 9.8
+   },
+   {
+    "name": "Largo del filtro",
+    "card": "chain",
+    "w": 175,
+    "h": 28,
+    "steps": 6,
+    "pxPerStep": 29.22
+   },
+   {
+    "name": "Semilla",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 9999,
+    "pxPerStep": 0.02
+   },
+   {
+    "name": "Retardo de los traseros",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 100,
+    "pxPerStep": 1.96
+   },
+   {
+    "name": "Velocidad de las correcciones",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 49,
+    "pxPerStep": 4
+   },
+   {
+    "name": "Realce máximo",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 12,
+    "pxPerStep": 16.33
+   },
+   {
+    "name": "Banda muerta",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 6,
+    "pxPerStep": 32.67
+   },
+   {
+    "name": "Presupuesto de realce",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 24,
+    "pxPerStep": 8.17
+   },
+   {
+    "name": "Tope en agudos",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 12,
+    "pxPerStep": 16.33
+   },
+   {
+    "name": "Volumen",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 60,
+    "pxPerStep": 3.27
+   },
+   {
+    "name": "Velocidad del volumen",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 23,
+    "pxPerStep": 8.52
+   },
+   {
+    "name": "Velocidad de la ganancia",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 29,
+    "pxPerStep": 6.76
+   },
+   {
+    "name": "Fundido del silencio",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 49,
+    "pxPerStep": 4
+   },
+   {
+    "name": "Ganancia de JBL Go 4 Red",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Ganancia de JBL Go 4 Black",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Ganancia de JBL Go 4 Blue",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Ganancia de Virtual 1",
+    "card": "chain",
+    "w": 146,
+    "h": 28,
+    "steps": 92,
+    "pxPerStep": 1.59
+   },
+   {
+    "name": "Techo",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 12,
+    "pxPerStep": 16.33
+   },
+   {
+    "name": "Recuperación",
+    "card": "chain",
+    "w": 196,
+    "h": 28,
+    "steps": 198,
+    "pxPerStep": 0.99
+   }
+  ],
+  "services_overflow": {
+   "tableW": 609,
+   "wrapW": 582,
+   "overflowX": "auto",
+   "clippedButtons": [
+    "Reiniciar",
+    "Reiniciar"
+   ]
+  }
+ },
+ "390": {
+  "escuchar": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 266,
+    "h": 44,
+    "steps": 60,
+    "pxPerStep": 4.43
+   },
+   {
+    "name": "Nivel del monitor",
+    "card": "monitor",
+    "w": 129,
+    "h": 44,
+    "steps": 100,
+    "pxPerStep": 1.29
+   }
+  ],
+  "parlantes": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 266,
+    "h": 44,
+    "steps": 60,
+    "pxPerStep": 4.43
+   },
+   {
+    "name": "Carácter",
+    "card": "spatial",
+    "w": 210,
+    "h": 44,
+    "steps": 20,
+    "pxPerStep": 10.5
+   }
+  ],
+  "cadena": [
+   {
+    "name": "volume",
+    "card": "cabecera",
+    "w": 266,
+    "h": 44,
+    "steps": 60,
+    "pxPerStep": 4.43
+   },
+   {
+    "name": "Cantidad de ambiente",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 20,
+    "pxPerStep": 4.1
+   },
+   {
+    "name": "Memoria",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 49,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Umbral",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 20,
+    "pxPerStep": 4.1
+   },
+   {
+    "name": "Pendiente",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 19,
+    "pxPerStep": 4.32
+   },
+   {
+    "name": "Energía mínima",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 20,
+    "pxPerStep": 4.1
+   },
+   {
+    "name": "Velocidad de los cambios",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 19,
+    "pxPerStep": 4.32
+   },
+   {
+    "name": "Retardo medio",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 30,
+    "pxPerStep": 2.73
+   },
+   {
+    "name": "Variación",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 20,
+    "pxPerStep": 4.1
+   },
+   {
+    "name": "Largo del filtro",
+    "card": "chain",
+    "w": 61,
+    "h": 44,
+    "steps": 6,
+    "pxPerStep": 10.22
+   },
+   {
+    "name": "Semilla",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 9999,
+    "pxPerStep": 0.01
+   },
+   {
+    "name": "Retardo de los traseros",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 100,
+    "pxPerStep": 0.82
+   },
+   {
+    "name": "Velocidad de las correcciones",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 49,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Realce máximo",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 12,
+    "pxPerStep": 6.83
+   },
+   {
+    "name": "Banda muerta",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 6,
+    "pxPerStep": 13.67
+   },
+   {
+    "name": "Presupuesto de realce",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 24,
+    "pxPerStep": 3.42
+   },
+   {
+    "name": "Tope en agudos",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 12,
+    "pxPerStep": 6.83
+   },
+   {
+    "name": "Volumen",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 60,
+    "pxPerStep": 1.37
+   },
+   {
+    "name": "Velocidad del volumen",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 23,
+    "pxPerStep": 3.57
+   },
+   {
+    "name": "Velocidad de la ganancia",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 29,
+    "pxPerStep": 2.83
+   },
+   {
+    "name": "Fundido del silencio",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 49,
+    "pxPerStep": 1.67
+   },
+   {
+    "name": "Techo",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 12,
+    "pxPerStep": 6.83
+   },
+   {
+    "name": "Recuperación",
+    "card": "chain",
+    "w": 82,
+    "h": 44,
+    "steps": 198,
+    "pxPerStep": 0.41
+   }
+  ],
+  "services_overflow": {
+   "tableW": 625,
+   "wrapW": 324,
+   "overflowX": "auto",
+   "clippedButtons": [
+    "Detener",
+    "Reiniciar",
+    "Iniciar",
+    "Detener",
+    "Reiniciar"
+   ]
+  }
+ }
+}

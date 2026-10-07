@@ -1,0 +1,192 @@
+- banner:
+  - text: aurasync SIMULADO
+  - status "Recibe el estado y los niveles por stream": En vivo
+  - text: cambios sin guardar
+  - button "Guardar instalación"
+  - region "Reproducción":
+    - button "Detener"
+    - text: Volumen
+    - status "Volumen": "-20 dB"
+    - slider: "-20"
+    - combobox "Fuente":
+      - 'option "Fuente: todo el sistema"'
+      - 'option "Fuente: una aplicación"'
+      - 'option "Fuente: un archivo"'
+      - 'option "Fuente: señal de prueba" [selected]'
+      - 'option "Fuente: render multicanal"'
+    - combobox "Cómo se reparte el sonido entre los parlantes":
+      - 'option "Modo: clásico" [selected]'
+      - 'option "Modo: espacial"'
+      - 'option "Modo: frente intacto"'
+      - 'option "Modo: directo"'
+    - button "2 cortes en 1 min"
+    - text: "Latencia -27 ms Preset: amplio"
+  - navigation "Secciones":
+    - button "Escuchar"
+    - button "Cadena"
+    - button "Parlantes"
+    - button "Calibrar"
+    - button "Diagnóstico"
+    - button "Ajustes"
+- main:
+  - region "Ahora":
+    - heading "Ahora" [level=2]
+    - text: "preset: amplio"
+    - term: Estado
+    - definition: sonando
+    - term: Fuente
+    - definition: señal de prueba
+    - term: Entrada
+    - definition: estéreo · hasta 24,0 kHz
+    - term: Cortes
+    - definition:
+      - button "2 en el último minuto"
+    - term: Sincronía
+    - definition: "sin medición Los retardos cambiaron después de la calibración de las 16:24 (que midió 9,0 ms): calibrá otra vez para medir lo que queda."
+    - group "Efectos":
+      - checkbox "Ambiente lo envolvente de la grabación, a los parlantes" [checked]
+      - text: Ambiente lo envolvente de la grabación, a los parlantes
+      - checkbox "Separar parlantes que cada uno suene un poco distinto" [checked]
+      - text: Separar parlantes que cada uno suene un poco distinto
+      - checkbox "Ecualización realza lo que le falta a cada parlante" [checked]
+      - text: Ecualización realza lo que le falta a cada parlante
+      - checkbox "Mantener sincronía corrige la deriva mientras suena" [checked]
+      - text: Mantener sincronía corrige la deriva mientras suena
+    - button "Calibrar y aplicar"
+    - button "Identificar parlantes"
+    - status
+  - region "Presets":
+    - heading "Presets" [level=2]
+    - list:
+      - listitem:
+        - text: amplio · actual
+        - button "Cargar"
+        - button "Borrar"
+      - listitem:
+        - text: cerrado
+        - button "Cargar"
+        - button "Borrar"
+    - textbox "Nombre del preset"
+    - button "Guardar el actual"
+  - region "Parlantes":
+    - heading "Parlantes" [level=2]
+    - text: ambiente, volumen y silencio
+    - group "Acciones por grupo":
+      - group "Grupo":
+        - button "Todos" [pressed]
+        - button "Adelante"
+        - button "Atrás"
+      - button "Silenciar"
+      - button "Activar"
+      - button "Identificar"
+      - text: 4 de 4
+    - button "Ambiente y volumen de JBL Go 4 Red": ▸
+    - text: Go 4 Red · FL sonando
+    - button "Tono"
+    - button "Silenciar"
+    - button "Ambiente y volumen de JBL Go 4 Black": ▸
+    - text: Go 4 Black · FR sonando
+    - button "Tono"
+    - button "Silenciar"
+    - button "Ambiente y volumen de JBL Go 4 Blue": ▸
+    - text: Go 4 Blue sonando
+    - button "Tono"
+    - button "Silenciar"
+    - button "Ambiente y volumen de Virtual 1": ▸
+    - text: Virtual 1 · RL virtual
+    - button "Tono"
+    - button "Silenciar"
+  - region "Niveles":
+    - heading "Niveles" [level=2]
+    - button "Pausar"
+    - text: Entrada L
+    - meter "Nivel Entrada L"
+    - text: "-16,1"
+    - button "Saturación en in L"
+    - text: Entrada R
+    - meter "Nivel Entrada R"
+    - text: "-16,2"
+    - button "Saturación en in R"
+    - text: Go 4 Red
+    - meter "Nivel Go 4 Red"
+    - text: "-43,0"
+    - button "Saturación en JBL Go 4 Red"
+    - text: Go 4 Black
+    - meter "Nivel Go 4 Black"
+    - text: "-41,2"
+    - button "Saturación en JBL Go 4 Black"
+    - text: Go 4 Blue
+    - meter "Nivel Go 4 Blue"
+    - text: "-46,1"
+    - button "Saturación en JBL Go 4 Blue"
+    - text: Virtual 1
+    - meter "Nivel Virtual 1"
+    - text: "-44,3"
+    - button "Saturación en Virtual 1"
+    - text: Micrófono
+    - meter "Nivel Micrófono"
+    - text: "-35,7"
+    - button "Saturación en mic"
+    - paragraph: sincronizado con lo que suena
+    - paragraph: "dBFS. Barra: RMS; raya: pico, retenido 1,5 s (cae 20 dB en 1,7 s). Verde bajo −18, ámbar hasta −6, rojo arriba. El recuadro dice SAT si hubo saturación; tocalo para apagarlo. Pausar detiene el movimiento."
+  - region "A/B ciego":
+    - heading "A/B ciego" [level=2]
+    - text: ¿se oye la diferencia entre dos presets? A
+    - combobox "A":
+      - option "amplio" [selected]
+      - option "cerrado"
+    - text: B
+    - combobox "B":
+      - option "amplio"
+      - option "cerrado" [selected]
+    - checkbox "Igualar la sonoridad" [checked]
+    - text: Igualar la sonoridad
+    - button "Empezar"
+    - status
+  - region "Entrada":
+    - heading "Entrada" [level=2]
+    - button "Pausar"
+    - text: 50 Hz 500 5 k 20 kHz −1 +1 0,02
+    - paragraph: "Correlación L/R en vivo: +1 mono, 0 canales independientes, negativa en contrafase."
+    - term: Tipo
+    - definition: estéreo
+    - term: Correlación L/R
+    - definition: 0,00 (1 = mono)
+    - term: Lateral / central
+    - definition: "-0,0 dB"
+    - term: Balance L − R
+    - definition: "-0,0 dB"
+    - term: Ancho de banda
+    - definition: 24,0 kHz
+    - term: Nivel
+    - definition: RMS -16,1 · pico -11,9 dBFS
+    - term: Saturación
+    - definition: ninguna
+    - term: "Aplicación: Firefox"
+    - definition: float32le 2ch 48000Hz
+    - term: "Aplicación: Spotify"
+    - definition: float32le 2ch 48000Hz
+    - paragraph
+  - region "Monitor (audífonos)":
+    - heading "Monitor (audífonos)" [level=2]
+    - text: no sincronizado con los parlantes
+    - paragraph: "Escuchar por audífonos u otra salida mientras suenan los parlantes. Llega con su propio retraso: sirve para escuchar la mezcla, no para estar en sincronía con la sala."
+    - text: Qué se oye
+    - combobox "Qué se oye en el monitor":
+      - option "Apagado"
+      - 'option "Estéreo: la entrada, sin procesar"'
+      - 'option "Mezcla: los parlantes, a izquierda y derecha"'
+      - 'option "Binaural: la sala en audífonos" [selected]'
+    - text: Salida
+    - combobox "Salida del monitor":
+      - option "elegí una salida"
+      - option "Salida del PC (simulada)"
+      - option "Audífonos (simulados)" [selected]
+    - text: Volumen
+    - combobox "Quién controla el volumen del monitor":
+      - option "del audífono" [selected]
+      - option "por software"
+    - text: Nivel
+    - status "Nivel 30": 30 %
+    - slider "Nivel del monitor": "30"
+    - status: Llega a Audífonos (simulados). Colchón 128 ms · rellenos 0. Igualando…

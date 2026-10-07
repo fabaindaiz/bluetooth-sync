@@ -80,3 +80,20 @@ disappears.
 
 The chain suggestions (i-7c8794-d99df9) will express themselves in these controls, later. "Sonando ahora"
 (i-7c8794-99f87e) is separate.
+
+## 7. Additions from the panel audit (user, 2026-10-07)
+
+The user decided that two findings of the audit (research/10 §10, items 10 and 11) enter this spec. The spec
+is still **for review** with these additions; the audit's group 1 (measured accessibility defects) is done
+**before** this mode.
+
+- **Quick non-blind bypass, per stage and global ("cadena apagada"), loudness-matched** (`loudness_match.py`,
+  as §3's direct/processed button): one switch on each chain card and one global, so the user hears what each
+  stage does without saving two presets. It complements the blind A/B; it is the "compare with how it is now"
+  of research/10 §8. Sources in research/10 §9: Roon's DSP toggle, Peace's on/off, Dirac's measured/corrected,
+  X AIR's RTA pre/post.
+- **Chain status light in the header**, after Roon's *Signal Path*: one indicator summarising
+  direct / processed / limiting / clipped, with **shape and text as well as colour** (WCAG 1.4.1), **held red
+  for a few seconds after a clip without blinking** (2.3.1); a click opens the chain's flow row.
+- Both get browser tests (and axe, d-7c8794-a5f3ba), and the loudness test of §5 applies to the bypass.
+

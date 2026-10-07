@@ -1,0 +1,17 @@
+[   3.6s] playing
+[  15.2s] calibrated
+monitor: simulated_headphones was at 100 %, lowering it to 30 % before opening
+[  20.7s] state ready
+[  26.5s] light escuchar kb done
+[  33.4s] light cadena kb done
+[  40.6s] light parlantes kb done
+[  43.9s] light calibrar kb done
+[  48.1s] light diagnostico kb done
+[  51.7s] light ajustes kb done
+[  57.6s] dark escuchar kb done
+[  64.6s] dark cadena kb done
+[  71.6s] dark parlantes kb done
+[  74.9s] dark calibrar kb done
+[  79.3s] dark diagnostico kb done
+[  83.0s] dark ajustes kb done
+[  83.3s] service stopped

@@ -1,0 +1,90 @@
+- banner:
+  - text: aurasync SIMULADO
+  - status "Recibe el estado y los niveles por stream": En vivo
+  - text: cambios sin guardar
+  - button "Guardar instalación"
+  - region "Reproducción":
+    - button "Detener"
+    - text: Volumen
+    - status "Volumen": "-20 dB"
+    - slider: "-20"
+    - combobox "Fuente":
+      - 'option "Fuente: todo el sistema"'
+      - 'option "Fuente: una aplicación"'
+      - 'option "Fuente: un archivo"'
+      - 'option "Fuente: señal de prueba" [selected]'
+      - 'option "Fuente: render multicanal"'
+    - combobox "Cómo se reparte el sonido entre los parlantes":
+      - 'option "Modo: clásico" [selected]'
+      - 'option "Modo: espacial"'
+      - 'option "Modo: frente intacto"'
+      - 'option "Modo: directo"'
+    - button "3 cortes en 10 min"
+    - text: "Latencia -27 ms Preset: amplio"
+  - navigation "Secciones":
+    - button "Escuchar"
+    - button "Cadena"
+    - button "Parlantes"
+    - button "Calibrar"
+    - button "Diagnóstico"
+    - button "Ajustes"
+- main:
+  - region "Ajustes":
+    - heading "Ajustes" [level=2]
+    - text: pasá el mouse o tocá (?) para más detalle
+    - paragraph:
+      - text: El sonido —ambiente, decorrelación, ecualización, retardo trasero, graves, volumen y limitador— está en
+      - button "Cadena"
+      - text: ", con cada algoritmo y sus perillas."
+    - heading "Sincronía" [level=3]
+    - text: Recalibración continua en vivo
+    - 'button "Ayuda: Recalibración continua"': "?"
+    - checkbox "Mantener la sincronía" [checked]
+    - text: Mantener la sincronía
+    - paragraph: Corrige mientras suena la deriva de los relojes de los parlantes. Va encendida; apagarla es avanzado.
+    - text: Sonda enmascarada en vivo · experimental
+    - 'button "Ayuda: Sonda enmascarada"': "?"
+    - checkbox "Medir con la sonda"
+    - text: Medir con la sonda Bajo la música (dB)
+    - spinbutton "Cuántos dB bajo la música va la sonda": "-20"
+    - paragraph: Más bajo se oye menos, pero mide peor. −20 dB es lo que se probó en simulación.
+    - text: Medir cada (s) al reiniciar
+    - 'button "Ayuda: Medir cada (s)"': "?"
+    - spinbutton "Cada cuántos segundos mide el lazo": "20"
+    - paragraph: Cada cuántos segundos vuelve a medir.
+    - text: Escuchar durante (s) al reiniciar
+    - 'button "Ayuda: Escuchar durante (s)"': "?"
+    - spinbutton "Cuántos segundos escucha el lazo": "10"
+    - paragraph: Cuántos segundos de música usa cada medición.
+    - heading "Salida avanzado" [level=3]
+    - text: Salida al reiniciar
+    - 'button "Ayuda: Salida"': "?"
+    - combobox "Modo de salida":
+      - 'option "combinada: un reloj para todos" [selected]'
+      - 'option "separada: un pw-play por parlante"'
+    - paragraph: Cómo llega el audio a los parlantes. Combinada es la que no salta.
+    - text: Bloque al reiniciar
+    - 'button "Ayuda: Bloque"': "?"
+    - combobox "Tamaño de bloque":
+      - option "1024 (21 ms)"
+      - option "2048 (43 ms)"
+      - option "4096 (85 ms)" [selected]
+      - option "8192 (171 ms)"
+    - paragraph: Cuánto audio procesa el motor de una vez.
+    - text: Buffer de pw-play (ms) al reiniciar
+    - 'button "Ayuda: Buffer de pw-play (ms)"': "?"
+    - spinbutton "Buffer de pw-play en ms": "50"
+    - paragraph: Cuánto pide pw-play por ciclo. 50 ms es lo medido como suficiente.
+    - text: Nombre de la salida al reiniciar
+    - 'button "Ayuda: Nombre de la salida"': "?"
+    - textbox "Nombre de la salida": aurasync (envolvente)
+    - paragraph: Cómo aparece aurasync en el menú de sonido del sistema.
+    - text: Emisor
+    - strong: A2DP
+    - paragraph: Bluetooth clásico, un enlace por parlante. Auracast espera a las placas nuevas (E4).
+    - text: Motor del DSP en un corte · experimental
+    - 'button "Ayuda: Motor del DSP"': "?"
+    - combobox "Motor del DSP":
+      - option "numpy (referencia)" [selected]
+      - option "rust (experimental)"
+    - status: Lee con numpy. Rust no está compilado en este equipo.

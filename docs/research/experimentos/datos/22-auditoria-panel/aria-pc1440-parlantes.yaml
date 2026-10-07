@@ -1,0 +1,269 @@
+- banner:
+  - text: aurasync SIMULADO
+  - status "Recibe el estado y los niveles por stream": En vivo
+  - text: cambios sin guardar
+  - button "Guardar instalación"
+  - region "Reproducción":
+    - button "Detener"
+    - text: Volumen
+    - status "Volumen": "-20 dB"
+    - slider: "-20"
+    - combobox "Fuente":
+      - 'option "Fuente: todo el sistema"'
+      - 'option "Fuente: una aplicación"'
+      - 'option "Fuente: un archivo"'
+      - 'option "Fuente: señal de prueba" [selected]'
+      - 'option "Fuente: render multicanal"'
+    - combobox "Cómo se reparte el sonido entre los parlantes":
+      - 'option "Modo: clásico" [selected]'
+      - 'option "Modo: espacial"'
+      - 'option "Modo: frente intacto"'
+      - 'option "Modo: directo"'
+    - button "2 cortes en 1 min"
+    - text: "Latencia -27 ms Preset: amplio"
+  - navigation "Secciones":
+    - button "Escuchar"
+    - button "Cadena"
+    - button "Parlantes"
+    - button "Calibrar"
+    - button "Diagnóstico"
+    - button "Ajustes"
+- main:
+  - region "Dispositivos Bluetooth (4)":
+    - heading "Dispositivos Bluetooth (4)" [level=2]
+    - button "Agregar parlante virtual" [disabled]
+    - button "Buscar cerca"
+    - table:
+      - rowgroup:
+        - row "Dispositivo Estado Batería Señal":
+          - columnheader "Dispositivo"
+          - columnheader "Estado"
+          - columnheader "Batería"
+          - columnheader "Señal"
+          - columnheader
+      - rowgroup:
+        - row "Conectados (3)":
+          - columnheader "Conectados (3)"
+        - row "JBL Go 4 Red 90:F2:60:75:4A:83 conectado · en la instalación 90 % — Desconectar":
+          - cell "JBL Go 4 Red 90:F2:60:75:4A:83"
+          - cell "conectado · en la instalación"
+          - cell "90 %"
+          - cell "—"
+          - cell "Desconectar":
+            - button "Desconectar"
+        - row "JBL Go 4 Black 90:F2:60:DA:66:6D conectado · en la instalación 75 % — Desconectar":
+          - cell "JBL Go 4 Black 90:F2:60:DA:66:6D"
+          - cell "conectado · en la instalación"
+          - cell "75 %"
+          - cell "—"
+          - cell "Desconectar":
+            - button "Desconectar"
+        - row "JBL Go 4 Blue 90:F2:60:E3:07:39 conectado · en la instalación 60 % — Desconectar":
+          - cell "JBL Go 4 Blue 90:F2:60:E3:07:39"
+          - cell "conectado · en la instalación"
+          - cell "60 %"
+          - cell "—"
+          - cell "Desconectar":
+            - button "Desconectar"
+        - row "Encontrados cerca, sin emparejar (1)":
+          - columnheader "Encontrados cerca, sin emparejar (1)"
+        - row "JBL Flip 7 F8:5C:7D:00:11:22 visto — -61 dBm Emparejar y conectar":
+          - cell "JBL Flip 7 F8:5C:7D:00:11:22"
+          - cell "visto"
+          - cell "—"
+          - cell "-61 dBm"
+          - cell "Emparejar y conectar":
+            - button "Emparejar y conectar"
+    - paragraph: Se listan los dispositivos de audio que conoce el sistema. Uno apagado o fuera de alcance aparece como «emparejado, sin conectar». Para uno nuevo, ponelo en modo emparejamiento (botón Bluetooth del parlante) y tocá Buscar cerca. La señal solo se conoce mientras se busca.
+  - region "Parlantes en detalle":
+    - heading "Parlantes en detalle" [level=2]
+    - text: rol, pan, ambiente, volumen y retardo
+    - table:
+      - rowgroup:
+        - row "Parlante Estado Tipo Rol Pan Ambiente Volumen Retardo (ms)":
+          - columnheader "Parlante"
+          - columnheader "Estado"
+          - columnheader "Tipo"
+          - columnheader "Rol"
+          - columnheader "Pan"
+          - columnheader "Ambiente"
+          - columnheader "Volumen"
+          - columnheader "Retardo (ms)"
+          - columnheader
+      - rowgroup:
+        - 'row "JBL Go 4 Red 90:F2:60:75:4A:83 · sbc · bluetooth:v0ECBp2063d0100 sonando JBL Go 4 FL · frontal izquierdo Pan de JBL Go 4 Red: volver a C Volumen de JBL Go 4 Red: volver a 0,0 dB efectivo 10,80 Sacar Tono Silenciar"':
+          - cell "JBL Go 4 Red 90:F2:60:75:4A:83 · sbc · bluetooth:v0ECBp2063d0100"
+          - cell "sonando"
+          - cell "JBL Go 4":
+            - combobox "Tipo de JBL Go 4 Red":
+              - option "Genérico"
+              - option "JBL Go 4" [selected]
+              - option "JBL Charge 6"
+          - cell "FL · frontal izquierdo":
+            - combobox "Rol de JBL Go 4 Red":
+              - option "personalizado" [disabled]
+              - option "FL · frontal izquierdo" [selected]
+              - option "FR · frontal derecho"
+              - option "RL · trasero izquierdo"
+              - option "RR · trasero derecho"
+          - 'cell "Pan de JBL Go 4 Red: volver a C"':
+            - slider "Pan de JBL Go 4 Red": "-0.7"
+            - status: I 0,70
+            - 'button "Pan de JBL Go 4 Red: volver a C"': ↺
+          - cell:
+            - slider "Ambiente de JBL Go 4 Red": "0.15"
+            - status: 0,15
+          - 'cell "Volumen de JBL Go 4 Red: volver a 0,0 dB"':
+            - slider "Volumen de JBL Go 4 Red": "-4"
+            - status: "-4,0 dB"
+            - 'button "Volumen de JBL Go 4 Red: volver a 0,0 dB"': ↺
+          - cell "efectivo 10,80":
+            - spinbutton "Retardo de JBL Go 4 Red en ms" [disabled]: "9"
+            - text: efectivo 10,80
+          - cell "Sacar Tono Silenciar":
+            - button "Sacar"
+            - button "Tono"
+            - button "Silenciar"
+        - 'row "JBL Go 4 Black 90:F2:60:DA:66:6D · sbc · bluetooth:v0ECBp2063d0100 sonando JBL Go 4 FR · frontal derecho Pan de JBL Go 4 Black: volver a C Volumen de JBL Go 4 Black: volver a 0,0 dB efectivo 6,30 Sacar Tono Silenciar"':
+          - cell "JBL Go 4 Black 90:F2:60:DA:66:6D · sbc · bluetooth:v0ECBp2063d0100"
+          - cell "sonando"
+          - cell "JBL Go 4":
+            - combobox "Tipo de JBL Go 4 Black":
+              - option "Genérico"
+              - option "JBL Go 4" [selected]
+              - option "JBL Charge 6"
+          - cell "FR · frontal derecho":
+            - combobox "Rol de JBL Go 4 Black":
+              - option "personalizado" [disabled]
+              - option "FL · frontal izquierdo"
+              - option "FR · frontal derecho" [selected]
+              - option "RL · trasero izquierdo"
+              - option "RR · trasero derecho"
+          - 'cell "Pan de JBL Go 4 Black: volver a C"':
+            - slider "Pan de JBL Go 4 Black": "0.7"
+            - status: D 0,70
+            - 'button "Pan de JBL Go 4 Black: volver a C"': ↺
+          - cell:
+            - slider "Ambiente de JBL Go 4 Black": "0.15"
+            - status: 0,15
+          - 'cell "Volumen de JBL Go 4 Black: volver a 0,0 dB"':
+            - slider "Volumen de JBL Go 4 Black": "-2.5"
+            - status: "-2,5 dB"
+            - 'button "Volumen de JBL Go 4 Black: volver a 0,0 dB"': ↺
+          - cell "efectivo 6,30":
+            - spinbutton "Retardo de JBL Go 4 Black en ms" [disabled]: "4.501"
+            - text: efectivo 6,30
+          - cell "Sacar Tono Silenciar":
+            - button "Sacar"
+            - button "Tono"
+            - button "Silenciar"
+        - row "JBL Go 4 Blue 90:F2:60:E3:07:39 · sbc · bluetooth:v0ECBp2063d0100 sonando JBL Go 4 personalizado efectivo 6,60 Sacar Tono Silenciar":
+          - cell "JBL Go 4 Blue 90:F2:60:E3:07:39 · sbc · bluetooth:v0ECBp2063d0100"
+          - cell "sonando"
+          - cell "JBL Go 4":
+            - combobox "Tipo de JBL Go 4 Blue":
+              - option "Genérico"
+              - option "JBL Go 4" [selected]
+              - option "JBL Charge 6"
+          - cell "personalizado":
+            - combobox "Rol de JBL Go 4 Blue":
+              - option "personalizado" [disabled] [selected]
+              - option "FL · frontal izquierdo"
+              - option "FR · frontal derecho"
+              - option "RL · trasero izquierdo"
+              - option "RR · trasero derecho"
+          - cell:
+            - slider "Pan de JBL Go 4 Blue": "0"
+            - status: C
+          - cell:
+            - slider "Ambiente de JBL Go 4 Blue": "0.55"
+            - status: 0,55
+          - cell:
+            - slider "Volumen de JBL Go 4 Blue": "0"
+            - status: 0,0 dB
+          - cell "efectivo 6,60":
+            - spinbutton "Retardo de JBL Go 4 Blue en ms" [disabled]: "0"
+            - text: efectivo 6,60
+          - cell "Sacar Tono Silenciar":
+            - button "Sacar"
+            - button "Tono"
+            - button "Silenciar"
+        - 'row "Virtual 1 virtual Genérico RL · trasero izquierdo Pan de Virtual 1: volver a C efectivo 6,60 Tono Silenciar"':
+          - cell "Virtual 1"
+          - cell "virtual"
+          - cell "Genérico":
+            - combobox "Tipo de Virtual 1":
+              - option "Genérico" [selected]
+              - option "JBL Go 4"
+              - option "JBL Charge 6"
+          - cell "RL · trasero izquierdo":
+            - combobox "Rol de Virtual 1":
+              - option "personalizado" [disabled]
+              - option "FL · frontal izquierdo"
+              - option "FR · frontal derecho"
+              - option "RL · trasero izquierdo" [selected]
+              - option "RR · trasero derecho"
+          - 'cell "Pan de Virtual 1: volver a C"':
+            - slider "Pan de Virtual 1": "-0.7"
+            - status: I 0,70
+            - 'button "Pan de Virtual 1: volver a C"': ↺
+          - cell:
+            - slider "Ambiente de Virtual 1": "0.55"
+            - status: 0,55
+          - cell:
+            - slider "Volumen de Virtual 1": "0"
+            - status: 0,0 dB
+          - cell "efectivo 6,60":
+            - spinbutton "Retardo de Virtual 1 en ms" [disabled]: "0"
+            - text: efectivo 6,60
+          - cell "Tono Silenciar":
+            - button "Tono"
+            - button "Silenciar"
+  - region "Sala":
+    - heading "Sala" [level=2]
+    - group "Distribución":
+      - button "Cuadrafonía FL FR RL RR" [pressed]
+      - button "Películas L C R S"
+      - button "5.0 L C R SL SR"
+      - button "Hexágono 6"
+      - button "7.0 L C R SL SR RL RR"
+      - button "Octógono 8"
+      - button "Dos anillos 4 + 4"
+      - button "Automático N parlantes"
+    - text: "frente FL JBL Go 4 Red FR JBL Go 4 Black RL Virtual 1 RR libre Go 4 Blue sin rol: 1"
+    - status:
+      - text: 1 parlante quedó sin lugar en esta sala (tiene lugar para 3). «Automático» los reparte a todos alrededor.
+      - button "Usar «Automático»"
+  - region "Espacial":
+    - heading "Espacial" [level=2]
+    - paragraph: Cada parlante es principal (sonido directo, con dirección) o ambiental (el ambiente, sin dirección). En modo espacial cada instrumento sale de los principales de su lado.
+    - text: Modo
+    - combobox "Modo de render":
+      - option "Clásico" [selected]
+      - option "Espacial"
+      - option "Frente intacto"
+      - option "Directo"
+    - text: Carácter (ubicación ↔ envolvimiento)
+    - slider "Carácter": "0.5"
+    - button "Todos principales"
+    - list:
+      - listitem:
+        - text: JBL Go 4 Red
+        - button "Principal" [pressed]
+        - button "Ambiental"
+      - listitem:
+        - text: JBL Go 4 Black
+        - button "Principal" [pressed]
+        - button "Ambiental"
+      - listitem:
+        - text: JBL Go 4 Blue
+        - button "Principal" [pressed]
+        - button "Ambiental"
+      - listitem:
+        - text: Virtual 1
+        - button "Principal" [pressed]
+        - button "Ambiental"
+    - 'figure "La pieza vista desde arriba: tú en el centro, cada principal en su ángulo; los ambientales, alrededor."':
+      - 'img "La pieza vista desde arriba: tú en el centro, cada principal en su ángulo; los ambientales, alrededor."': JBL Go 4 Red JBL Go 4 Black JBL Go 4 Blue Virtual 1
+      - text: "La pieza vista desde arriba: tú en el centro, cada principal en su ángulo; los ambientales, alrededor."
+    - group: "Cada perilla: recomendación y cómo cambia el sonido"

@@ -1,0 +1,301 @@
+- banner:
+  - text: aurasync SIMULADO
+  - status "Recibe el estado y los niveles por stream": En vivo
+  - text: cambios sin guardar
+  - button "Guardar instalación"
+  - region "Reproducción":
+    - button "Detener"
+    - text: Volumen
+    - status "Volumen": "-20 dB"
+    - slider: "-20"
+    - combobox "Fuente":
+      - 'option "Fuente: todo el sistema"'
+      - 'option "Fuente: una aplicación"'
+      - 'option "Fuente: un archivo"'
+      - 'option "Fuente: señal de prueba" [selected]'
+      - 'option "Fuente: render multicanal"'
+    - combobox "Cómo se reparte el sonido entre los parlantes":
+      - 'option "Modo: clásico" [selected]'
+      - 'option "Modo: espacial"'
+      - 'option "Modo: frente intacto"'
+      - 'option "Modo: directo"'
+    - button "3 cortes en 1 min"
+    - text: "Latencia -27 ms Preset: amplio"
+  - navigation "Secciones":
+    - button "Escuchar"
+    - button "Cadena"
+    - button "Parlantes"
+    - button "Calibrar"
+    - button "Diagnóstico"
+    - button "Ajustes"
+- main:
+  - region "Cadena":
+    - heading "Cadena" [level=2]
+    - text: cada etapa en el orden en que suena · (?) explica cada perilla
+    - group "Calidad":
+      - text: "Entrada -14,0 LUFS sonoridad, últimos 3 s Salida (suma) -38,1 LUFS todos los parlantes Ganancia de la cadena -4,1 LU con el volumen: -24,1 LU PSR entrada / salida 5,4 / 6,2 dB salida: la menor, Go 4 Black Pico real máximo -35,7 dBTP de las salidas, últimos 3 s Limitador 0 % del tiempo, el que más trabaja"
+      - list:
+        - listitem: "Ganancia perdida: la cadena suena 4,1 LU más baja que la entrada (sin contar el volumen)."
+    - navigation "Etapas, en el orden de proceso":
+      - text: Entrada
+      - button "Ambiente"
+      - button "Modo espacial"
+      - button "Decorrelación"
+      - button "Difusión"
+      - button "Alineación"
+      - button "Ecualización"
+      - button "Graves"
+      - button "Volumen"
+      - button "Limitador"
+      - text: Parlantes la cadena agrega 66,8 ms, igual en todos
+    - list:
+      - listitem:
+        - region "Ambiente":
+          - heading "Ambiente" [level=3]
+          - text: +42,7 ms
+          - 'button "Ayuda: Ambiente"': "?"
+          - paragraph: Separa del estéreo lo que no está igual en los dos canales —la sala, la reverberación— para mandarlo a los parlantes que envuelven.
+          - group "Algoritmo en vivo":
+            - text: Algoritmo en vivo
+            - radio "Coherencia entre canales Extrae el ambiente por coherencia, banda por banda. costo ~1 ms por bloque · latencia 42,7 ms · por defecto" [checked]
+            - text: Coherencia entre canales Extrae el ambiente por coherencia, banda por banda. costo ~1 ms por bloque · latencia 42,7 ms · por defecto
+            - radio "Sin extraer Todos los parlantes reciben solo el sonido directo, según su pan. latencia 42,7 ms"
+            - text: Sin extraer Todos los parlantes reciben solo el sonido directo, según su pan. latencia 42,7 ms
+          - group: Perillas de «Coherencia entre canales» 6
+          - 'group "Por parlante: Pan, Ambiente"':
+            - button "Go 4 Red"
+            - slider "Pan de JBL Go 4 Red": "-0.7"
+            - status: "-0,70"
+            - 'button "Pan de JBL Go 4 Red: volver a 0,00"': ↺
+            - slider "Ambiente de JBL Go 4 Red": "0.15"
+            - status: 0,15
+            - 'button "Ambiente de JBL Go 4 Red: volver a 0,00"': ↺
+            - button "Go 4 Black"
+            - slider "Pan de JBL Go 4 Black": "0.7"
+            - status: 0,70
+            - 'button "Pan de JBL Go 4 Black: volver a 0,00"': ↺
+            - slider "Ambiente de JBL Go 4 Black": "0.15"
+            - status: 0,15
+            - 'button "Ambiente de JBL Go 4 Black: volver a 0,00"': ↺
+            - button "Go 4 Blue"
+            - slider "Pan de JBL Go 4 Blue": "0"
+            - status: 0,00
+            - slider "Ambiente de JBL Go 4 Blue": "0.55"
+            - status: 0,55
+            - 'button "Ambiente de JBL Go 4 Blue: volver a 0,00"': ↺
+            - button "Virtual 1"
+            - slider "Pan de Virtual 1": "-0.7"
+            - status: "-0,70"
+            - 'button "Pan de Virtual 1: volver a 0,00"': ↺
+            - slider "Ambiente de Virtual 1": "0.55"
+            - status: 0,55
+            - 'button "Ambiente de Virtual 1: volver a 0,00"': ↺
+          - 'group "Ambiente: en vivo"':
+            - text: En vivo
+            - term: mezcla de ambiente ahora
+            - definition: 1,00
+            - term: ambiente en la salida
+            - definition: 0 %
+      - listitem:
+        - region "Modo espacial":
+          - heading "Modo espacial" [level=3]
+          - text: 0 ms
+          - 'button "Ayuda: Modo espacial"': "?"
+          - paragraph: Cómo se reparte el estéreo entre los parlantes.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "Clásico Una mezcla de L y R por parlante, como hasta ahora. sin latencia · por defecto" [checked]
+            - text: Clásico Una mezcla de L y R por parlante, como hasta ahora. sin latencia · por defecto
+            - radio "Espacial Cada instrumento sale de su lado; el ambiente, a los ambientales. costo ~3 ms por bloque con 3 parlantes · sin latencia"
+            - text: Espacial Cada instrumento sale de su lado; el ambiente, a los ambientales. costo ~3 ms por bloque con 3 parlantes · sin latencia
+            - radio "Frente intacto Adelante, el estéreo tal cual; el resto, solo el ambiente. costo ~3 ms por bloque con 3 parlantes · sin latencia"
+            - text: Frente intacto Adelante, el estéreo tal cual; el resto, solo el ambiente. costo ~3 ms por bloque con 3 parlantes · sin latencia
+            - 'radio "Directo Estéreo puro alineado: sin efectos, mismo volumen. sin latencia"'
+            - text: "Directo Estéreo puro alineado: sin efectos, mismo volumen. sin latencia"
+          - text: Sobre «Clásico»
+          - 'button "Ayuda: Clásico"': "?"
+          - 'group "Modo espacial: en vivo"':
+            - text: En vivo
+            - term: render
+            - definition: classic
+            - term: makeup db
+            - definition: 0,00
+      - listitem:
+        - region "Decorrelación":
+          - heading "Decorrelación" [level=3]
+          - text: +2,5 ms
+          - 'button "Ayuda: Decorrelación"': "?"
+          - paragraph: Hace que cada parlante suene apenas distinto, para que el oído no los funda en uno solo.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "Fase aleatoria suave Un retardo de grupo al azar, distinto por parlante, alrededor de 2,5 ms. costo ~0,2 ms por parlante · latencia 2,5 ms · por defecto" [checked]
+            - text: Fase aleatoria suave Un retardo de grupo al azar, distinto por parlante, alrededor de 2,5 ms. costo ~0,2 ms por parlante · latencia 2,5 ms · por defecto
+            - radio "Sin decorrelar Los parlantes que reciben la misma mezcla suenan idénticos. sin latencia"
+            - text: Sin decorrelar Los parlantes que reciben la misma mezcla suenan idénticos. sin latencia
+          - group: Perillas de «Fase aleatoria suave» 5
+          - 'group "Decorrelación: en vivo"':
+            - text: En vivo
+            - term: activa
+            - definition: sí
+            - term: largo del filtro
+            - definition: 256 muestras
+            - term: retardo medio
+            - definition: 2,5 ms
+            - term: worst above 500
+            - definition: 0,46
+            - term: worst feeds
+            - definition: 0,33
+            - term: assignment
+            - definition: Go 4 Red 0,00 · Go 4 Black 1,00 · Go 4 Blue 2,00 · Virtual 1 3,00
+            - term: assignment mode
+            - definition: order
+            - term: reassign pending
+            - definition: "no"
+            - term: notice
+            - definition: —
+      - listitem:
+        - region "Difusión":
+          - heading "Difusión" [level=3]
+          - text: 0 ms
+          - 'button "Ayuda: Difusión"': "?"
+          - paragraph: Agrega una cola de sala distinta en cada parlante, para que el ambiente se sienta más amplio.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "Sin difusión Nada se agrega. sin latencia · por defecto" [checked]
+            - text: Sin difusión Nada se agrega. sin latencia · por defecto
+            - radio "Cola de ruido Una reverberación corta y distinta por parlante. costo ~0,2 ms por parlante · sin latencia"
+            - text: Cola de ruido Una reverberación corta y distinta por parlante. costo ~0,2 ms por parlante · sin latencia
+          - 'group "Difusión: en vivo"':
+            - text: En vivo
+            - term: activa
+            - definition: "no"
+            - term: cola respecto de lo que suena
+            - definition: —
+      - listitem:
+        - region "Alineación":
+          - heading "Alineación" [level=3]
+          - text: +0,3 ms
+          - 'button "Ayuda: Alineación"': "?"
+          - paragraph: Atrasa a cada parlante lo justo para que todos lleguen juntos, más el retardo de los traseros.
+          - paragraph: Retardo de banda limitada · costo ~0,1 ms por parlante · latencia 0,3 ms · por defecto
+          - group: Perillas de «Retardo de banda limitada» 2
+          - 'group "Alineación: en vivo"':
+            - text: En vivo
+            - term: retardo ahora
+            - definition: Go 4 Red 10,80 ms · Go 4 Black 6,30 ms · Go 4 Blue 6,60 ms · Virtual 1 6,60 ms
+            - term: moviéndose
+            - definition: "no"
+      - listitem:
+        - region "Ecualización":
+          - heading "Ecualización" [level=3]
+          - text: +21,3 ms
+          - 'button "Ayuda: Ecualización"': "?"
+          - paragraph: Levanta lo que a cada parlante le falta, según lo que midió la calibración.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "Solo realce Corrige los huecos de la respuesta medida, hasta un máximo. costo ~0,3 ms por parlante · latencia 21,3 ms · por defecto" [checked]
+            - text: Solo realce Corrige los huecos de la respuesta medida, hasta un máximo. costo ~0,3 ms por parlante · latencia 21,3 ms · por defecto
+            - radio "Sin ecualizar Cada parlante suena como suena. latencia 21,3 ms"
+            - text: Sin ecualizar Cada parlante suena como suena. latencia 21,3 ms
+          - group: Perillas de «Solo realce» 4
+          - 'group "Ecualización: en vivo"':
+            - text: En vivo
+            - term: activa
+            - definition: sí
+            - term: realce máximo
+            - definition: Go 4 Red 0,0 dB · Go 4 Black 0,0 dB · Go 4 Blue 0,0 dB · Virtual 1 0,0 dB
+            - term: realce total
+            - definition: Go 4 Red 0,0 dB · Go 4 Black 0,0 dB · Go 4 Blue 0,0 dB · Virtual 1 0,0 dB
+      - listitem:
+        - region "Graves":
+          - heading "Graves" [level=3]
+          - text: 0 ms
+          - 'button "Ayuda: Graves"': "?"
+          - paragraph: Protege a los parlantes chicos de los graves que no pueden dar, o se los pasa a uno grande.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "Sin tocar Todos reciben todos los graves. sin latencia · por defecto" [checked]
+            - text: Sin tocar Todos reciben todos los graves. sin latencia · por defecto
+            - radio "Proteger Un pasa-altos en los parlantes chicos; opcionalmente, armónicos que sugieren el grave. costo ~0,1 ms por parlante; ~0,4 con armónicos · sin latencia"
+            - text: Proteger Un pasa-altos en los parlantes chicos; opcionalmente, armónicos que sugieren el grave. costo ~0,1 ms por parlante; ~0,4 con armónicos · sin latencia
+            - 'radio "Cruce a un parlante grande Los graves de todos van al parlante que puede darlos. costo ~0,1 ms por parlante · sin latencia No disponible: hace falta un parlante apto para graves (JBL Charge 6); di qué tipo es cada parlante" [disabled]'
+            - text: "Cruce a un parlante grande Los graves de todos van al parlante que puede darlos. costo ~0,1 ms por parlante · sin latencia No disponible: hace falta un parlante apto para graves (JBL Charge 6); di qué tipo es cada parlante"
+          - 'group "Graves: en vivo"':
+            - text: En vivo
+            - term: activa
+            - definition: "no"
+            - term: graves a
+            - definition: —
+            - term: motivo
+            - definition: —
+            - term: grave quitado
+            - definition: —
+            - term: armónicos
+            - definition: —
+            - term: alimentación de graves
+            - definition: —
+      - listitem:
+        - region "Volumen":
+          - heading "Volumen" [level=3]
+          - text: 0 ms
+          - 'button "Ayuda: Volumen"': "?"
+          - paragraph: El volumen general y el nivel de cada parlante.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "Digital El volumen se aplica en el programa, antes del Bluetooth. sin latencia · por defecto" [checked]
+            - text: Digital El volumen se aplica en el programa, antes del Bluetooth. sin latencia · por defecto
+            - radio "En el parlante El volumen se pide a cada parlante por Bluetooth; la señal digital queda cerca de 0 dB. costo un pactl por parlante y cambio, fuera del hilo del audio · sin latencia"
+            - text: En el parlante El volumen se pide a cada parlante por Bluetooth; la señal digital queda cerca de 0 dB. costo un pactl por parlante y cambio, fuera del hilo del audio · sin latencia
+          - group: Perillas de «Digital» 4
+          - 'group "Por parlante: Ganancia, Silencio"':
+            - button "Go 4 Red"
+            - slider "Ganancia de JBL Go 4 Red": "-4"
+            - status: "-4,2 dB"
+            - 'button "Ganancia de JBL Go 4 Red: volver a 0,0 dB"': ↺
+            - checkbox "Silencio de JBL Go 4 Red"
+            - text: "no"
+            - button "Go 4 Black"
+            - slider "Ganancia de JBL Go 4 Black": "-2.5"
+            - status: "-2,4 dB"
+            - 'button "Ganancia de JBL Go 4 Black: volver a 0,0 dB"': ↺
+            - checkbox "Silencio de JBL Go 4 Black"
+            - text: "no"
+            - button "Go 4 Blue"
+            - slider "Ganancia de JBL Go 4 Blue": "0"
+            - status: 0,0 dB
+            - checkbox "Silencio de JBL Go 4 Blue"
+            - text: "no"
+            - button "Virtual 1"
+            - slider "Ganancia de Virtual 1": "0"
+            - status: 0,0 dB
+            - checkbox "Silencio de Virtual 1"
+            - text: "no"
+          - 'group "Volumen: en vivo"':
+            - text: En vivo
+            - term: volumen ahora
+            - definition: "-20,0 dB"
+            - term: modo
+            - definition: "off"
+      - listitem:
+        - region "Limitador":
+          - heading "Limitador" [level=3]
+          - text: 0 ms
+          - 'button "Ayuda: Limitador"': "?"
+          - paragraph: Baja el nivel en vez de recortar cuando un pasaje se pasa de escala.
+          - group "Algoritmo con un corte breve":
+            - text: Algoritmo con un corte breve
+            - radio "De pico Ataque instantáneo, sin latencia. sin latencia · por defecto" [checked]
+            - text: De pico Ataque instantáneo, sin latencia. sin latencia · por defecto
+            - radio "De pico real Mira 3 ms adelante y detecta los picos entre muestras. costo 0,08 ms por parlante (MEDIDO en el Mac) · latencia 3,0 ms"
+            - text: De pico real Mira 3 ms adelante y detecta los picos entre muestras. costo 0,08 ms por parlante (MEDIDO en el Mac) · latencia 3,0 ms
+          - group: Perillas de «De pico» 2
+          - 'group "Limitador: en vivo"':
+            - text: En vivo
+            - term: tipo
+            - definition: peak
+            - term: latencia
+            - definition: 0,0 ms
+            - term: reducción
+            - definition: Go 4 Red 0,0 dB Go 4 Black 0,0 dB Go 4 Blue 0,0 dB Virtual 1 0,0 dB
+            - term: tiempo activo
+            - definition: Go 4 Red 0 % Go 4 Black 0 % Go 4 Blue 0 % Virtual 1 0 %

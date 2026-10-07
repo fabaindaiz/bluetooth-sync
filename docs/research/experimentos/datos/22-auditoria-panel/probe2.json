@@ -1,0 +1,291 @@
+{
+ "light": {
+  "replaced": {
+   "escuchar": {
+    "total": 60,
+    "gone": 0,
+    "examples": []
+   },
+   "cadena": {
+    "total": 88,
+    "gone": 0,
+    "examples": []
+   },
+   "parlantes": {
+    "total": 74,
+    "gone": 13,
+    "examples": [
+     {
+      "sel": "button.ghost.small-btn",
+      "text": "Desconectar",
+      "where": "otro",
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+     },
+     {
+      "sel": "button.small-btn",
+      "text": "Emparejar y conectar",
+      "where": "otro",
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+     },
+     {
+      "sel": "button.btn.small-btn.ml-1",
+      "text": "Usar «Automático»",
+      "where": "otro",
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+     },
+     {
+      "sel": "button.seg",
+      "text": "Principal",
+      "where": "otro",
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+     },
+     {
+      "sel": "button.seg",
+      "text": "Ambiental",
+      "where": "otro",
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+     }
+    ]
+   },
+   "calibrar": {
+    "total": 25,
+    "gone": 0,
+    "examples": []
+   },
+   "diagnostico": {
+    "total": 37,
+    "gone": 0,
+    "examples": []
+   },
+   "ajustes": {
+    "total": 32,
+    "gone": 0,
+    "examples": []
+   }
+  },
+  "focus_loss": [
+   {
+    "control": "parlantes button «Desconectar»",
+    "same": false,
+    "connected": false,
+    "now": "body"
+   },
+   {
+    "control": "parlantes button «Usar «Automático»»",
+    "same": false,
+    "connected": false,
+    "now": "body"
+   },
+   {
+    "control": "parlantes button.seg «Ambiental»",
+    "same": false,
+    "connected": false,
+    "now": "body"
+   },
+   {
+    "control": "escuchar [data-card=presets] button «Cargar»",
+    "same": true,
+    "connected": true,
+    "now": "button.small-btn"
+   },
+   {
+    "control": "escuchar [data-card=quick] button «Silenciar»",
+    "same": true,
+    "connected": true,
+    "now": "button.btn.small-btn"
+   },
+   {
+    "control": "diagnostico [data-card=services] button «Detener»",
+    "same": true,
+    "connected": true,
+    "now": "button.ghost.small-btn"
+   },
+   {
+    "control": "escuchar button.meter-clip «»",
+    "same": true,
+    "connected": true,
+    "now": "button.meter-clip"
+   },
+   {
+    "control": "parlantes [data-card=speakers] input[type=range] «»",
+    "same": true,
+    "connected": true,
+    "now": "input[type=range]"
+   },
+   {
+    "control": "parlantes [data-card=speakers] select «»",
+    "same": true,
+    "connected": true,
+    "now": "select"
+   }
+  ],
+  "volume_name": {
+   "slider named /Volumen/": 4,
+   "status named Volumen": 1,
+   "labels of #volume": [],
+   "label.control": "volume-out"
+  },
+  "label_mismatch": [
+   {
+    "label": "Volumen -20 dB",
+    "control": "OUTPUT#volume-out",
+    "input": "volume"
+   },
+   {
+    "label": "Nivel 30 %",
+    "control": "OUTPUT#monitor-gain-value",
+    "input": "monitor-gain"
+   }
+  ],
+  "logs": {
+   "lines": 32,
+   "unique": 32
+  },
+  "cadena_live": {
+   "watched": 131,
+   "changing": 0,
+   "maxDistinct": 0,
+   "examples": [],
+   "pauseButtons": 0
+  },
+  "undo": {
+   "visible_s": 10.4,
+   "rect": [
+    440,
+    832,
+    560,
+    44
+   ],
+   "covers": [
+    "button.btn.btn-ghost.small-btn Tono",
+    "button.btn.small-btn.q-mute Silenciar"
+   ],
+   "with_hover_s": 10.3,
+   "focus_after_delete": "body",
+   "undo_in_tab_order_after": {
+    "from": -1,
+    "undo": 12,
+    "total": 58
+   }
+  },
+  "help_popup": {
+   "hover_visible": "visible",
+   "after_escape_hover": "visible",
+   "hoverable": "hidden",
+   "focus_visible_popup": "visible",
+   "after_escape_focus": "visible",
+   "popup_contrast_text": "10.43",
+   "popup_width": 288
+  },
+  "cadena_help": {
+   "before": {
+    "expanded": null,
+    "label": "Ayuda: Ambiente",
+    "controls": null
+   },
+   "after_enter": null,
+   "after_escape": null,
+   "focus_after": "button.help-btn"
+  },
+  "details_escape": {
+   "opened": true,
+   "open_after_escape": true
+  },
+  "primary_focus": [
+   {
+    "view": "calibrar",
+    "text": "Calibrar",
+    "fv": true,
+    "outline": "solid 2px #0084d1",
+    "changed": 526,
+    "maxRatio": 4.02,
+    "total": 4680
+   },
+   {
+    "view": "calibrar",
+    "text": "Aplicar sugerencia",
+    "fv": true,
+    "outline": "solid 2px #0084d1",
+    "changed": 811,
+    "maxRatio": 4.02,
+    "total": 8372
+   }
+  ],
+  "run_stopped_focus": {
+   "text": "Iniciar",
+   "fv": true,
+   "outline": "solid 2px #0084d1",
+   "changed": 485,
+   "maxRatio": 3.96,
+   "total": 4160
+  }
+ },
+ "dark": {
+  "help_popup": {
+   "hover_visible": "visible",
+   "after_escape_hover": "visible",
+   "hoverable": "hidden",
+   "focus_visible_popup": "visible",
+   "after_escape_focus": "visible",
+   "popup_contrast_text": "13.96",
+   "popup_width": 288
+  },
+  "cadena_help": {
+   "before": {
+    "expanded": null,
+    "label": "Ayuda: Ambiente",
+    "controls": null
+   },
+   "after_enter": null,
+   "after_escape": null,
+   "focus_after": "button.help-btn"
+  },
+  "details_escape": {
+   "opened": true,
+   "open_after_escape": true
+  },
+  "primary_focus": [
+   {
+    "view": "calibrar",
+    "text": "Calibrar",
+    "fv": true,
+    "outline": "solid 2px #0084d1",
+    "changed": 520,
+    "maxRatio": 4.4,
+    "total": 4680
+   },
+   {
+    "view": "calibrar",
+    "text": "Aplicar sugerencia",
+    "fv": true,
+    "outline": "solid 2px #0084d1",
+    "changed": 803,
+    "maxRatio": 4.4,
+    "total": 8372
+   }
+  ],
+  "run_stopped_focus": {
+   "text": "Iniciar",
+   "fv": true,
+   "outline": "solid 2px #0084d1",
+   "changed": 479,
+   "maxRatio": 4.49,
+   "total": 4160
+  }
+ }
+}

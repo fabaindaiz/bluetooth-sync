@@ -1,0 +1,22 @@
+[   3.6s] playing
+[  15.2s] calibrated
+monitor: simulated_headphones was at 100 %, lowering it to 30 % before opening
+[  20.9s] state ready
+[  42.6s] pc1440-light escuchar done
+[  65.4s] pc1440-light cadena done
+[  87.9s] pc1440-light parlantes done
+[ 106.5s] pc1440-light calibrar done
+[ 126.1s] pc1440-light diagnostico done
+[ 145.0s] pc1440-light ajustes done
+[ 187.4s] pc1440-dark escuchar done
+[ 190.8s] pc1440-dark cadena done
+[ 193.5s] pc1440-dark parlantes done
+[ 195.9s] pc1440-dark calibrar done
+[ 199.1s] pc1440-dark diagnostico done
+[ 201.6s] pc1440-dark ajustes done
+[ 218.4s] reduced escuchar
+[ 234.9s] reduced calibrar
+[ 251.3s] reduced diagnostico
+[ 267.8s] reduced cadena
+[ 286.7s] ab done
+[ 286.9s] service stopped
