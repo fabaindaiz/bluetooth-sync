@@ -6,7 +6,7 @@ sale.
 
 | Carpeta | Placa | Para qué | Estado |
 |---|---|---|---|
-| [supermini/](supermini/) | 5× SuperMini nRF52840 (clon de nice!nano) | Controlador HCI por USB CDC-ACM (`serial:`) para Bumble en el PC; más adelante, por UART para la Pico | Vacía hasta E1 |
+| [supermini/](supermini/) | 4× SuperMini nRF52840 (clon de nice!nano) | Controlador HCI por USB CDC-ACM (`serial:`) para Bumble en el PC; más adelante, por UART para la Pico | Vacía hasta E1 |
 | [pico/](pico/) | 1× Raspberry Pi Pico 2 W (RP2350) | Probe P3: benchmark de LC3 y tarjeta USB de 4 canales. Si P3 sale bien, el cerebro del emisor dedicado (Fase 3, variante H2b) | Vacía hasta P3 |
 
 **Qué se anota en cada medición** (`CLAUDE.md`):

@@ -1,0 +1,5 @@
+{"t": 5563.081991, "kind": "version", "hci_version": 17, "hci_subversion": 4224, "lmp_version": 17, "company_identifier": 89, "lmp_subversion": 4224}
+{"t": 5563.082079, "kind": "le_features", "LE_2M_PHY": true, "LE_EXTENDED_ADVERTISING": true, "LE_PERIODIC_ADVERTISING": true, "ISOCHRONOUS_BROADCASTER": true, "SYNCHRONIZED_RECEIVER": true, "CONNECTED_ISOCHRONOUS_STREAM_CENTRAL": false, "SLEEP_CLOCK_ACCURACY_UPDATES": false}
+{"t": 5563.082108, "kind": "commands", "HCI_LE_CREATE_BIG_COMMAND": true, "HCI_LE_CREATE_BIG_TEST_COMMAND": true, "HCI_LE_BIG_CREATE_SYNC_COMMAND": true, "HCI_LE_READ_ISO_TX_SYNC_COMMAND": true, "HCI_LE_SETUP_ISO_DATA_PATH_COMMAND": true, "HCI_LE_READ_BUFFER_SIZE_V2_COMMAND": true, "HCI_LE_ISO_TRANSMIT_TEST_COMMAND": true}
+{"t": 5563.082118, "kind": "iso_buffers", "max_packet_size": 255, "max_in_flight": 10}
+{"t": 5563.082897, "kind": "vs_version", "hw_platform": 2, "hw_variant": 2, "fw_variant": 0, "fw_version": 180, "fw_revision": 4363, "fw_build": 1118343448}

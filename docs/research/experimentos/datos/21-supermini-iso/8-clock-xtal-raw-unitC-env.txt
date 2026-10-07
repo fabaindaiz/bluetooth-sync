@@ -1,0 +1,6 @@
+       Offset: +4.114ms
+    Frequency: -1,961ppm
+ 16:36:00 up  4:53,  1 user,  load average: 4,36, 2,57, 1,96
+       Offset: +4.114ms
+    Frequency: -1,961ppm
+ 16:46:01 up  5:03,  1 user,  load average: 0,13, 0,70, 1,31

@@ -192,6 +192,25 @@ consultado el 2026-10-02):
 
 Para la meta de 8 parlantes (d-7c8794-3b7793): 3–4 adaptadores, sin contar el AX210.
 
+### 2.5 Validación con fuentes primarias (2026-10-07)
+
+Contra el datasheet de Infineon (rev *D, copia del PDF), pico-examples@0d62f75, btstack, TinyUSB 0.21.0,
+debugprobe y liblc3, leídos el 2026-10-07. **No se pudieron leer** los hilos de Nordic DevZone de forma
+directa, el datasheet desde infineon.com ni el grupo de Google de BTstack.
+
+| Nº | Afirmación | Veredicto | Evidencia |
+|---|---|---|---|
+| 9 | El CYW43439 no puede hacer Auracast | **Matizado**: sin extended advertising está **VERIFICADO**; sin ISO, **INFERIDO** | btstack#563 (mringwal): *"we can conclude that the 43439 does not support extended advertising"*; el datasheet calla sobre ISO (es silencio, no negación) |
+| 10 | Hace A2DP source con BTstack | **VERIFICADO** | `pico-examples/bluetooth/btstack_examples/a2dp_source_demo/` (el `.c` está en btstack) |
+| 11 | `MAX_NR_AVDTP_CONNECTIONS 1`, 3 búferes ACL; sin reportes de 2 streams | **Matizado** | `pico-examples/bluetooth/config/btstack_config_common.h` L34 y L55-56, tal cual. **btstack#143 es sobre ESP32 y sí tuvo respuesta** (*"A2DP is not able to sync multiple devices"*). El datasheet §7.5.8 declara *"Multiple Simultaneous A2DP Audio Streams"*. No hay ningún reporte público con Pico W. El 1 es un límite del ejemplo; dos streams quedan como algo a **MEDIR** |
+| 12 | Sonda SWD para recuperar un nRF52840 | **Matizado** | debugprobe v2.3.1 trae `debugprobe_on_pico2.uf2`; el `nrf52.cfg` de OpenOCD permite `nrf52_recover` con CMSIS-DAP. Sin probar contra un nRF52840 real |
+| 13 | LC3 de 4 canales a 48 kHz y 10 ms en tiempo real | **NO DETERMINADO**, probablemente justo | nRF5340 (M33 a 128 MHz, códec de Nordic): *"~30% CPU load when encoding a 96 kbps stream"* ≈ 38 MHz por canal (DevZone 93487, REPORTADO); lc3-fast en M4F a 64 MHz ≈ 34 MHz por canal (tercero). Estimado: **140–240 MHz para 4 canales**, más que un núcleo de 150 MHz. Se mide con P3(a) |
+| 14 | El SOF de USB para disciplinar el reloj con TinyUSB | **VERIFICADO** en TinyUSB | `audio_device.h` L294-331 (feedback), ejemplo `uac2_speaker_fb`, `dcd_rp2040.c` L202-209 (SOF). La disciplina misma es código propio. Riesgo: tinyusb#4088 (control de reloj UAC2 en RP2040), sin confirmar si sigue en 0.21.0 |
+
+**Qué cambia:** la Pico 2 W no sirve como emisor A2DP para 3 o 4 parlantes (eso sigue en el PC). Para la
+Fase 3, codificar 4 canales LC3 en un solo RP2350 es dudoso: o se reparten 2 canales por Pico, o el LC3 se
+codifica en el PC. P3(a) lo mide antes de decidir.
+
 ## 3. Lo que se decide ya en Linux para no cerrarles la puerta
 
 Todo en línea con "mismo núcleo, otro backend emisor" (d-7c8794-9afee2) y con el foco

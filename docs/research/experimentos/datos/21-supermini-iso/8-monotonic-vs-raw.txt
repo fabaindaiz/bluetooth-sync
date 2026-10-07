@@ -1,0 +1,1 @@
+{"seconds": 180.0, "monotonic_vs_raw_ppm": -0.991, "halves": [-0.901, -1.068]}

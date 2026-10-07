@@ -1,0 +1,13 @@
+{"step":"set 0 then new session without setting"}
+{"t": 5146.006484, "kind": "big_reserved_time_set", "reserved_us": 0, "status": 0}
+{"kind": "big_created", "num_bis": 4, "nse": 3, "pto": 4, "irc": 2, "delay": 7938}
+{"kind": "big_created", "num_bis": 4, "nse": 3, "pto": 4, "irc": 2, "delay": 7938}
+{"kind": "big_created", "num_bis": 2, "nse": 5, "pto": 1, "irc": 2, "delay": 6590}
+{"step":"set 2500, new sessions 2 BIS"}
+{"t": 5147.000648, "kind": "big_reserved_time_set", "reserved_us": 2500, "status": 0}
+{"kind": "big_created", "num_bis": 2, "nse": 4, "pto": 2, "irc": 2, "delay": 5242}
+{"kind": "big_created", "num_bis": 2, "nse": 4, "pto": 2, "irc": 2, "delay": 5242}
+{"step":"set 1600 (default) and check"}
+{"t": 5147.649357, "kind": "big_reserved_time_set", "reserved_us": 1600, "status": 0}
+{"kind": "big_created", "num_bis": 2, "nse": 5, "pto": 1, "irc": 2, "delay": 6590}
+{"kind": "big_created", "num_bis": 4, "nse": 2, "pto": 0, "irc": 2, "delay": 5242}

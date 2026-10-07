@@ -1,0 +1,4 @@
+rx_big.py:155: FutureWarning: Only for testing.
+  big_sync = await device.create_big_sync(
+/home/fadiaz/.local/share/hatch/env/virtual/aurasync/RNX04zMz/aurasync/lib/python3.12/site-packages/pyee/asyncio.py:79: FutureWarning: Only for testing
+  coro: Any = f(*args, **kwargs)

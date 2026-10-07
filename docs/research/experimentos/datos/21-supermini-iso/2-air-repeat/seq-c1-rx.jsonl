@@ -1,0 +1,10 @@
+{"t": 5686.486831, "kind": "emitter_found", "address": "F2:00:00:00:00:21", "sid": 3, "rssi": -34}
+{"t": 5686.645755, "kind": "pa_synced", "interval_ms": 100.0, "phy": 1}
+{"t": 5686.645795, "kind": "biginfo", "num_bis": 4, "nse": 2, "iso_interval_ms": 10.0, "bn": 1, "pto": 0, "irc": 2, "max_pdu": 120, "sdu_interval": 10000, "max_sdu": 120, "phy": 2, "framing": 0, "encryption": 0, "advertiser_clock_accuracy": 0}
+{"t": 5686.749607, "kind": "big_synced", "nse": 2, "bn": 1, "pto": 0, "irc": 2, "max_pdu": 120, "iso_interval_ms": 10.0, "transport_latency_us": 5242}
+{"t": 5687.754346, "kind": "rx", "received": [100, 100, 100, 101], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5688.755206, "kind": "rx", "received": [200, 200, 200, 201], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5689.756141, "kind": "rx", "received": [300, 300, 300, 301], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5690.756989, "kind": "rx", "received": [400, 400, 400, 401], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5691.757989, "kind": "rx", "received": [500, 500, 500, 501], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5691.758117, "kind": "rx_end", "lost_sync": false, "seconds": 5.005, "received": [500, 500, 500, 501], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 500}, "drift_ppm_emitter_vs_receiver": [-83.12460984394309, -83.12028811519045, -83.12028811519045, -83.10924369747674], "timestamped": [50, 50, 50, 50]}

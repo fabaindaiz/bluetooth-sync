@@ -58,6 +58,7 @@ pero **no converge** en el parlante de `ambiente` alto. Sigue apagado por defect
 | `radio.py` · `cuts.py` | los paquetes que el Bluetooth descarta (`reduce bitpool` en el journal de WirePlumber) y el registro de cortes | spec 2026-10-02 §3, [experimentos/12](../docs/research/experimentos/12-microcortes-con-3-go-4.md) |
 | `access.py` · `clients.py` · `pairing.py` | quién puede hablar con el servicio: un token por cliente guardado como hash, alcances (`read`, `control`, `admin`), emparejamiento, intentos fallidos por dirección, tickets del stream y CORS | d-7c8794-37f9bc, [`docs/control-api.md`](docs/control-api.md) |
 | `tls.py` · `lan.py` · `remote.py` · `mdns.py` | HTTPS con una raíz propia limitada a la red local, los nombres de la máquina (recalculados si cambia la IP), los puertos HTTP y HTTPS, y el anuncio mDNS opcional | d-7c8794-37f9bc |
+| `bumble_fixes.py` | correcciones locales a Bumble 0.0.235, que se aplican con `apply()` antes de abrir un transporte HCI (la primera: `LE Read ISO TX Sync`) | d-7c8794-570a77, [experimentos/21](../docs/research/experimentos/21-f1-iso-en-la-supermini.md) |
 | `cli.py` | `doctor`, `sinks`, `init`, `calibrate`, `run`, `play`, `service`, `radio-log`, `clients`, `tls` | — |
 
 ## Cómo se usa

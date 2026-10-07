@@ -1,0 +1,65 @@
+{"t": 5468.569467, "kind": "emitter_found", "address": "F2:00:00:00:00:21", "sid": 3, "rssi": -41}
+{"t": 5468.768374, "kind": "pa_synced", "interval_ms": 100.0, "phy": 1}
+{"t": 5468.768419, "kind": "biginfo", "num_bis": 4, "nse": 2, "iso_interval_ms": 10.0, "bn": 1, "pto": 0, "irc": 2, "max_pdu": 120, "sdu_interval": 10000, "max_sdu": 120, "phy": 2, "framing": 0, "encryption": 0, "advertiser_clock_accuracy": 0}
+{"t": 5468.872203, "kind": "big_synced", "nse": 2, "bn": 1, "pto": 0, "irc": 2, "max_pdu": 120, "iso_interval_ms": 10.0, "transport_latency_us": 5242}
+{"t": 5469.876893, "kind": "rx", "received": [100, 100, 100, 101], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5470.877741, "kind": "rx", "received": [200, 200, 200, 201], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5471.878653, "kind": "rx", "received": [300, 300, 300, 301], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5472.879699, "kind": "rx", "received": [400, 400, 400, 401], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5473.880933, "kind": "rx", "received": [500, 500, 500, 501], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5474.881444, "kind": "rx", "received": [601, 600, 600, 601], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5475.882295, "kind": "rx", "received": [701, 700, 700, 701], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5476.882564, "kind": "rx", "received": [801, 801, 800, 801], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5477.883454, "kind": "rx", "received": [901, 901, 900, 901], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5478.883653, "kind": "rx", "received": [1001, 1001, 1001, 1001], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5479.884762, "kind": "rx", "received": [1101, 1101, 1101, 1101], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5480.885876, "kind": "rx", "received": [1201, 1201, 1201, 1202], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5481.88685, "kind": "rx", "received": [1301, 1301, 1301, 1302], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5482.887663, "kind": "rx", "received": [1401, 1401, 1401, 1402], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5483.888482, "kind": "rx", "received": [1501, 1501, 1501, 1502], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5484.889406, "kind": "rx", "received": [1601, 1601, 1601, 1602], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5485.89028, "kind": "rx", "received": [1701, 1701, 1701, 1702], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5486.89115, "kind": "rx", "received": [1802, 1801, 1801, 1802], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5487.891325, "kind": "rx", "received": [1902, 1902, 1901, 1902], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5488.892348, "kind": "rx", "received": [2002, 2002, 2001, 2002], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5489.892663, "kind": "rx", "received": [2102, 2102, 2102, 2102], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5490.893736, "kind": "rx", "received": [2202, 2202, 2202, 2202], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5491.893964, "kind": "rx", "received": [2302, 2302, 2302, 2303], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5492.895037, "kind": "rx", "received": [2402, 2402, 2402, 2403], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5493.89612, "kind": "rx", "received": [2502, 2502, 2502, 2503], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5494.896965, "kind": "rx", "received": [2602, 2602, 2602, 2603], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5495.898007, "kind": "rx", "received": [2702, 2702, 2702, 2703], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5496.898961, "kind": "rx", "received": [2802, 2802, 2802, 2803], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5497.899833, "kind": "rx", "received": [2902, 2902, 2902, 2903], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5498.900818, "kind": "rx", "received": [3003, 3002, 3002, 3003], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5499.901022, "kind": "rx", "received": [3103, 3103, 3102, 3103], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5500.902161, "kind": "rx", "received": [3203, 3203, 3202, 3203], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5501.90241, "kind": "rx", "received": [3303, 3303, 3303, 3303], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5502.903295, "kind": "rx", "received": [3403, 3403, 3403, 3403], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5503.903523, "kind": "rx", "received": [3503, 3503, 3503, 3504], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5504.90466, "kind": "rx", "received": [3603, 3603, 3603, 3604], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5505.90548, "kind": "rx", "received": [3703, 3703, 3703, 3704], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5506.906521, "kind": "rx", "received": [3803, 3803, 3803, 3804], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5507.907362, "kind": "rx", "received": [3903, 3903, 3903, 3904], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5508.90851, "kind": "rx", "received": [4003, 4003, 4003, 4004], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5509.90906, "kind": "rx", "received": [4103, 4103, 4103, 4104], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5510.910255, "kind": "rx", "received": [4204, 4203, 4203, 4204], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5511.910511, "kind": "rx", "received": [4304, 4304, 4303, 4304], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5512.911532, "kind": "rx", "received": [4404, 4404, 4403, 4404], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5513.911789, "kind": "rx", "received": [4504, 4504, 4504, 4504], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5514.912836, "kind": "rx", "received": [4604, 4604, 4604, 4604], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5515.914073, "kind": "rx", "received": [4704, 4704, 4704, 4705], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5516.915016, "kind": "rx", "received": [4804, 4804, 4804, 4805], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5517.916168, "kind": "rx", "received": [4904, 4904, 4904, 4905], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5518.916766, "kind": "rx", "received": [5004, 5004, 5004, 5005], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5519.917895, "kind": "rx", "received": [5104, 5104, 5104, 5105], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5520.918306, "kind": "rx", "received": [5204, 5204, 5204, 5205], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5521.919554, "kind": "rx", "received": [5305, 5304, 5304, 5305], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5522.920797, "kind": "rx", "received": [5405, 5405, 5404, 5405], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5523.921223, "kind": "rx", "received": [5505, 5505, 5505, 5505], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5524.92207, "kind": "rx", "received": [5605, 5605, 5605, 5605], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 99}}
+{"t": 5525.922306, "kind": "rx", "received": [5705, 5705, 5705, 5706], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5526.923279, "kind": "rx", "received": [5805, 5805, 5805, 5806], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5527.924462, "kind": "rx", "received": [5905, 5905, 5905, 5906], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5528.925273, "kind": "rx", "received": [6005, 6005, 6005, 6006], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 100}}
+{"t": 5528.925874, "kind": "rx_end", "lost_sync": false, "seconds": 60.049, "received": [6005, 6005, 6005, 6006], "invalid": [0, 0, 0, 1], "gaps": [0, 0, 0, 0], "counter_offsets": {"[0, 0, 0, 0]": 5980}, "drift_ppm_emitter_vs_receiver": [-6.216842546757917, -6.21646087906047, -6.216452267837624, -6.216545323733946], "timestamped": [600, 600, 600, 600]}

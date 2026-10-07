@@ -181,3 +181,34 @@ Para el motor en Rust (i-7c8794-fd9732, `engine/README.md`). Versiones MEDIDAS e
 - hatch 1.16.2: un miembro de workspace con backend maturin fuera de `host/` falla ("No members
   could be derived"); la extensión se compila con un script (d-7c8794-dc712e).
 - Costo medido de la lectura sinc en este equipo: [20](20-costo-de-la-lectura-sinc-en-rust.md).
+
+
+## Hardware recibido el 2026-10-07
+
+- **4× SuperMini nRF52840** (clon de nice!nano). Llegaron el 2026-10-07, todavía sin
+  flashear ni etiquetar. Cada medición anota qué unidad se usó; conviene marcarlas como A, B, C y D.
+- **1× Raspberry Pi Pico 2 W**, la del usuario: sonda SWD de recuperación (debugprobe) y el cerebro
+  de la Fase 3.
+- Las pruebas de Auracast (E2 a E5) se hacen en este equipo, `HP-O16`, con los JBL traídos
+  hasta aquí (decisión del usuario del 2026-10-07).
+- **Unidades identificadas (MEDIDO, 2026-10-07)** por el número de serie USB, que es el mismo en el
+  bootloader y en el firmware. Todas con UF2 Bootloader 0.6.0 nice!nano y S140 6.1.1, y de fábrica sin
+  aplicación:
+  - **A:** `25351136B0E21CB1`. **Tiene cristal de 32 kHz**, y su cristal de 32 MHz va a +79 ppm. Desde el
+    2026-10-07 a las 17:2x tiene el controlador con cristal y con el toque a 1200 baudios (`hci_uart_iso` +
+    `iso.conf`).
+  - **C:** `893169D3E93C0F4E` (la segunda que se conectó; el usuario la rotuló C), con la misma imagen; se
+    **Tiene cristal de 32 kHz**, y su cristal de 32 MHz va a +64 ppm. Al cierre del 2026-10-07 tiene el
+    **emisor autónomo** (`probes/21-supermini-iso/standalone_tx/`); vuelve al controlador por software
+    (`stty -F /dev/ttyACMn 1200` y copiar el UF2).
+    colgó en el reinicio después de grabar y funciona tras desconectarla (experimentos/21).
+
+  Hay respaldo del flash de fábrica fuera del repositorio, en `~/supermini-respaldo/`.
+
+## Toolchain de firmware (instalado por el usuario el 2026-10-07)
+
+- `nrfutil` 8.2.0 (`c910332`, 2026-04-21), desde AUR con `paru -S nrfutil`: el binario de Nordic en
+  `/usr/bin/nrfutil`.
+- **nRF Connect SDK v3.4.1** con `nrfutil sdk-manager install v3.4.1`, en `~/ncs/v3.4.1` (`nrf` en
+  `b20f8619`, 2026-09-17). El toolchain `8285d8ad56` está en `~/ncs/toolchains/`. Ocupa 13 GB.
+- Para revertirlo: `rm -rf ~/ncs ~/.nrfutil` y `paru -Rns nrfutil`. Sin reglas udev ni J-Link: no hacen falta.

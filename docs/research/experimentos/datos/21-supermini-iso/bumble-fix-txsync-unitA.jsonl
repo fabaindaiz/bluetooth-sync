@@ -1,0 +1,12 @@
+{"t": 7124.665428, "kind": "sample", "k": 29, "std_psn": 28, "std_ts": 3442715433, "time_offset": 0, "vs": [28, 3442715433]}
+{"t": 7124.970055, "kind": "mismatch", "std": [58, 3443015433, 0], "vs": [59, 3443025433]}
+{"t": 7124.970085, "kind": "sample", "k": 59, "std_psn": 58, "std_ts": 3443015433, "time_offset": 0, "vs": [59, 3443025433]}
+{"t": 7125.268303, "kind": "sample", "k": 89, "std_psn": 88, "std_ts": 3443315433, "time_offset": 0, "vs": [88, 3443315433]}
+{"t": 7125.565574, "kind": "sample", "k": 119, "std_psn": 118, "std_ts": 3443615433, "time_offset": 0, "vs": [118, 3443615433]}
+{"t": 7125.867705, "kind": "sample", "k": 149, "std_psn": 148, "std_ts": 3443915433, "time_offset": 0, "vs": [148, 3443915433]}
+{"t": 7126.167605, "kind": "sample", "k": 179, "std_psn": 178, "std_ts": 3444215433, "time_offset": 0, "vs": [178, 3444215433]}
+{"t": 7126.466263, "kind": "sample", "k": 209, "std_psn": 208, "std_ts": 3444515433, "time_offset": 0, "vs": [208, 3444515433]}
+{"t": 7126.766894, "kind": "sample", "k": 239, "std_psn": 238, "std_ts": 3444815433, "time_offset": 0, "vs": [238, 3444815433]}
+{"t": 7127.06668, "kind": "sample", "k": 269, "std_psn": 268, "std_ts": 3445115433, "time_offset": 0, "vs": [268, 3445115433]}
+{"t": 7127.367117, "kind": "sample", "k": 299, "std_psn": 298, "std_ts": 3445415433, "time_offset": 0, "vs": [298, 3445415433]}
+{"t": 7127.367145, "kind": "result", "matches": 39, "total": 40}
