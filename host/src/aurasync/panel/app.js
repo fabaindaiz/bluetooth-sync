@@ -2798,6 +2798,7 @@ function renderSpatial(s) {
   const kinds = s.speakers.map((sp) => `${sp.name}:${sp.role_kind}:${sp.pan}:${sp.ambience}`).join("|");
   const render = (s.chain_summary && s.chain_summary.spatial) || "classic";
   for (const id of ["spatial-render", "now-render"]) if (!$(id).matches(":focus")) $(id).value = render;
+  renderRenderNote(render, s.quality && s.quality.render_match);
   const rows = s.speakers.map((sp) => {
     const kind = sp.role_kind || "principal";
     const seg = (value, label) => {
@@ -2813,6 +2814,21 @@ function renderSpatial(s) {
     spatialKey = key;
     loadSpatial();
   }
+}
+
+// El directo se explica en una línea, y la igualación de volumen de cada modo (render_match.py) se
+// muestra cuando no es cero: el clásico es la referencia y nunca la lleva.
+function renderRenderNote(render, match) {
+  const parts = [];
+  if (render === "direct") parts.push("Directo — estéreo puro alineado: sin efectos, mismo volumen.");
+  if (match && match.render === render && Math.abs(match.makeup_db) >= 0.05) {
+    const db = `${match.makeup_db > 0 ? "+" : "−"}${Math.abs(match.makeup_db).toFixed(1)} dB`;
+    const how = match.status === "locked" ? "" : match.status === "frozen" ? " (en pausa)" : " (ajustando)";
+    parts.push(`Igualación de volumen con el clásico: ${db}${how}.`);
+  }
+  const note = $("spatial-render-note");
+  note.textContent = parts.join(" ");
+  note.hidden = parts.length === 0;
 }
 
 async function loadSpatial() {

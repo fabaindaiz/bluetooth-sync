@@ -124,6 +124,23 @@ export interface QualitySum {
   s: number | null;
 }
 
+/** `quality.render_match`: every render at `classic`'s loudness (render_match.py, spec
+ * 2026-10-05-virtual-speakers-and-hot-join §9). `makeup_db` is the gain the playing render gets
+ * (0 for `classic`, the reference); `status` is `reference` while `classic` plays, else the
+ * match's (`measuring`, `locked`, `frozen`: silence, a cut or a calibration; `unmeasured`: see
+ * `reason`, `no_reference` until `classic` was heard, `reference_stale` when it was heard with
+ * other speakers sounding). `reference_lu` is `classic`'s net loudness without the volume, and
+ * `makeups_db` each other render's remembered makeup. Additive, 2026-10-06.
+ */
+export interface RenderMatchView {
+  render: string | null;
+  makeup_db: number;
+  status: "reference" | "measuring" | "locked" | "frozen" | "unmeasured";
+  reason: "no_reference" | "reference_stale" | null;
+  reference_lu: number | null;
+  makeups_db: Record<string, number>;
+}
+
 export interface QualityEvent {
   input: QualityInput;
   outputs: Record<string, QualityOutput>;
@@ -135,6 +152,7 @@ export interface QualityEvent {
   tp_max: number | null;
   limiter_pct_max: number | null;
   cost_ms: number;
+  render_match: RenderMatchView;
 }
 
 export interface RadioSpeaker {

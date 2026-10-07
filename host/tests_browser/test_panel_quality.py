@@ -444,14 +444,30 @@ _USABILITY_HINTS = 0.3
 # The devices card's «Agregar parlante virtual» (virtual speakers, phase 1): on a phone the card head
 # wraps to a second row.
 _VIRTUAL_BUTTON = 0.2
+# The `direct` render (spec 2026-10-05 §9): a fourth algorithm in Cadena's «Modo espacial», a row
+# more that the scenarios through Cadena scroll past (+0.1 on the totals, measured on Linux,
+# 2026-10-06).
+_DIRECT_RENDER = 0.1
 MAX_COST_BY_PLATFORM = {
     "Darwin": (
-        {"teléfono": 31.4 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 13.7 + _SPATIAL_STAGE},
-        {"teléfono": 26.1 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 10.0 + _SPATIAL_STAGE},
+        {
+            "teléfono": 31.4 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON + _DIRECT_RENDER,
+            "PC": 13.7 + _SPATIAL_STAGE + _DIRECT_RENDER,
+        },
+        {
+            "teléfono": 26.1 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON + _DIRECT_RENDER,
+            "PC": 10.0 + _SPATIAL_STAGE + _DIRECT_RENDER,
+        },
     ),
     "Linux": (
-        {"teléfono": 32.0 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 13.6 + _SPATIAL_STAGE},
-        {"teléfono": 26.7 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON, "PC": 10.0 + _SPATIAL_STAGE},
+        {
+            "teléfono": 32.0 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON + _DIRECT_RENDER,
+            "PC": 13.6 + _SPATIAL_STAGE + _DIRECT_RENDER,
+        },
+        {
+            "teléfono": 26.7 + _SPATIAL_STAGE + _USABILITY_HINTS + _VIRTUAL_BUTTON + _DIRECT_RENDER,
+            "PC": 10.0 + _SPATIAL_STAGE + _DIRECT_RENDER,
+        },
     ),
 }
 MAX_COST, MAX_COST_SIX = MAX_COST_BY_PLATFORM.get(platform.system(), MAX_COST_BY_PLATFORM["Darwin"])

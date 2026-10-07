@@ -59,6 +59,24 @@ digital en 0 dB (`bt_volume.py`).
 **Compensación del A/B** (`ganancia_comparacion_db`): una ganancia de salida más, con rampa,
 que el servicio usa para igualar la sonoridad de dos presets mientras se comparan. En 0 dB
 multiplica por 1 exacto.
+
+**The `direct` render** (spec 2026-10-05-virtual-speakers-and-hot-join §9): "pure aligned
+stereo". Each speaker plays its side of L/R by its pan at constant power, and nothing of the chain
+touches it: no ambience, decorrelator, EQ curve, bass stage, diffuse tail, Haas delay or spatial
+upmix. It keeps the alignment delay, the speaker's gain, mute, the volume and the limiter, and the
+fixed latencies of the extractor and of the EQ (which plays a flat filter). It does skip the
+decorrelator's group delay (`decorrelate.mean_ms`, ~2.5 ms): a switch moves every speaker by that,
+equally and through the cut, and `chain.latency_ms` reports it. `render` is the render playing; it
+changes at a cut's bottom, like the other renders of the `spatial` stage. The stages `direct` does
+not feed (the diffuse tail, the bass filters) are rebuilt for the switch and swapped at the bottom,
+so leaving `direct` never replays what played before it.
+
+**The render's makeup** (`render_makeup_db`): one more ramped output gain, the same path as the
+A/B's, that keeps every render at `classic`'s loudness. Whoever keeps the makeups
+(`render_match.RenderMatch`) moves it slowly while a render plays and answers `on_render_switch`
+at a cut's bottom, where it jumps with the output at zero. At 0 dB it multiplies by an exact 1.
+`render_makeup_block_db` and `comparison_block_db` say what each block was made with, so the
+match takes both gains back out of what it measures.
 """
 
 from __future__ import annotations
@@ -100,6 +118,8 @@ VENTANA_METRICAS_S = 5.0
 MAXIMO_RAMPA_S = 2.0
 """Un cambio de retardo pedido desde un control que la rampa tardaría más que esto en
 alcanzar pasa por el corte en vez de arrastrarse."""
+DIRECT = "direct"
+"""The `spatial` stage's pure aligned stereo render."""
 
 
 class Motor:
@@ -158,6 +178,11 @@ class Motor:
         self.ecualizar = ecualizar
         self.ecualizacion_activa = c.algorithm("eq") != "off"
         """Si se aplica la ecualización de cada parlante. Solo cambia a través del corte."""
+        self.render: str = c.algorithm("spatial")
+        """The render playing (`classic`, `spatial`, `front` or `direct`): it changes at a cut's bottom."""
+        self.on_render_switch: Callable[[str], float] | None = None
+        """Asked at the cut's bottom where the render changes: the makeup (dB) the new render starts
+        at (`render_match.RenderMatch.select`). None: the makeup stays where it is."""
         # Arranca ya en su valor: antes de sonar no hay nada que una rampa tenga que disimular.
         self._volumen = DecibelRamp(volumen_db, c.param("volume", "volume_speed_db_s"), sr)
         self.volumen_del_bloque_db: float | np.ndarray = float(volumen_db)
@@ -350,8 +375,17 @@ class Motor:
             graves = self._nuevos_graves()
             al_corte.append(lambda: setattr(self, "_graves", graves))
         if ("spatial", None) in cambios:
-            espacial = self._nuevo_espacial(nuevo) if nuevo.algorithm("spatial") in SPATIAL_RENDERS else None
-            al_corte.append(lambda: setattr(self, "espacial", espacial))
+            render = nuevo.algorithm("spatial")
+            espacial = self._nuevo_espacial(nuevo) if render in SPATIAL_RENDERS else None
+            # The stages `direct` does not feed are built here, outside the bottom, and swapped in
+            # at it when the render enters or leaves `direct` (review 2026-10-06: kept, the diffuse
+            # tail replayed the music from before `direct`).
+            fresh = (
+                (self._nueva_difusion(), self._nuevos_graves())
+                if DIRECT in {self.render, anterior.algorithm("spatial"), render}
+                else None
+            )
+            al_corte.append(lambda: self._switch_render(render, espacial, fresh))
         if ("limiter", None) in cambios or ("limiter", "lookahead_ms") in cambios:
 
             def cambiar_limitadores() -> None:
@@ -499,7 +533,7 @@ class Motor:
         m["diffuse"].update(self._difusion.metrics())
         m["eq"].update(
             {
-                "active": self.ecualizar and self.ecualizacion_activa,
+                "active": self.ecualizar and self.ecualizacion_activa and self.render != DIRECT,
                 "max_boost_db": {n: round(float(np.max(c)), 2) if c is not None else 0.0 for n, c in curvas.items()},
                 "boost_energy_db": {
                     n: round(eq.boost_energy_db(c), 2) if c is not None else 0.0 for n, c in curvas.items()
@@ -507,6 +541,7 @@ class Motor:
             }
         )
         m["bass"].update(self._graves.metrics())
+        m["spatial"].update({"render": self.render, "makeup_db": round(self._makeup.current_db, 2)})
         m["volume"]["volume_db_now"] = round(self._volumen.current_db, 2)
         m["limiter"].update(
             {
@@ -604,6 +639,18 @@ class Motor:
             self.sr,
         )
         self._compensacion.jump()
+        makeup = getattr(self, "_makeup", None)
+        self._makeup = DecibelRamp(
+            makeup.target_db if makeup is not None else 0.0,
+            cadena.default("volume", "volume_speed_db_s"),
+            self.sr,
+        )
+        self._makeup.jump()
+        self.comparison_block_db: float | np.ndarray = self._compensacion.target_db
+        """The A/B's compensation (dB) the last block was made with (render_match.py takes it out)."""
+        self.render_makeup_block_db: float | np.ndarray = self._makeup.target_db
+        """The render's makeup (dB) the last block was made with, per sample while it ramps: the
+        match takes it back out of what it measures (render_match.py)."""
         # Para las métricas: (muestras, muestras con el limitador actuando) por parlante, en
         # bloques de la ventana, y la energía del ambiente frente a la de la entrada.
         self._historia_limitador: dict[str, deque] = {p.nombre: deque() for p in self.instalacion.parlantes}
@@ -640,6 +687,40 @@ class Motor:
     def ganancia_comparacion_db(self, valor: float) -> None:
         """Se mueve con rampa (30 dB/s); en el fondo de un corte salta con todo lo demás."""
         self._compensacion.target_db = valor
+
+    @property
+    def render_makeup_db(self) -> float:
+        return self._makeup.target_db
+
+    @render_makeup_db.setter
+    def render_makeup_db(self, value: float) -> None:
+        """Moves as a ramp (30 dB/s); at a cut's bottom it jumps with everything else."""
+        self._makeup.target_db = value
+
+    def jump_render_makeup(self, value: float) -> None:
+        """Sets the makeup without a ramp: before audio flows, or at a cut's bottom."""
+        self._makeup.target_db = value
+        self._makeup.jump()
+
+    def _switch_render(
+        self,
+        render: str,
+        espacial: SpatialUpmix | None,
+        fresh: tuple[chain_stages.DiffuseStage, chain_stages.BassStage] | None = None,
+    ) -> None:
+        """At a cut's bottom: the new render, its renderer, and the makeup it starts at."""
+        previous, self.render, self.espacial = self.render, render, espacial
+        if DIRECT in {previous, render} and previous != render:
+            # What `direct` does not feed belongs to the render that is leaving: the decorrelator's
+            # tails, the diffuse tail and the bass filters start empty; the EQ plays flat in direct.
+            # All of it changes here, with the output at zero.
+            self._cola_filtro = {n: np.zeros_like(c) for n, c in self._cola_filtro.items()}
+            if fresh is not None:
+                self._difusion, self._graves = fresh
+            if self.ecualizar:
+                self._cambiar_taps()
+        if self.on_render_switch is not None:
+            self._makeup.target_db = self.on_render_switch(render)
 
     @property
     def extraer_ambiente_activo(self) -> bool:
@@ -695,6 +776,7 @@ class Motor:
             self._ganancia[p.nombre] = 10 ** (p.ganancia_db / 20)
         self._mezcla_ambiente.jump()
         self._compensacion.jump()
+        self._makeup.jump()
         for nombre, objetivo in self.retardos_efectivos_ms().items():
             self._lineas[nombre].saltar_a(objetivo)
 
@@ -714,7 +796,7 @@ class Motor:
         """La curva que suena: la guardada, con el tope de `eq.max_boost_db` aplicado al leerla
         (la guardada no se toca: bajar el tope y volver a subirlo la recupera)."""
         curva = parlante.ecualizacion_db
-        if curva is None or not self.ecualizacion_activa:
+        if curva is None or not self.ecualizacion_activa or self.render == DIRECT:
             return None
         tope = self._cadena.param("eq", "max_boost_db")
         if max(curva) > tope:
@@ -773,7 +855,11 @@ class Motor:
         El de Haas se aplica **en proporción a cuánto ambiente lleva** el parlante: un
         parlante que solo reproduce el directo no debe alejarse, y uno que solo lleva
         ambiente se retrasa el valor completo.
+
+        `direct` has no ambience: only the calibration's delay.
         """
+        if self.render == DIRECT:
+            return {p.nombre: p.retardo_ms for p in self.instalacion.parlantes}
         return {
             p.nombre: p.retardo_ms + p.ambiente * self.instalacion.retardo_traseros_ms
             for p in self.instalacion.parlantes
@@ -811,15 +897,20 @@ class Motor:
         envolvente, saltar = self._corte.block(n)
         self.volumen_del_bloque_db = self._volumen.block_db(n)
         salida_global = 10 ** (self.volumen_del_bloque_db / 20) * envolvente
-        compensacion = self._compensacion.block(n)
+        self.comparison_block_db = self._compensacion.block_db(n)
+        compensacion = 10 ** (self.comparison_block_db / 20)
         if not (isinstance(compensacion, float) and compensacion == 1.0):
             salida_global = salida_global * compensacion
+        self.render_makeup_block_db = self._makeup.block_db(n)
+        if not (isinstance(self.render_makeup_block_db, float) and self.render_makeup_block_db == 0.0):
+            salida_global = salida_global * 10 ** (self.render_makeup_block_db / 20)
+        directo_puro = self.render == DIRECT and canales is None
         # El cruce de graves: lo bajo del centro para el parlante de graves, atrasado como su
         # propia señal por el decorrelador (`chain_stages.py`).
         atraso = (
             round(self._cadena.param("decorrelate", "mean_ms") * self.sr / 1000) if self.decorrelacion_activa else 0
         )
-        graves = self._graves.feed(izq_d, der_d, atraso) if canales is None else None
+        graves = self._graves.feed(izq_d, der_d, atraso) if canales is None and not directo_puro else None
         sonda = self.sonda if self.sonda is not None and self.sonda.active else None
         if sonda is not None:
             sonda.begin(n)
@@ -838,6 +929,11 @@ class Motor:
                 given = canales.get(p.nombre)
                 x = np.zeros(n) if given is None or len(given) != n else np.asarray(given, dtype=float)
                 mezcla_propia = x
+            elif directo_puro:
+                # Pure aligned stereo: the constant-power pan of L/R and nothing else of the chain.
+                angulo = (pan + 1) * (np.pi / 4)
+                x = np.cos(angulo) * izq_d + np.sin(angulo) * der_d
+                mezcla_propia = x
             elif espacial is not None:
                 # Spatial: the direct part placed and left alone; only the ambience is decorrelated
                 # (spec 2026-10-04 §3). The decorrelator's tail is the ambience's.
@@ -854,14 +950,15 @@ class Motor:
                 decorrelado = self._convolucionar(p.nombre, x)
                 if self.decorrelacion_activa:
                     x = decorrelado
-            if self._difusion.active and canales is None:
+            if self._difusion.active and canales is None and not directo_puro:
                 x = self._difusion.process(p.nombre, x, mezcla_propia)
             if graves is not None:
                 x = self._graves.before_delay(p.nombre, x, graves)
             x = self._lineas[p.nombre].procesar(x)
             if self.ecualizar:
                 x = self._ecualizador[p.nombre].process(x)
-            x = self._graves.process(p.nombre, x)
+            if not directo_puro:
+                x = self._graves.process(p.nombre, x)
             activo = self._activo[p.nombre]
             activo.target = 0.0 if p.nombre in self.silenciados else 1.0
             x = x * self._rampa_de_ganancia(p.nombre, p.ganancia_db, n) * salida_global * activo.block(n)

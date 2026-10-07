@@ -86,6 +86,7 @@ from aurasync.outputs import output_kind
 from aurasync.presets import PresetChainStore, PresetStore, read_lenient, write_atomic
 from aurasync.probe_ring import RingError as ProbeRingError
 from aurasync.rejoin import RejoinPolicy
+from aurasync.render_match import RenderMatch
 from aurasync.session import AudioSession, SessionError, SessionOptions
 from aurasync.snapshot import build_snapshot
 from aurasync.sync_estimator import SyncEstimator
@@ -475,6 +476,12 @@ class Service:
             # digital volume is then 0 dB). The monitor follows it in both (monitor.Levels).
             volume=lambda: self.settings.volume_db,
         )
+        self.render_match = RenderMatch()
+        """Every render at `classic`'s loudness (render_match.py, spec 2026-10-05 §9): one per
+        process, so each render's makeup outlives a session."""
+        # A blind A/B moves its own compensation live and compares presets: nothing is learned
+        # meanwhile, and the renders stay at their remembered makeups (review 2026-10-06).
+        self.render_match.hold_while = lambda: self.ab is not None
         self.engine_wanted = backend.wanted(engine)
         """The engine asked for (`service.json`, `AURASYNC_ENGINE`, `engine_set`); `state.engine`
         says which one reads and why it differs."""
@@ -657,7 +664,7 @@ class Service:
             self._quality_at = now
             pct = motor.uso_limitador_pct() if hasattr(motor, "uso_limitador_pct") else {}
             digital = getattr(motor, "volumen_db", None)
-            self.quality = meter.summary(pct, digital)
+            self.quality = {**meter.summary(pct, digital), "render_match": self.render_match.view()}
             self._ab_measure(meter)
 
     def _note_order(self, op: str, seconds: float) -> None:
@@ -778,12 +785,17 @@ class Service:
         except ValueError as exc:
             raise ContractError("conflict", str(exc)) from exc
         motor.silenciados = s.muted
+        if hasattr(motor, "jump_render_makeup"):
+            # Before audio flows: the motor starts at its render's makeup and asks at each switch.
+            self.render_match.bind(motor)
         # No audio flows yet: the engine is chosen here, not at a cut.
         self._apply_engine()
         if self.bt_volume.active and hasattr(motor, "saltar_volumen"):
             # The speakers carry the volume: the digital one starts at 0 dB.
             motor.saltar_volumen(0.0)
         session = self.session_factory(installation, motor, options, self._session_log)
+        if hasattr(motor, "jump_render_makeup"):
+            session.render_match = self.render_match
         if hasattr(session, "bt_volumes"):
             # A simulated room applies the speakers' volume (`simulated.py`).
             session.bt_volumes = self.bt_volume.backend

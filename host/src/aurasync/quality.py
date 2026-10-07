@@ -163,6 +163,32 @@ class QualityMeter:
         meter = next(iter(self.outputs.values()), None)
         return self._sum(meter._short_steps) if meter is not None else -math.inf  # noqa: SLF001
 
+    # -- what the render's loudness match reads (render_match.py) ------------------------------
+
+    @property
+    def steps_total(self) -> int:
+        """100 ms steps measured so far (the same on the input and on every output)."""
+        return self.channels[0].steps_total
+
+    @property
+    def step_samples(self) -> int:
+        return self.channels[0]._step_n  # noqa: SLF001
+
+    @property
+    def short_steps(self) -> int:
+        return self.channels[0]._short_steps  # noqa: SLF001
+
+    def net_lu(self, steps: int) -> float:
+        """The outputs' summed loudness minus the input's over the last `steps` steps (-inf/nan in
+        silence): the window can start after a cut, where `net_gain_lu`'s 3 s cannot."""
+        out, inp = self._sum(steps), self._sum(steps, self.channels)
+        return out - inp if math.isfinite(out) and math.isfinite(inp) else -math.inf
+
+    @property
+    def input_momentary(self) -> float:
+        """The input's momentary loudness (400 ms), before the volume: what decides a pause."""
+        return self._sum(self.channels[0]._momentary_steps, self.channels)  # noqa: SLF001
+
     @property
     def outputs_momentary(self) -> float:
         meter = next(iter(self.outputs.values()), None)

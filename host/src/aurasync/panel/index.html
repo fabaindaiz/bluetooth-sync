@@ -41,10 +41,11 @@
         </select>
         <select id="source-app" class="input min-h-9 max-w-[9rem] py-0.5 text-xs sm:text-sm" aria-label="Aplicación" hidden></select>
         <!-- El modo, a la vista en todas las pestañas (antes solo en Parlantes → Espacial y en Cadena; probes/18). -->
-        <select id="now-render" data-render-quick class="input min-h-9 max-w-[11rem] flex-1 py-0.5 text-xs sm:min-h-10 sm:max-w-none sm:text-sm" aria-label="Cómo se reparte el sonido entre los parlantes" title="Clásico: una mezcla por parlante · Espacial: cada instrumento en su lado · Frente intacto: el estéreo adelante y el ambiente alrededor">
+        <select id="now-render" data-render-quick class="input min-h-9 max-w-[11rem] flex-1 py-0.5 text-xs sm:min-h-10 sm:max-w-none sm:text-sm" aria-label="Cómo se reparte el sonido entre los parlantes" title="Clásico: una mezcla por parlante · Espacial: cada instrumento en su lado · Frente intacto: el estéreo adelante y el ambiente alrededor · Directo: estéreo puro alineado, sin efectos, mismo volumen">
           <option value="classic">Modo: clásico</option>
           <option value="spatial">Modo: espacial</option>
           <option value="front">Modo: frente intacto</option>
+          <option value="direct">Modo: directo</option>
         </select>
         <input id="source-file" type="text" autocomplete="off" placeholder="/home/…/tema.wav" class="input min-h-9 max-w-[12rem] py-0.5 text-xs sm:text-sm" aria-label="Ruta del archivo WAV" hidden>
         <button type="button" id="chip-quality" class="chip" title="Cortes del audio: tocá para ver cuándo y por qué">cortes —</button>
@@ -283,6 +284,7 @@
             <option value="classic">Clásico</option>
             <option value="spatial">Espacial</option>
             <option value="front">Frente intacto</option>
+            <option value="direct">Directo</option>
           </select>
         </label>
         <label class="field"><span>Carácter (ubicación ↔ envolvimiento)</span>
@@ -290,6 +292,7 @@
         </label>
         <button type="button" id="spatial-all-principal" class="btn btn-ghost">Todos principales</button>
       </div>
+      <p id="spatial-render-note" class="muted small mt-2" hidden></p>
       <ul id="spatial-speakers" class="mt-2 grid gap-1"></ul>
       <div id="spatial-room" class="mt-2"></div>
       <details id="spatial-explain" class="mt-3">

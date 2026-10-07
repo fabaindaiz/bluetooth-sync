@@ -38,8 +38,8 @@ DOCS: dict[str, Doc] = {
     "render": Doc(
         "render",
         "Modo",
-        "Clásico (como hasta ahora), espacial (cada instrumento en su ángulo, el ambiente aparte) o frente "
-        "intacto (el estéreo adelante, el ambiente alrededor).",
+        "Clásico (como hasta ahora), espacial (cada instrumento en su ángulo, el ambiente aparte), frente "
+        "intacto (el estéreo adelante, el ambiente alrededor) o directo (estéreo puro alineado, sin efectos).",
         _STAGE.help + " " + _APPLY,
         "classic",
         "Es el sonido de siempre: el espacial se vuelve el de fábrica solo si gana el A/B ciego 8 de 10.",
@@ -51,6 +51,8 @@ DOCS: dict[str, Doc] = {
             "front": "Adelante, el estéreo tal cual: nunca suena peor que el estéreo solo. Atrás y a los "
             "costados, solo el ambiente de la grabación, más fuerte y un poco tarde: la sala te rodea sin "
             "mover a los instrumentos.",
+            "direct": "Estéreo puro alineado: cada parlante toca su lado de L/R, sin ningún efecto, al mismo "
+            "volumen que el clásico. Es el «antes» para comparar qué agrega el proceso.",
         },
     ),
     "character": Doc(
@@ -243,6 +245,26 @@ def classic_metrics(ring: dict[str, tuple[float | None, str]], seed: int = 0) ->
     }
 
 
+def direct_metrics(ring: dict[str, tuple[float | None, str]], seed: int = 0) -> dict[str, float]:
+    """The same two numbers for `direct`: each speaker its side of L/R by its pan, at constant
+    power, and no ambience at all (motor.py)."""
+    sig = _signals(seed)
+    places = {n: control.role_from_angle(a) if a is not None else (0.0, 0.55) for n, (a, _) in ring.items()}
+    skip = SR // 4
+
+    def mix(left, right):
+        out = {}
+        for n, (pan, _amb) in places.items():
+            theta = (pan + 1) * np.pi / 4
+            x = np.cos(theta) * left + np.sin(theta) * right
+            out[n] = float(x[skip:] @ x[skip:])
+        return out
+
+    energies = [mix(*sig["left"]), mix(*sig["right"])]
+    principals = sorted(n for n, (a, k) in ring.items() if k == "principal" and a is not None)
+    return {"separation_db": round(_separation(energies, principals), 2), "ambient_pct": 0.0}
+
+
 _CATEGORIES = [{"x": 0, "label": "ubicación (dB)"}, {"x": 1, "label": "ambiente (%)"}]
 
 
@@ -289,6 +311,7 @@ def figure(name: str, values: chain.ChainValues, ring: dict[str, tuple[float | N
                     "current" if render == "front" else "other",
                     metrics(dataclasses.replace(current, front_intact=True), ring),
                 ),
+                ("directo", "current" if render == "direct" else "other", direct_metrics(ring)),
             ],
             CAPTION,
         )

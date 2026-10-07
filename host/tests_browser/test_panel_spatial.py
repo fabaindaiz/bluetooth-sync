@@ -1,6 +1,7 @@
 """The panel's "Espacial" card: principal/ambient per speaker, the spatial mode and its knobs
 explained, the room from above, and the `auto` layout (spec 2026-10-04 §5)."""
 
+import re
 import time
 
 from playwright.sync_api import Page, expect
@@ -79,3 +80,25 @@ def test_auto_is_a_layout(page: Page, svc: Running):
     expect(page.locator("body[data-ready='1']")).to_be_attached()
     assert page.evaluate("(s) => window.aurasyncShow(s)", '[data-card="room"]')
     expect(page.locator('[data-room-layout="auto"]')).to_contain_text("Automático")
+
+
+def test_direct_is_chosen_here_and_shows_its_makeup(page: Page, svc: Running):
+    """`direct` (spec 2026-10-05 §9): pure aligned stereo, at classic's loudness. Its one-line
+    description, and the makeup when it is not zero (render_match.py)."""
+    _open(page, svc)
+    expect(page.locator('#now-render option[value="direct"]')).to_have_count(1)
+    svc.command("start")
+    # As if `direct` had been heard before: it comes back at its remembered makeup. Set on the
+    # engine thread, the only one that writes the match.
+    done = []
+    svc.service.on_engine(lambda: (svc.service.render_match.match.makeup.update(direct=2.0), done.append(1)))
+    _wait(lambda: done)
+    page.locator("#spatial-render").select_option("direct")
+    _wait(lambda: svc.service.settings.chain.algorithm("spatial") == "direct")
+    note = page.locator("#spatial-render-note")
+    expect(note).to_contain_text("Directo — estéreo puro alineado: sin efectos, mismo volumen.")
+    expect(note).to_contain_text(
+        re.compile(r"Igualación de volumen con el clásico: [+\u2212]\d+\.\d dB"), timeout=10_000
+    )
+    page.locator("#spatial-render").select_option("classic")
+    expect(note).to_be_hidden(timeout=10_000)

@@ -80,7 +80,8 @@ class SpatialParams:
 
 HALF_TURN = 180.0
 SPATIAL_RENDERS = frozenset({"spatial", "front"})
-"""The `spatial` stage's algorithms that this renderer plays (the other is `classic`)."""
+"""The `spatial` stage's algorithms that this renderer plays (the others, `classic` and `direct`, are
+numpy paths in the motor and never reach it nor its Rust port)."""
 
 FRONT_AMBIENCE_BOOST_DB = 6.0
 """In "frente intacto" the ambience is added on top of the full stereo, not taken out of it, and a

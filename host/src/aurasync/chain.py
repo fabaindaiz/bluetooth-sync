@@ -391,6 +391,16 @@ _SPATIAL_STAGE = Stage(
             _SPATIAL_PARAMS,
             cost="~3 ms por bloque con 3 parlantes",
         ),
+        Algorithm(
+            "direct",
+            "Directo",
+            "Estéreo puro alineado: sin efectos, mismo volumen.",
+            "Cada parlante toca su lado de L/R según su pan, a potencia constante. Sin extraer ambiente, "
+            "sin decorrelar, sin ecualización, sin graves, sin cola difusa, sin Haas y sin upmix; quedan "
+            "la alineación, la ganancia de cada parlante, el silencio, el volumen y el limitador. Suena "
+            "a la misma sonoridad que el clásico (una ganancia de igualación, spec 2026-10-05 §9): sirve "
+            "para comparar «antes y después».",
+        ),
     ),
     "classic",
 )
@@ -700,7 +710,8 @@ _BASS_STAGE = Stage(
     "Graves",
     "Protege a los parlantes chicos de los graves que no pueden dar, o se los pasa a uno grande.",
     "El Go 4 baja los graves por su cuenta pasado el 50 % de volumen (REPORTADO). Quitarle lo "
-    "que no puede reproducir le deja margen para el resto.",
+    "que no puede reproducir le deja margen para el resto. El modo espacial «Directo» no pasa por "
+    "esta etapa; el limitador lo sigue acotando.",
     (
         Algorithm("off", "Sin tocar", "Todos reciben todos los graves.", ""),
         Algorithm(
@@ -1404,6 +1415,9 @@ def pending(values: ChainValues) -> dict[str, bool]:
 
 def algorithm_latency_ms(values: ChainValues, stage_id: str) -> float:
     """The latency the stage's algorithm in use adds, with its knobs (equal on every speaker)."""
+    if stage_id == "decorrelate" and values.algorithm("spatial") == "direct":
+        # `direct` does not go through the decorrelator: its group delay is not there.
+        return 0.0
     algo = stage(stage_id).algorithm(values.algorithm(stage_id))
     if algo.latency_param:
         return float(values.param(stage_id, algo.latency_param))

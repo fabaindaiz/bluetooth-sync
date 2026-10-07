@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from aurasync.config import Instalacion
     from aurasync.motor import Motor
     from aurasync.outputs import PlayerLike
+    from aurasync.render_match import RenderMatch
 
 
 ROUTING_CHECK_S = 2.0
@@ -472,6 +473,9 @@ class AudioSession:
         self._check_until = 0.0
         self.monitor = None
         """The headphone monitor (monitor.MonitorOutput), not synchronised with the speakers."""
+        self.render_match: RenderMatch | None = None
+        """Every render at `classic`'s loudness (render_match.py): the service's, set before
+        `open`. None: no makeup moves (the motor keeps the one it has)."""
         self.multichannel: MultichannelFile | None = None
         """The multichannel render the engine plays while the source is `multichannel`."""
         self.probe_ring = ProbeRing([p.nombre for p in installation.parlantes], options.rate)
@@ -679,6 +683,10 @@ class AudioSession:
             self._telemetry_failures = getattr(self, "_telemetry_failures", 0) + 1
             if self._telemetry_failures == 1:
                 self.log("telemetría", motivo="falló el registro de métricas; el audio sigue")
+        self._match_render(
+            calibrating=self.calibration is not None and self.calibration.state == "running",
+            multichannel=channels is not None,
+        )
         gone = self.outputs.refresh()
         for name in gone:
             self.cuts.add("lost", name, "el stream hacia el parlante murió")
@@ -710,6 +718,23 @@ class AudioSession:
             self.enable_recalibration(self.microphone)
         if self.loop is not None and (self.calibration is None or self.calibration.state != "running"):
             self._recalibration_step(blocks)
+
+    # -- the render's loudness match (render_match.py) ------------------------------------
+
+    def _match_render(self, *, calibrating: bool, multichannel: bool) -> None:
+        """After the quality meter took the block. Frozen while a calibration plays its stimulus
+        (the speakers do not play the render); a multichannel source (made elsewhere) plays with no
+        makeup.
+        A failure never stops the audio: the makeup stays where it is."""
+        match = self.render_match
+        if match is None or not hasattr(self.motor, "render"):
+            return
+        try:
+            match.after_block(self.motor, self.quality, self.options.block, hold=calibrating, bypass=multichannel)
+        except Exception:  # noqa: BLE001 - a side channel: the speakers go on at the makeup they have
+            self._render_match_failures = getattr(self, "_render_match_failures", 0) + 1
+            if self._render_match_failures == 1:
+                self.log("igualación de sonoridad", motivo="falló; el audio sigue con la ganancia que tenía")
 
     # -- the headphone monitor (monitor.py) ----------------------------------------------
 

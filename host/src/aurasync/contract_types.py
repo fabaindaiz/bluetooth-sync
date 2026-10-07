@@ -158,6 +158,23 @@ class QualitySum(TypedDict):
     s: float | None
 
 
+class RenderMatchView(TypedDict):
+    """`quality.render_match`: every render at `classic`'s loudness (render_match.py, spec
+    2026-10-05-virtual-speakers-and-hot-join §9). `makeup_db` is the gain the playing render gets
+    (0 for `classic`, the reference); `status` is `reference` while `classic` plays, else the
+    match's (`measuring`, `locked`, `frozen`: silence, a cut or a calibration; `unmeasured`: see
+    `reason`, `no_reference` until `classic` was heard, `reference_stale` when it was heard with
+    other speakers sounding). `reference_lu` is `classic`'s net loudness without the volume, and
+    `makeups_db` each other render's remembered makeup. Additive, 2026-10-06."""
+
+    render: str | None
+    makeup_db: float
+    status: Literal["reference", "measuring", "locked", "frozen", "unmeasured"]
+    reason: Literal["no_reference", "reference_stale"] | None
+    reference_lu: float | None
+    makeups_db: dict[str, float]
+
+
 class QualityEvent(TypedDict):
     input: QualityInput
     outputs: dict[str, QualityOutput]
@@ -169,6 +186,7 @@ class QualityEvent(TypedDict):
     tp_max: float | None
     limiter_pct_max: float | None
     cost_ms: float
+    render_match: RenderMatchView
 
 
 # -- the radio (the stream's `radio` event and `state.radio`, spec §3) -------------------
@@ -336,6 +354,7 @@ SHAPES: list[type] = [
     QualityInput,
     QualityOutput,
     QualitySum,
+    RenderMatchView,
     QualityEvent,
     RadioSpeaker,
     RadioEvent,

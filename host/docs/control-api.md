@@ -454,6 +454,8 @@ loaded.
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain"}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "limiter", "params": {"release_ms": 400}}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "ambience", "speaker": "JBL Go 4 Red", "params": {"pan": -0.5}}'
+# Pure aligned stereo (no effects, at classic's loudness: `quality.render_match`), through the cut.
+curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "spatial", "algorithm": "direct"}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_reset", "stage": "limiter"}'
 ```
 
@@ -489,7 +491,9 @@ Mac). The stream's `quality` event and `state.quality` (null without a session):
  "sum": {"m": -22.8, "s": -23.0},
  "net_gain_lu": 0.4, "chain_gain_lu": 0.4,
  "flattening": false, "flattening_outputs": [],
- "tp_max": -6.0, "limiter_pct_max": 0.0, "cost_ms": 0.32}
+ "tp_max": -6.0, "limiter_pct_max": 0.0, "cost_ms": 0.32,
+ "render_match": {"render": "direct", "makeup_db": -3.6, "status": "locked", "reason": null,
+                  "reference_lu": -0.9, "makeups_db": {"direct": -3.6, "spatial": 0.8}}}
 ```
 
 - `m`, `s`, `i`: momentary (400 ms), short-term (3 s) and integrated (gated) loudness, LUFS;
@@ -501,6 +505,28 @@ Mac). The stream's `quality` event and `state.quality` (null without a session):
   With the panel at 0 dB, the defaults and a wide stereo mix it is 0 ± 1 LU; a centred mix
   reads up to +1.76 LU (three speakers, each about the mono sum), and the ambience mix moves it.
 - `flattening`: an output's PSR is more than 1 dB under the input's while both carry music.
+- `render_match` (additive, 2026-10-06; `render_match.py`, spec
+  2026-10-05-virtual-speakers-and-hot-join §9): every render of the `spatial` stage at
+  `classic`'s loudness, so that switching between `direct` (pure aligned stereo) and the
+  processed renders keeps the volume equal on average (the net loudness against the remembered
+  `classic` reference: the two are measured at different moments of the music, so a passage can
+  still differ). `render` is the render playing; `makeup_db` the
+  gain it gets (an output gain with a 30 dB/s ramp, before the limiter; `classic`, the
+  reference, never has one). `reference_lu` is `classic`'s net loudness without the volume and
+  the makeup (the speakers' summed short-term loudness minus the input's), measured while it
+  plays and remembered; `makeups_db` each other render's remembered makeup, which it starts at
+  when it comes back (applied at the cut's bottom: a switch never jumps after the first visit).
+  `status`: `reference` while `classic` plays; `measuring` (the first visit corrects 50 % of
+  the error per second until it locks, then 10 %/s, as the monitor's match); `locked` (within
+  0.5 LU); `frozen` (the input is silent, a cut, a calibration, a blind A/B running, a
+  multichannel source; the window starts 0.5 s after a cut ends); `unmeasured` with `reason`
+  `no_reference` (`classic` not heard yet in this process) or `reference_stale` (it was heard with
+  other speakers sounding: muting one under `direct` would otherwise turn the others up). Capped
+  at ±12 dB. The volume and the A/B's compensation are taken out of what it measures. A
+  multichannel source plays with no makeup (it is not a render of this stage). Other speakers (one
+  joined or left) forget every makeup and the reference. The makeups live for the service's
+  process, not on disk. While it plays, `sum`, `net_gain_lu` and `chain_gain_lu` include the
+  makeup (they are what the speakers get).
 
 ### The radio
 
@@ -579,6 +605,12 @@ reply of `ab_stop`) carry:
 ```
 
 `loudness_lu` is what is heard (compensation included); `diff` is `b - a`.
+
+**Renders are pre-matched** (`quality.render_match`, 2026-10-06): each render of the `spatial`
+stage plays at its remembered makeup, so an A/B between presets that differ in render compares
+them at matched loudness even with `match_loudness: false`. While the A/B runs the render match
+learns nothing (its makeups stay as they are), and it never takes the A/B's compensation for a
+difference between renders.
 
 ### Open streams
 
