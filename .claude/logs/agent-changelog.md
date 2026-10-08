@@ -370,6 +370,41 @@ todavía.
     el orden para retomarlos;
   - la próxima sesión toma el panel web y el motor en Rust en `HP-O16`;
   - el CLAUDE.md se puso al día.
+- **2026-10-08, la ronda del motor Rust** (rama `rust-r7-r10-r11`, sin commits todavía). El usuario pidió
+  verificar si el motor Rust estaba listo:
+  - tenía 3 de 13 etapas;
+  - la suite con Rust activo pasaba 1510 de 1514, con 4 fallos que son de los tests;
+  - con numpy, este equipo no llegaba a 20× tiempo real con todo encendido (experimento 20 §4).
+
+  Después pidió arreglar el defecto de construcción y portar las tres etapas que más pesan. Se hizo con
+  subagentes, una revisión por tarea y una revisión final con el modelo más capaz:
+  - **el arreglo:** `backend.built` hace que una etapa que falla al construirse o configurarse vuelva a
+    numpy;
+  - **la tarea 7:** `StreamingFIR` y `PartitionedFIR` pasan a Rust dentro de las clases de numpy, así que el
+    EQ, el crossover, la protección de graves, la cola difusa y el EQ de calibración pasan a Rust;
+  - **la tarea 10:** en el crossover no quedó nada más que portar; además se arregló un desperdicio en
+    `VirtualBass`;
+  - **la tarea 11:** `VirtualBass` pasa entero a Rust;
+  - **la revisión final:** documentos contradictorios, controles de propiedad que faltaban, una llamada a un
+    objeto Rust roto, un log engañoso y la versión en `capabilities`, todo corregido.
+- **Medido** (experimento 20 §5–§7): la cadena con todo encendido pasa de 14× a 32× tiempo real; por defecto,
+  de 4,8 a 1,33 ms por bloque. `check.sh` dio ok con 1830 tests. La extensión de producción se recompiló.
+- **En paralelo, sin carga de CPU:**
+  - el plan del grupo 1 de la auditoría, con las respuestas del usuario
+    (`docs/superpowers/plans/2026-10-08-panel-audit-group-1.md`);
+  - el SUS en español, copiado con su cita (research/10 §10.1);
+  - la spec del modo simple, especificada hasta el contrato (§7.1–§7.3) y lista para aprobar.
+- **Qué salió mal:**
+  - el push del 2026-10-07 lo bloqueó el permiso automático;
+  - `origin/main` había recibido un commit desde `PC-Ryzen5`, así que se rebasó;
+  - las instantáneas del árbol colgaban todas de `HEAD` y no formaban cadena: se arregló el script;
+  - la tarea 10 siguió despertándose después de cerrada y hubo que detenerla.
+- **Pendiente:**
+  - el commit de la rama (lo decide el usuario);
+  - escuchar el motor Rust con los audífonos y hacer el A/B;
+  - las etapas 8, 9 y 12–15 y el `RustMotor`;
+  - los menores diferidos del ledger;
+  - el grupo 1 del panel en un worktree aparte.
 
 ---
 
