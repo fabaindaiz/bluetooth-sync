@@ -1,0 +1,3474 @@
+{
+ "thirds_hz": [
+  49.60628287400625,
+  62.5,
+  78.74506561842958,
+  99.21256574801247,
+  125.0,
+  157.49013123685916,
+  198.42513149602493,
+  250.0,
+  314.9802624737183,
+  396.8502629920499,
+  500.0,
+  629.9605249474366,
+  793.7005259840998,
+  1000.0,
+  1259.9210498948732,
+  1587.4010519681995,
+  2000.0,
+  2519.8420997897465,
+  3174.8021039363994,
+  4000.0,
+  5039.684199579493,
+  6349.604207872798,
+  8000.0,
+  10079.368399158986,
+  12699.208415745596,
+  16000.0,
+  20158.73679831797
+ ],
+ "captures": {
+  "ensayo-agudos-a": {
+   "seconds": 20.6,
+   "lag_ms": 416.2,
+   "in_dbfs": -16.21,
+   "out_dbfs": -21.3,
+   "gain_db": [
+    -17.94,
+    -12.62,
+    -6.33,
+    -1.26,
+    1.38,
+    -2.08,
+    -1.35,
+    -2.67,
+    -4.42,
+    -4.93,
+    -5.89,
+    -5.0,
+    -6.93,
+    -4.59,
+    -4.48,
+    -4.41,
+    -4.24,
+    -4.48,
+    -4.43,
+    -4.11,
+    -2.65,
+    -1.81,
+    -0.67,
+    0.18,
+    -0.95,
+    -1.39,
+    -0.98
+   ],
+   "h1_db": [
+    -18.27,
+    -12.74,
+    -6.87,
+    -3.92,
+    -2.69,
+    -3.04,
+    -4.13,
+    -5.32,
+    -8.68,
+    -12.21,
+    -14.81,
+    -15.34,
+    -18.74,
+    -13.12,
+    -14.44,
+    -12.21,
+    -26.44,
+    -19.97,
+    -22.23,
+    -54.93,
+    -24.07,
+    -28.29,
+    -23.58,
+    -38.68,
+    -26.93,
+    -40.75,
+    -34.44
+   ],
+   "coherence": [
+    0.927,
+    0.974,
+    0.883,
+    0.543,
+    0.392,
+    0.8,
+    0.527,
+    0.544,
+    0.375,
+    0.187,
+    0.128,
+    0.093,
+    0.066,
+    0.14,
+    0.101,
+    0.166,
+    0.006,
+    0.028,
+    0.017,
+    0.0,
+    0.007,
+    0.002,
+    0.005,
+    0.0,
+    0.003,
+    0.0,
+    0.0
+   ]
+  },
+  "ensayo-agudos-b": {
+   "seconds": 20.6,
+   "lag_ms": 416.1,
+   "in_dbfs": -17.1,
+   "out_dbfs": -22.48,
+   "gain_db": [
+    -18.03,
+    -12.73,
+    -6.37,
+    -1.47,
+    1.25,
+    -2.23,
+    -1.5,
+    -2.28,
+    -4.81,
+    -4.58,
+    -5.7,
+    -5.74,
+    -5.91,
+    -5.25,
+    -4.59,
+    -4.12,
+    -4.09,
+    -4.15,
+    -4.22,
+    -3.84,
+    -2.8,
+    -2.28,
+    -4.82,
+    -4.78,
+    -5.85,
+    -6.67,
+    -6.35
+   ],
+   "h1_db": [
+    -18.39,
+    -12.84,
+    -6.9,
+    -4.43,
+    -3.31,
+    -3.3,
+    -4.35,
+    -4.93,
+    -9.43,
+    -11.75,
+    -15.62,
+    -14.74,
+    -32.88,
+    -10.96,
+    -16.61,
+    -12.07,
+    -25.0,
+    -22.35,
+    -20.7,
+    -33.35,
+    -23.74,
+    -32.63,
+    -29.61,
+    -43.63,
+    -33.04,
+    -43.91,
+    -39.13
+   ],
+   "coherence": [
+    0.922,
+    0.976,
+    0.885,
+    0.506,
+    0.35,
+    0.782,
+    0.519,
+    0.544,
+    0.346,
+    0.192,
+    0.102,
+    0.126,
+    0.002,
+    0.269,
+    0.063,
+    0.16,
+    0.008,
+    0.015,
+    0.023,
+    0.001,
+    0.008,
+    0.001,
+    0.003,
+    0.0,
+    0.002,
+    0.0,
+    0.001
+   ]
+  },
+  "ensayo-eq-a": {
+   "seconds": 20.6,
+   "lag_ms": 326.2,
+   "in_dbfs": -20.22,
+   "out_dbfs": -25.87,
+   "gain_db": [
+    -17.06,
+    -12.76,
+    -7.93,
+    -4.32,
+    -1.69,
+    -3.07,
+    -3.74,
+    -2.99,
+    -6.49,
+    -6.15,
+    -6.13,
+    -5.36,
+    -7.02,
+    -5.37,
+    -6.44,
+    -6.17,
+    -6.03,
+    -7.29,
+    -7.06,
+    -6.32,
+    -5.02,
+    -3.73,
+    -2.08,
+    -2.46,
+    -3.01,
+    -3.02,
+    -2.63
+   ],
+   "h1_db": [
+    -25.6,
+    -21.87,
+    -25.67,
+    -16.03,
+    -17.94,
+    -21.23,
+    -21.86,
+    -19.57,
+    -23.47,
+    -27.55,
+    -26.29,
+    -21.95,
+    -35.71,
+    -32.25,
+    -31.58,
+    -32.95,
+    -43.44,
+    -36.8,
+    -38.05,
+    -39.83,
+    -44.22,
+    -42.42,
+    -33.86,
+    -46.9,
+    -41.29,
+    -43.44,
+    -36.63
+   ],
+   "coherence": [
+    0.14,
+    0.123,
+    0.017,
+    0.067,
+    0.024,
+    0.015,
+    0.015,
+    0.022,
+    0.02,
+    0.007,
+    0.01,
+    0.022,
+    0.001,
+    0.002,
+    0.003,
+    0.002,
+    0.0,
+    0.001,
+    0.001,
+    0.0,
+    0.0,
+    0.0,
+    0.001,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "ensayo-eq-a-repeticion": {
+   "seconds": 20.6,
+   "lag_ms": 411.4,
+   "in_dbfs": -46.34,
+   "out_dbfs": -50.49,
+   "gain_db": [
+    -15.78,
+    -11.29,
+    -6.65,
+    -3.17,
+    -0.56,
+    -1.47,
+    -2.17,
+    -4.01,
+    -6.27,
+    -6.44,
+    -6.0,
+    -6.37,
+    -5.83,
+    -6.8,
+    -6.77,
+    -7.26,
+    -6.54,
+    -6.85,
+    -6.55,
+    -6.16,
+    -4.98,
+    -3.07,
+    -1.67,
+    -1.27,
+    -1.58,
+    -1.63,
+    -1.6
+   ],
+   "h1_db": [
+    -16.1,
+    -11.49,
+    -6.95,
+    -3.51,
+    -1.33,
+    -2.22,
+    -2.73,
+    -4.28,
+    -6.61,
+    -6.76,
+    -6.4,
+    -6.7,
+    -6.62,
+    -7.16,
+    -7.77,
+    -12.74,
+    -9.73,
+    -14.43,
+    -13.3,
+    -9.19,
+    -13.95,
+    -11.56,
+    -9.53,
+    -3.02,
+    -23.49,
+    -22.49,
+    -4.84
+   ],
+   "coherence": [
+    0.928,
+    0.954,
+    0.933,
+    0.925,
+    0.836,
+    0.842,
+    0.88,
+    0.94,
+    0.924,
+    0.929,
+    0.911,
+    0.927,
+    0.834,
+    0.921,
+    0.794,
+    0.283,
+    0.479,
+    0.175,
+    0.211,
+    0.498,
+    0.127,
+    0.141,
+    0.164,
+    0.668,
+    0.006,
+    0.008,
+    0.474
+   ]
+  },
+  "ensayo-eq-b": {
+   "seconds": 20.7,
+   "lag_ms": 288.2,
+   "in_dbfs": -16.54,
+   "out_dbfs": -18.87,
+   "gain_db": [
+    -18.51,
+    -13.07,
+    -6.6,
+    -1.15,
+    1.43,
+    -1.52,
+    0.45,
+    1.44,
+    0.54,
+    0.85,
+    0.34,
+    0.02,
+    -1.51,
+    1.41,
+    1.47,
+    1.51,
+    1.76,
+    2.03,
+    1.76,
+    1.56,
+    1.11,
+    0.43,
+    0.35,
+    0.85,
+    -0.32,
+    -0.74,
+    -0.33
+   ],
+   "h1_db": [
+    -18.87,
+    -13.38,
+    -7.21,
+    -4.46,
+    -3.61,
+    -2.59,
+    -2.04,
+    -0.8,
+    -4.29,
+    -8.29,
+    -11.35,
+    -11.2,
+    -14.65,
+    -8.48,
+    -9.95,
+    -6.62,
+    -26.46,
+    -12.51,
+    -16.02,
+    -30.72,
+    -21.4,
+    -29.91,
+    -23.87,
+    -42.52,
+    -26.75,
+    -36.95,
+    -35.98
+   ],
+   "coherence": [
+    0.92,
+    0.932,
+    0.868,
+    0.466,
+    0.313,
+    0.782,
+    0.564,
+    0.598,
+    0.329,
+    0.122,
+    0.068,
+    0.076,
+    0.049,
+    0.103,
+    0.072,
+    0.154,
+    0.002,
+    0.035,
+    0.017,
+    0.001,
+    0.006,
+    0.001,
+    0.004,
+    0.0,
+    0.002,
+    0.0,
+    0.0
+   ]
+  },
+  "ensayo-presupuesto-a": {
+   "seconds": 20.7,
+   "lag_ms": 283.2,
+   "in_dbfs": -16.63,
+   "out_dbfs": -20.75,
+   "gain_db": [
+    -17.34,
+    -11.74,
+    -5.22,
+    -0.72,
+    2.81,
+    -1.31,
+    -0.55,
+    -1.19,
+    -3.33,
+    -3.0,
+    -3.89,
+    -4.42,
+    -5.31,
+    -4.0,
+    -4.29,
+    -3.71,
+    -3.47,
+    -2.82,
+    -2.94,
+    -2.99,
+    -2.04,
+    -0.74,
+    0.61,
+    1.21,
+    0.16,
+    -0.52,
+    -0.1
+   ],
+   "h1_db": [
+    -26.49,
+    -26.76,
+    -10.68,
+    -12.16,
+    -11.79,
+    -11.8,
+    -13.21,
+    -15.46,
+    -12.1,
+    -11.49,
+    -14.96,
+    -19.13,
+    -21.31,
+    -15.74,
+    -18.75,
+    -22.14,
+    -17.75,
+    -17.42,
+    -16.84,
+    -25.76,
+    -30.02,
+    -26.14,
+    -24.53,
+    -25.42,
+    -28.22,
+    -36.6,
+    -25.71
+   ],
+   "coherence": [
+    0.121,
+    0.031,
+    0.285,
+    0.072,
+    0.035,
+    0.089,
+    0.054,
+    0.037,
+    0.133,
+    0.142,
+    0.078,
+    0.034,
+    0.025,
+    0.067,
+    0.036,
+    0.014,
+    0.037,
+    0.035,
+    0.041,
+    0.005,
+    0.002,
+    0.003,
+    0.003,
+    0.002,
+    0.001,
+    0.0,
+    0.003
+   ]
+  },
+  "ensayo-presupuesto-b": {
+   "seconds": 20.6,
+   "lag_ms": 410.4,
+   "in_dbfs": -22.15,
+   "out_dbfs": -27.32,
+   "gain_db": [
+    -17.28,
+    -13.36,
+    -6.19,
+    0.97,
+    1.63,
+    -2.14,
+    -2.03,
+    -3.3,
+    -5.25,
+    -6.05,
+    -5.99,
+    -6.44,
+    -6.81,
+    -4.98,
+    -3.96,
+    -4.55,
+    -4.75,
+    -4.61,
+    -4.94,
+    -4.25,
+    -2.19,
+    -1.39,
+    -0.61,
+    -0.21,
+    -0.64,
+    -1.11,
+    -0.56
+   ],
+   "h1_db": [
+    -17.68,
+    -13.45,
+    -7.32,
+    -4.15,
+    -1.9,
+    -2.64,
+    -4.39,
+    -4.14,
+    -6.48,
+    -6.65,
+    -7.15,
+    -7.2,
+    -7.49,
+    -6.19,
+    -6.19,
+    -6.53,
+    -6.64,
+    -6.56,
+    -6.55,
+    -6.18,
+    -4.79,
+    -3.3,
+    -1.93,
+    -2.02,
+    -1.79,
+    -1.71,
+    -1.57
+   ],
+   "coherence": [
+    0.912,
+    0.978,
+    0.77,
+    0.307,
+    0.443,
+    0.891,
+    0.58,
+    0.823,
+    0.755,
+    0.87,
+    0.765,
+    0.838,
+    0.856,
+    0.756,
+    0.6,
+    0.634,
+    0.647,
+    0.638,
+    0.691,
+    0.641,
+    0.549,
+    0.644,
+    0.737,
+    0.659,
+    0.768,
+    0.872,
+    0.793
+   ]
+  },
+  "motor-numpy": {
+   "seconds": 20.6,
+   "lag_ms": 367.5,
+   "in_dbfs": -25.36,
+   "out_dbfs": -29.49,
+   "gain_db": [
+    -14.65,
+    -11.02,
+    -6.27,
+    -3.17,
+    -1.01,
+    -2.08,
+    -2.64,
+    -4.34,
+    -6.43,
+    -5.07,
+    -4.25,
+    -5.7,
+    -6.19,
+    -5.71,
+    -5.14,
+    -5.87,
+    -5.75,
+    -6.0,
+    -5.6,
+    -5.63,
+    -3.85,
+    -2.45,
+    -1.06,
+    -0.85,
+    -0.85,
+    -0.85,
+    -1.09
+   ],
+   "h1_db": [
+    -14.92,
+    -11.54,
+    -7.2,
+    -4.13,
+    -1.44,
+    -2.32,
+    -3.03,
+    -4.76,
+    -6.88,
+    -5.92,
+    -4.78,
+    -6.17,
+    -6.68,
+    -6.57,
+    -6.01,
+    -6.19,
+    -6.15,
+    -6.45,
+    -6.8,
+    -6.76,
+    -5.13,
+    -4.55,
+    -4.13,
+    -5.42,
+    -5.53,
+    -5.26,
+    -2.21
+   ],
+   "coherence": [
+    0.94,
+    0.888,
+    0.807,
+    0.802,
+    0.907,
+    0.946,
+    0.915,
+    0.908,
+    0.9,
+    0.823,
+    0.884,
+    0.897,
+    0.893,
+    0.82,
+    0.819,
+    0.929,
+    0.912,
+    0.902,
+    0.758,
+    0.772,
+    0.746,
+    0.617,
+    0.493,
+    0.349,
+    0.341,
+    0.362,
+    0.771
+   ]
+  },
+  "motor-rust": {
+   "seconds": 20.6,
+   "lag_ms": 410.1,
+   "in_dbfs": -28.48,
+   "out_dbfs": -32.7,
+   "gain_db": [
+    -14.87,
+    -10.93,
+    -6.34,
+    -3.53,
+    -1.88,
+    -1.84,
+    -2.64,
+    -3.95,
+    -6.95,
+    -5.05,
+    -5.4,
+    -5.64,
+    -5.76,
+    -5.72,
+    -5.39,
+    -6.12,
+    -5.71,
+    -5.82,
+    -5.82,
+    -5.68,
+    -3.72,
+    -2.44,
+    -1.0,
+    -0.77,
+    -0.87,
+    -0.73,
+    -1.04
+   ],
+   "h1_db": [
+    -15.27,
+    -11.25,
+    -7.22,
+    -4.21,
+    -2.62,
+    -2.21,
+    -2.87,
+    -4.37,
+    -7.41,
+    -5.42,
+    -6.14,
+    -5.92,
+    -6.12,
+    -6.42,
+    -6.22,
+    -6.61,
+    -6.26,
+    -6.74,
+    -7.16,
+    -7.42,
+    -6.63,
+    -7.51,
+    -9.37,
+    -12.59,
+    -9.08,
+    -9.55,
+    -2.59
+   ],
+   "coherence": [
+    0.911,
+    0.931,
+    0.818,
+    0.855,
+    0.842,
+    0.918,
+    0.947,
+    0.907,
+    0.9,
+    0.918,
+    0.844,
+    0.938,
+    0.919,
+    0.851,
+    0.826,
+    0.892,
+    0.881,
+    0.808,
+    0.735,
+    0.669,
+    0.511,
+    0.311,
+    0.146,
+    0.066,
+    0.151,
+    0.131,
+    0.699
+   ]
+  }
+ },
+ "comparisons": {
+  "ensayo-eq": {
+   "measured": [
+    -1.45,
+    -0.31,
+    1.33,
+    3.17,
+    3.12,
+    1.55,
+    4.19,
+    4.43,
+    7.03,
+    7.0,
+    6.47,
+    5.38,
+    5.51,
+    6.78,
+    7.91,
+    7.68,
+    7.79,
+    9.32,
+    8.82,
+    7.88,
+    6.13,
+    4.16,
+    2.43,
+    3.31,
+    2.69,
+    2.28,
+    2.3
+   ],
+   "expected": [
+    -6.0,
+    -6.0,
+    -6.0,
+    -6.0,
+    -6.0,
+    -4.99,
+    -3.69,
+    -2.05,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -0.0,
+    -2.04,
+    -3.35,
+    -5.0,
+    -5.0,
+    -5.0,
+    -5.0,
+    -5.0
+   ],
+   "offset_db": 7.3,
+   "shape": [
+    -8.75,
+    -7.61,
+    -5.97,
+    -4.13,
+    -4.18,
+    -5.75,
+    -3.11,
+    -2.87,
+    -0.27,
+    -0.3,
+    -0.83,
+    -1.92,
+    -1.79,
+    -0.52,
+    0.61,
+    0.38,
+    0.49,
+    2.02,
+    1.52,
+    0.58,
+    -1.17,
+    -3.14,
+    -4.87,
+    -3.99,
+    -4.61,
+    -5.02,
+    -5.0
+   ],
+   "error_db_median": 0.61,
+   "error_db_max": 2.75
+  },
+  "ensayo-presupuesto": {
+   "measured": [
+    0.06,
+    -1.62,
+    -0.97,
+    1.69,
+    -1.18,
+    -0.83,
+    -1.48,
+    -2.11,
+    -1.92,
+    -3.05,
+    -2.1,
+    -2.02,
+    -1.5,
+    -0.98,
+    0.33,
+    -0.84,
+    -1.28,
+    -1.79,
+    -2.0,
+    -1.26,
+    -0.15,
+    -0.65,
+    -1.22,
+    -1.42,
+    -0.8,
+    -0.59,
+    -0.46
+   ],
+   "expected": [
+    -0.55,
+    -0.55,
+    -0.55,
+    -0.55,
+    -0.55,
+    -0.46,
+    -0.34,
+    -0.19,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -0.19,
+    -0.31,
+    -0.46,
+    -0.46,
+    -0.46,
+    -0.46,
+    -0.46
+   ],
+   "offset_db": -1.35,
+   "shape": [
+    1.41,
+    -0.27,
+    0.38,
+    3.04,
+    0.17,
+    0.52,
+    -0.13,
+    -0.76,
+    -0.57,
+    -1.7,
+    -0.75,
+    -0.67,
+    -0.15,
+    0.37,
+    1.68,
+    0.51,
+    0.07,
+    -0.44,
+    -0.65,
+    0.09,
+    1.2,
+    0.7,
+    0.13,
+    -0.07,
+    0.55,
+    0.76,
+    0.89
+   ],
+   "error_db_median": 0.67,
+   "error_db_max": 3.59
+  },
+  "ensayo-agudos": {
+   "measured": [
+    -0.09,
+    -0.11,
+    -0.04,
+    -0.21,
+    -0.13,
+    -0.15,
+    -0.15,
+    0.39,
+    -0.39,
+    0.35,
+    0.19,
+    -0.74,
+    1.02,
+    -0.66,
+    -0.11,
+    0.29,
+    0.15,
+    0.33,
+    0.21,
+    0.27,
+    -0.15,
+    -0.47,
+    -4.15,
+    -4.96,
+    -4.9,
+    -5.28,
+    -5.37
+   ],
+   "expected": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -5.0,
+    -5.0,
+    -5.0,
+    -5.0,
+    -5.0
+   ],
+   "offset_db": 0.08,
+   "shape": [
+    -0.17,
+    -0.19,
+    -0.12,
+    -0.29,
+    -0.21,
+    -0.23,
+    -0.23,
+    0.31,
+    -0.47,
+    0.27,
+    0.11,
+    -0.82,
+    0.94,
+    -0.74,
+    -0.19,
+    0.21,
+    0.07,
+    0.25,
+    0.13,
+    0.19,
+    -0.23,
+    -0.55,
+    -4.23,
+    -5.04,
+    -4.98,
+    -5.36,
+    -5.45
+   ],
+   "error_db_median": 0.23,
+   "error_db_max": 0.94
+  },
+  "repeticion": {
+   "measured": [
+    1.28,
+    1.47,
+    1.28,
+    1.15,
+    1.13,
+    1.6,
+    1.57,
+    -1.02,
+    0.22,
+    -0.29,
+    0.13,
+    -1.01,
+    1.19,
+    -1.43,
+    -0.33,
+    -1.09,
+    -0.51,
+    0.44,
+    0.51,
+    0.16,
+    0.04,
+    0.66,
+    0.41,
+    1.19,
+    1.43,
+    1.39,
+    1.03
+   ],
+   "expected": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "offset_db": -0.23,
+   "shape": [
+    1.51,
+    1.7,
+    1.51,
+    1.38,
+    1.36,
+    1.83,
+    1.8,
+    -0.79,
+    0.45,
+    -0.06,
+    0.36,
+    -0.78,
+    1.42,
+    -1.2,
+    -0.1,
+    -0.86,
+    -0.28,
+    0.67,
+    0.74,
+    0.39,
+    0.27,
+    0.89,
+    0.64,
+    1.42,
+    1.66,
+    1.62,
+    1.26
+   ],
+   "error_db_median": 0.89,
+   "error_db_max": 1.83
+  },
+  "motor": {
+   "measured": [
+    -0.22,
+    0.09,
+    -0.07,
+    -0.36,
+    -0.87,
+    0.24,
+    0.0,
+    0.39,
+    -0.52,
+    0.02,
+    -1.15,
+    0.06,
+    0.43,
+    -0.01,
+    -0.25,
+    -0.25,
+    0.04,
+    0.18,
+    -0.22,
+    -0.05,
+    0.13,
+    0.01,
+    0.06,
+    0.08,
+    -0.02,
+    0.12,
+    0.05
+   ],
+   "expected": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "offset_db": -0.13,
+   "shape": [
+    -0.09,
+    0.22,
+    0.06,
+    -0.23,
+    -0.74,
+    0.37,
+    0.13,
+    0.52,
+    -0.39,
+    0.15,
+    -1.02,
+    0.19,
+    0.56,
+    0.12,
+    -0.12,
+    -0.12,
+    0.17,
+    0.31,
+    -0.09,
+    0.08,
+    0.26,
+    0.14,
+    0.19,
+    0.21,
+    0.11,
+    0.25,
+    0.18
+   ],
+   "error_db_median": 0.19,
+   "error_db_max": 1.02
+  }
+ },
+ "log": {
+  "phases": {
+   "inicio|numpy": {
+    "seconds": 173,
+    "motor_ms_median": 11.17,
+    "motor_ms_p95": 13.138,
+    "motor_ms_max": 18.38,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     1,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 97695.62,
+     "events": [
+      {
+       "seq": 1,
+       "t": 97523.351,
+       "at": "2026-10-08T14:47:55.143-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "start"
+       },
+       "count": 37
+      },
+      {
+       "seq": 2,
+       "t": 97529.232,
+       "at": "2026-10-08T14:48:01.025-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 3,
+       "t": 97545.275,
+       "at": "2026-10-08T14:48:17.068-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "monitor_set"
+       },
+       "count": 37
+      },
+      {
+       "seq": 4,
+       "t": 97553.298,
+       "at": "2026-10-08T14:48:25.091-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      }
+     ],
+     "faults_10min": 3,
+     "faults_1min": 0,
+     "by_kind": {
+      "xrun": 2,
+      "late": 1
+     },
+     "likely": null
+    }
+   },
+   "base-rust|numpy": {
+    "seconds": 1,
+    "motor_ms_median": 10.74,
+    "motor_ms_p95": 10.74,
+    "motor_ms_max": 10.74,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 97696.62,
+     "events": [
+      {
+       "seq": 1,
+       "t": 97523.351,
+       "at": "2026-10-08T14:47:55.143-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "start"
+       },
+       "count": 37
+      },
+      {
+       "seq": 2,
+       "t": 97529.232,
+       "at": "2026-10-08T14:48:01.025-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 3,
+       "t": 97545.275,
+       "at": "2026-10-08T14:48:17.068-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "monitor_set"
+       },
+       "count": 37
+      },
+      {
+       "seq": 4,
+       "t": 97553.298,
+       "at": "2026-10-08T14:48:25.091-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      }
+     ],
+     "faults_10min": 3,
+     "faults_1min": 0,
+     "by_kind": {
+      "xrun": 2,
+      "late": 1
+     },
+     "likely": null
+    }
+   },
+   "base-rust|rust": {
+    "seconds": 73,
+    "motor_ms_median": 5.04,
+    "motor_ms_p95": 6.646,
+    "motor_ms_max": 9.8,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 98169.667,
+     "events": [
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 11,
+       "t": 97697.679,
+       "at": "2026-10-08T14:50:49.472-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 12,
+       "t": 97721.997,
+       "at": "2026-10-08T14:51:13.790-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 13,
+       "t": 97751.952,
+       "at": "2026-10-08T14:51:43.745-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 14,
+       "t": 97785.322,
+       "at": "2026-10-08T14:52:17.114-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 15,
+       "t": 97815.607,
+       "at": "2026-10-08T14:52:47.400-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 16,
+       "t": 97845.904,
+       "at": "2026-10-08T14:53:17.697-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 17,
+       "t": 98087.575,
+       "at": "2026-10-08T14:57:19.368-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 18,
+       "t": 98103.777,
+       "at": "2026-10-08T14:57:35.570-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 19,
+       "t": 98119.143,
+       "at": "2026-10-08T14:57:50.936-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 20,
+       "t": 98136.886,
+       "at": "2026-10-08T14:58:08.679-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 21,
+       "t": 98155.666,
+       "at": "2026-10-08T14:58:27.458-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      }
+     ],
+     "faults_10min": 1,
+     "faults_1min": 0,
+     "by_kind": {
+      "late": 1
+     },
+     "likely": null
+    }
+   },
+   "base-numpy|numpy": {
+    "seconds": 93,
+    "motor_ms_median": 10.68,
+    "motor_ms_p95": 12.594,
+    "motor_ms_max": 13.87,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 98196.449,
+     "events": [
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 11,
+       "t": 97697.679,
+       "at": "2026-10-08T14:50:49.472-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 12,
+       "t": 97721.997,
+       "at": "2026-10-08T14:51:13.790-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 13,
+       "t": 97751.952,
+       "at": "2026-10-08T14:51:43.745-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 14,
+       "t": 97785.322,
+       "at": "2026-10-08T14:52:17.114-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 15,
+       "t": 97815.607,
+       "at": "2026-10-08T14:52:47.400-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 16,
+       "t": 97845.904,
+       "at": "2026-10-08T14:53:17.697-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 17,
+       "t": 98087.575,
+       "at": "2026-10-08T14:57:19.368-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 18,
+       "t": 98103.777,
+       "at": "2026-10-08T14:57:35.570-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 19,
+       "t": 98119.143,
+       "at": "2026-10-08T14:57:50.936-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 20,
+       "t": 98136.886,
+       "at": "2026-10-08T14:58:08.679-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 21,
+       "t": 98155.666,
+       "at": "2026-10-08T14:58:27.458-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 22,
+       "t": 98171.276,
+       "at": "2026-10-08T14:58:43.068-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 23,
+       "t": 98185.448,
+       "at": "2026-10-08T14:58:57.240-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "ab_start",
+       "context": {
+        "last_order": "ab_start"
+       }
+      }
+     ],
+     "faults_10min": 0,
+     "faults_1min": 0,
+     "by_kind": {},
+     "likely": null
+    }
+   },
+   "pesado-numpy|numpy": {
+    "seconds": 63,
+    "motor_ms_median": 10.95,
+    "motor_ms_p95": 11.403,
+    "motor_ms_max": 12.11,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 97846.904,
+     "events": [
+      {
+       "seq": 1,
+       "t": 97523.351,
+       "at": "2026-10-08T14:47:55.143-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "start"
+       },
+       "count": 37
+      },
+      {
+       "seq": 2,
+       "t": 97529.232,
+       "at": "2026-10-08T14:48:01.025-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 3,
+       "t": 97545.275,
+       "at": "2026-10-08T14:48:17.068-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "monitor_set"
+       },
+       "count": 37
+      },
+      {
+       "seq": 4,
+       "t": 97553.298,
+       "at": "2026-10-08T14:48:25.091-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 11,
+       "t": 97697.679,
+       "at": "2026-10-08T14:50:49.472-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 12,
+       "t": 97721.997,
+       "at": "2026-10-08T14:51:13.790-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 13,
+       "t": 97751.952,
+       "at": "2026-10-08T14:51:43.745-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 14,
+       "t": 97785.322,
+       "at": "2026-10-08T14:52:17.114-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 15,
+       "t": 97815.607,
+       "at": "2026-10-08T14:52:47.400-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 16,
+       "t": 97845.904,
+       "at": "2026-10-08T14:53:17.697-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      }
+     ],
+     "faults_10min": 3,
+     "faults_1min": 0,
+     "by_kind": {
+      "xrun": 2,
+      "late": 1
+     },
+     "likely": null
+    }
+   },
+   "pesado-rust|rust": {
+    "seconds": 30,
+    "motor_ms_median": 5.08,
+    "motor_ms_p95": 6.084,
+    "motor_ms_max": 8.82,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 97814.326,
+     "events": [
+      {
+       "seq": 1,
+       "t": 97523.351,
+       "at": "2026-10-08T14:47:55.143-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "start"
+       },
+       "count": 37
+      },
+      {
+       "seq": 2,
+       "t": 97529.232,
+       "at": "2026-10-08T14:48:01.025-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 3,
+       "t": 97545.275,
+       "at": "2026-10-08T14:48:17.068-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "monitor_set"
+       },
+       "count": 37
+      },
+      {
+       "seq": 4,
+       "t": 97553.298,
+       "at": "2026-10-08T14:48:25.091-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 11,
+       "t": 97697.679,
+       "at": "2026-10-08T14:50:49.472-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 12,
+       "t": 97721.997,
+       "at": "2026-10-08T14:51:13.790-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 13,
+       "t": 97751.952,
+       "at": "2026-10-08T14:51:43.745-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 14,
+       "t": 97785.322,
+       "at": "2026-10-08T14:52:17.114-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      }
+     ],
+     "faults_10min": 3,
+     "faults_1min": 0,
+     "by_kind": {
+      "xrun": 2,
+      "late": 1
+     },
+     "likely": null
+    }
+   },
+   "base|numpy": {
+    "seconds": 219,
+    "motor_ms_median": 10.86,
+    "motor_ms_p95": 11.692,
+    "motor_ms_max": 12.22,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 98066.936,
+     "events": [
+      {
+       "seq": 1,
+       "t": 97523.351,
+       "at": "2026-10-08T14:47:55.143-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "start"
+       },
+       "count": 37
+      },
+      {
+       "seq": 2,
+       "t": 97529.232,
+       "at": "2026-10-08T14:48:01.025-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 3,
+       "t": 97545.275,
+       "at": "2026-10-08T14:48:17.068-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "monitor_set"
+       },
+       "count": 37
+      },
+      {
+       "seq": 4,
+       "t": 97553.298,
+       "at": "2026-10-08T14:48:25.091-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 11,
+       "t": 97697.679,
+       "at": "2026-10-08T14:50:49.472-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 12,
+       "t": 97721.997,
+       "at": "2026-10-08T14:51:13.790-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 13,
+       "t": 97751.952,
+       "at": "2026-10-08T14:51:43.745-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 14,
+       "t": 97785.322,
+       "at": "2026-10-08T14:52:17.114-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 15,
+       "t": 97815.607,
+       "at": "2026-10-08T14:52:47.400-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 16,
+       "t": 97845.904,
+       "at": "2026-10-08T14:53:17.697-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      }
+     ],
+     "faults_10min": 3,
+     "faults_1min": 0,
+     "by_kind": {
+      "xrun": 2,
+      "late": 1
+     },
+     "likely": null
+    }
+   },
+   "cambios|numpy": {
+    "seconds": 20,
+    "motor_ms_median": 10.585,
+    "motor_ms_p95": 11.362,
+    "motor_ms_max": 11.4,
+    "budget_ms": 85.3,
+    "monitor_drops": [
+     0,
+     0
+    ],
+    "monitor_refills": [
+     2,
+     2
+    ],
+    "monitor_trims": [
+     0,
+     0
+    ],
+    "xruns_last": {
+     "bt:bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 0,
+      "per_min": 0.0
+     },
+     "bluez_output.14_06_A7_6B_E3_F0.1": {
+      "total": 37,
+      "per_min": 0.0
+     }
+    },
+    "cuts_last": {
+     "now": 98086.939,
+     "events": [
+      {
+       "seq": 1,
+       "t": 97523.351,
+       "at": "2026-10-08T14:47:55.143-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "start"
+       },
+       "count": 37
+      },
+      {
+       "seq": 2,
+       "t": 97529.232,
+       "at": "2026-10-08T14:48:01.025-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 3,
+       "t": 97545.275,
+       "at": "2026-10-08T14:48:17.068-03:00",
+       "kind": "xrun",
+       "fault": true,
+       "where": "bluez_output.14_06_A7_6B_E3_F0.1",
+       "what": "PipeWire registró un corte en el stream",
+       "detail": "37 en el pw-play",
+       "context": {
+        "last_order": "monitor_set"
+       },
+       "count": 37
+      },
+      {
+       "seq": 4,
+       "t": 97553.298,
+       "at": "2026-10-08T14:48:25.091-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 5,
+       "t": 97577.363,
+       "at": "2026-10-08T14:48:49.156-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 6,
+       "t": 97586.927,
+       "at": "2026-10-08T14:48:58.720-03:00",
+       "kind": "late",
+       "fault": true,
+       "where": "motor",
+       "what": "el motor llegó tarde a entregar el bloque",
+       "detail": "79 ms tarde",
+       "context": {
+        "last_order": "set"
+       },
+       "late_ms": 79
+      },
+      {
+       "seq": 7,
+       "t": 97601.427,
+       "at": "2026-10-08T14:49:13.219-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 8,
+       "t": 97625.489,
+       "at": "2026-10-08T14:49:37.282-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 9,
+       "t": 97649.553,
+       "at": "2026-10-08T14:50:01.345-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 10,
+       "t": 97673.616,
+       "at": "2026-10-08T14:50:25.409-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 11,
+       "t": 97697.679,
+       "at": "2026-10-08T14:50:49.472-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 12,
+       "t": 97721.997,
+       "at": "2026-10-08T14:51:13.790-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 13,
+       "t": 97751.952,
+       "at": "2026-10-08T14:51:43.745-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      },
+      {
+       "seq": 14,
+       "t": 97785.322,
+       "at": "2026-10-08T14:52:17.114-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 15,
+       "t": 97815.607,
+       "at": "2026-10-08T14:52:47.400-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "engine_set",
+       "context": {
+        "last_order": "engine_set"
+       }
+      },
+      {
+       "seq": 16,
+       "t": 97845.904,
+       "at": "2026-10-08T14:53:17.697-03:00",
+       "kind": "fade",
+       "fault": false,
+       "where": null,
+       "what": "corte intencional",
+       "detail": "preset_load",
+       "context": {
+        "last_order": "preset_load"
+       }
+      }
+     ],
+     "faults_10min": 3,
+     "faults_1min": 0,
+     "by_kind": {
+      "xrun": 2,
+      "late": 1
+     },
+     "likely": null
+    }
+   }
+  },
+  "marks": [
+   {
+    "t": 1791481680.8853457,
+    "mark": "preset_load",
+    "preset": "ensayo-eq-a"
+   },
+   {
+    "t": 1791481684.9528062,
+    "mark": "capture",
+    "label": "ensayo-eq-a",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481704.9562922,
+    "mark": "capture_end",
+    "label": "ensayo-eq-a",
+    "ok": true
+   },
+   {
+    "t": 1791481704.9564106,
+    "mark": "preset_load",
+    "preset": "ensayo-eq-b"
+   },
+   {
+    "t": 1791481709.0186715,
+    "mark": "capture",
+    "label": "ensayo-eq-b",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481729.0201573,
+    "mark": "capture_end",
+    "label": "ensayo-eq-b",
+    "ok": true
+   },
+   {
+    "t": 1791481729.0203156,
+    "mark": "preset_load",
+    "preset": "ensayo-presupuesto-a"
+   },
+   {
+    "t": 1791481733.080154,
+    "mark": "capture",
+    "label": "ensayo-presupuesto-a",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481753.0815284,
+    "mark": "capture_end",
+    "label": "ensayo-presupuesto-a",
+    "ok": true
+   },
+   {
+    "t": 1791481753.0816836,
+    "mark": "preset_load",
+    "preset": "ensayo-presupuesto-b"
+   },
+   {
+    "t": 1791481757.145561,
+    "mark": "capture",
+    "label": "ensayo-presupuesto-b",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481777.147016,
+    "mark": "capture_end",
+    "label": "ensayo-presupuesto-b",
+    "ok": true
+   },
+   {
+    "t": 1791481777.1471152,
+    "mark": "preset_load",
+    "preset": "ensayo-agudos-a"
+   },
+   {
+    "t": 1791481781.207377,
+    "mark": "capture",
+    "label": "ensayo-agudos-a",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481801.2088408,
+    "mark": "capture_end",
+    "label": "ensayo-agudos-a",
+    "ok": true
+   },
+   {
+    "t": 1791481801.2089553,
+    "mark": "preset_load",
+    "preset": "ensayo-agudos-b"
+   },
+   {
+    "t": 1791481805.2716272,
+    "mark": "capture",
+    "label": "ensayo-agudos-b",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481825.273005,
+    "mark": "capture_end",
+    "label": "ensayo-agudos-b",
+    "ok": true
+   },
+   {
+    "t": 1791481825.2731159,
+    "mark": "preset_load",
+    "preset": "ensayo-eq-a"
+   },
+   {
+    "t": 1791481829.334083,
+    "mark": "capture",
+    "label": "ensayo-eq-a-repeticion",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481849.3355656,
+    "mark": "capture_end",
+    "label": "ensayo-eq-a-repeticion",
+    "ok": true
+   },
+   {
+    "t": 1791481849.3357553,
+    "mark": "engine_set",
+    "engine": "rust"
+   },
+   {
+    "t": 1791481853.6540935,
+    "mark": "capture",
+    "label": "motor-rust",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481873.6555066,
+    "mark": "capture_end",
+    "label": "motor-rust",
+    "ok": true
+   },
+   {
+    "t": 1791481873.6556025,
+    "mark": "engine_set",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791481877.9677668,
+    "mark": "capture",
+    "label": "motor-numpy",
+    "seconds": 20.0,
+    "out_target": "bluez_output.14_06_A7_6B_E3_F0.1"
+   },
+   {
+    "t": 1791481897.969149,
+    "mark": "capture_end",
+    "label": "motor-numpy",
+    "ok": true
+   },
+   {
+    "t": 1791481903.6300392,
+    "mark": "preset_load",
+    "preset": "ensayo-eq-a"
+   },
+   {
+    "t": 1791481906.9049857,
+    "mark": "heavy_on",
+    "chain": {
+     "ambience": "avendano_jot",
+     "spatial": "front",
+     "decorrelate": "group_delay",
+     "diffuse": "noise_tail",
+     "align": "sinc",
+     "eq": "boost_only",
+     "bass": "protect",
+     "volume": "digital",
+     "limiter": "true_peak"
+    }
+   },
+   {
+    "t": 1791481906.905051,
+    "mark": "engine_set",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791481906.9902618,
+    "mark": "heavy_run",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791481936.990504,
+    "mark": "engine_set",
+    "engine": "rust"
+   },
+   {
+    "t": 1791481937.2806113,
+    "mark": "heavy_run",
+    "engine": "rust"
+   },
+   {
+    "t": 1791481967.2808099,
+    "mark": "engine_set",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791481967.5674233,
+    "mark": "heavy_run",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791481997.5676212,
+    "mark": "preset_load",
+    "preset": "ensayo-eq-a"
+   },
+   {
+    "t": 1791482000.6148527,
+    "mark": "heavy_off",
+    "chain": {
+     "ambience": "avendano_jot",
+     "spatial": "front",
+     "decorrelate": "group_delay",
+     "diffuse": "noise_tail",
+     "align": "sinc",
+     "eq": "boost_only",
+     "bass": "protect",
+     "volume": "digital",
+     "limiter": "true_peak"
+    }
+   },
+   {
+    "t": 1791482219.3430014,
+    "mark": "switches_start",
+    "count": 6
+   },
+   {
+    "t": 1791482239.2393484,
+    "mark": "engine_set",
+    "engine": "rust"
+   },
+   {
+    "t": 1791482246.7618046,
+    "mark": "user_heard"
+   },
+   {
+    "t": 1791482255.418417,
+    "mark": "engine_set",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791482270.792021,
+    "mark": "engine_set",
+    "engine": "rust"
+   },
+   {
+    "t": 1791482288.5205305,
+    "mark": "engine_set",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791482307.33113,
+    "mark": "engine_set",
+    "engine": "rust"
+   },
+   {
+    "t": 1791482322.9170032,
+    "mark": "engine_set",
+    "engine": "numpy"
+   },
+   {
+    "t": 1791482328.2381673,
+    "mark": "switches_end"
+   },
+   {
+    "t": 1791482337.0646176,
+    "mark": "ab_start",
+    "pair": "ensayo-eq"
+   },
+   {
+    "t": 1791482345.6907897,
+    "mark": "paused",
+    "why": "user: implement the seamless engine switch"
+   }
+  ]
+ }
+}
