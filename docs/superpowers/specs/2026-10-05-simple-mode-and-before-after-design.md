@@ -1,6 +1,7 @@
 # Simple mode, perceptual controls, and before/after — design
 
-**Date:** 2026-10-05 · **Status:** written from the user's answers of 2026-10-05, for review. **Roadmap:**
+**Date:** 2026-10-05, revised 2026-10-08 · **Status:** written from the user's answers of 2026-10-05, with the
+2026-10-07 audit additions (§7) specified to contract level on 2026-10-08 — **ready for the user's approval**. **Roadmap:**
 i-7c8794-0ad844. **Depends on:** phase 2 Task 12 (the speakers' `direct` render and their loudness match,
 spec 2026-10-05-virtual-speakers-and-hot-join §9) and `loudness_match.py` (the monitor's, 2026-10-05).
 
@@ -97,3 +98,40 @@ is still **for review** with these additions; the audit's group 1 (measured acce
   for a few seconds after a clip without blinking** (2.3.1); a click opens the chain's flow row.
 - Both get browser tests (and axe, d-7c8794-a5f3ba), and the loudness test of §5 applies to the bypass.
 
+### 7.1 The bypass, to contract level
+
+- **Global bypass = the `direct` render** that already exists (phase 2 Task 12): "cadena apagada" is exactly
+  §3's direct/processed switch, so it reuses its op (`compare {target: "direct"|"processed"}`) and its
+  loudness match. One switch, two places in the panel (the header and the Cadena screen), never two mechanisms.
+- **Per-stage bypass:** a new op `bypass_set {stage: <chain stage name>, on: bool}` (scope `control`); the
+  snapshot gains `bypass: {stages: [names]}`. A bypassed stage is set to its neutral (the value that makes it
+  the identity, from `chain.py`'s descriptors) **through the cut** (80 + 80 ms) like any change that needs one,
+  and is restored on `on: false`; the stage's knobs are untouched, so undo and presets never see the bypass.
+  Bypass is session state, not saved in presets.
+- **Loudness:** the per-stage bypass is matched with `render_match` keyed by the set of bypassed stages, so
+  each combination remembers its own makeup. **Prerequisite:** the review findings P1/P2 on `render_match`
+  (roadmap i-7c8794-353aff: the key must not drift with per-speaker gains, and the window must restart when the
+  key changes) are fixed first; otherwise switching a bypass right after a gain change stores a wrong makeup.
+- **Simple mode interaction:** a bypassed stage that a simple control drives shows "en desvío" next to the
+  control; moving the control does not lift the bypass.
+
+### 7.2 The chain status light, to contract level
+
+- Snapshot field `chain_status: {state, since_s}` with `state` ∈ `direct | processed | limiting | clipped`,
+  computed in the service from data it already has: `direct` when the global bypass/direct render is heard;
+  `limiting` when `quality.summary()["limiter_pct_max"]` is above 1 % in the last second; `clipped` when any
+  output's short-term true peak (`tp`) reaches 0 dBTP, **held for 3 s** after the last clip (no blinking:
+  the state changes at most once per second, WCAG 2.3.1/2.2.2); `processed` otherwise.
+- Panel: one indicator in the header with an icon shape per state **and** its Spanish label ("Directo",
+  "Procesado", "Limitando", "Saturó") plus colour; `role="status"` written only when the state changes
+  (research/10 §10 item 5); click/Enter opens Cadena on the flow row.
+- Older services without the field: the indicator is hidden (the panel reads defensively, as elsewhere).
+
+### 7.3 Verification for §7
+
+- Unit: `bypass_set` validation (unknown stage → contract error), neutral values per stage, restore, not in
+  presets; `chain_status` transitions with the 3 s hold and the 1 s rate limit; loudness within 1 LU across
+  bypass on/off after the first visit (the §5 test, per stage).
+- Browser: the per-stage switch on each Cadena card and the global switch reflect the snapshot; the status
+  light shows shape + text + colour, announces only on change, and opens Cadena; axe clean in light, dark and
+  forced-colors.

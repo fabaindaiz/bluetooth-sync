@@ -857,7 +857,42 @@ Para cada tarea se anota si salió, cuánto tardó y dónde dudó:
 3. Averiguar si algún parlante va atrasado, y corregirlo o calibrar.
 4. Guardar la configuración como un preset, cambiar algo y volver al preset.
 
-Al terminar, el **SUS** (10 preguntas, 1 a 5). Se usa la **versión validada en español** (Sevilla-González
-y otros, 2020, CC BY 4.0, §9 3.1). Es material de terceros: **sus ítems se copian al repositorio solo con el
-permiso del usuario**; mientras tanto, se enlaza la fuente. Con un solo usuario, lo que sirve es la serie
-en el tiempo (la misma persona después de cada ronda de cambios), no el 68 de referencia.
+Al terminar, el **SUS**, en su **versión validada en español**. Los ítems se copian textuales, sin cambiar
+la redacción: así lo pide la validación, y "herramienta" se refiere al panel. El usuario aprobó copiarlos
+(2026-10-07).
+
+> *Por favor seleccione de cada uno de los enunciados la opción que mejor describa su experiencia con la
+> herramienta electrónica. Un puntaje de 1 significa que usted se encuentra totalmente en desacuerdo con el
+> enunciado, mientras que un puntaje en 5 significa que está totalmente de acuerdo, un puntaje de 3
+> significaría que usted se encuentra neutral con el enunciado.*
+
+| Nº | Enunciado | 1 (Totalmente en desacuerdo) … 5 (Totalmente de acuerdo) |
+|---|---|---|
+| 1 | Me gustaría usar esta herramienta frecuentemente. | 1 2 3 4 5 |
+| 2 | Considero que esta herramienta es innecesariamente compleja | 1 2 3 4 5 |
+| 3 | Considero que la herramienta es fácil de usar. | 1 2 3 4 5 |
+| 4 | Considero necesario el apoyo de personal experto para poder utilizar esta herramienta | 1 2 3 4 5 |
+| 5 | Considero que las funciones de la herramienta están bien integradas | 1 2 3 4 5 |
+| 6 | Considero que la herramienta presenta muchas contradicciones | 1 2 3 4 5 |
+| 7 | Imagino que la mayoría de las personas aprenderían a usar esta herramienta rápidamente | 1 2 3 4 5 |
+| 8 | Considero que el uso de esta herramienta es tedioso | 1 2 3 4 5 |
+| 9 | Me sentí muy confiado al usar la herramienta | 1 2 3 4 5 |
+| 10 | Necesité saber bastantes cosas antes de poder empezar a usar esta herramienta | 1 2 3 4 5 |
+
+**Cómo se calcula:**
+- en los ítems impares se resta 1 a la posición marcada;
+- en los pares, se le resta la posición a 5;
+- la suma se multiplica por 2,5, y da un puntaje de 0 a 100.
+
+Es el método de Brooke (§9 3.1; REPORTADO, porque el PDF original no abrió). Con un solo usuario, lo que
+sirve es la **serie en el tiempo**: la misma persona después de cada ronda de cambios, sin compararse con el 68
+de referencia.
+
+**Fuente y licencia (VERIFICADO el 2026-10-08):** los ítems están en el anexo 2 (Multimedia Appendix 2) de
+Sevilla-Gonzalez MDR, Moreno Loaeza L, Lazaro-Carrera LS, Bourguet Ramirez B, Vázquez Rodríguez A,
+Peralta-Pedrero ML, Almeda-Valdes P. *Spanish Version of the System Usability Scale for the Assessment of
+Electronic Tools: Development and Validation.* JMIR Human Factors 2020;7(4):e21161,
+doi:[10.2196/21161](https://doi.org/10.2196/21161). Se descargó del servicio abierto de Europe PMC
+(`PMC7773510/supplementaryFiles`), porque PMC pedía un captcha. Es un artículo de acceso abierto bajo
+**Creative Commons Attribution 4.0** (https://creativecommons.org/licenses/by/4.0/), que permite reproducirlo
+citando la publicación original en JMIR Human Factors, como se hace aquí.
