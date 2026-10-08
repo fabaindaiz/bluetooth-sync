@@ -198,8 +198,8 @@ def test_preset_load_fades_even_when_nothing_changes(running):
     _ok(running, op="start")
     motor = FakeSession.instances[0].motor
     cuts = []
-    original = motor.cortar
-    motor.cortar = lambda accion=None: (cuts.append(1), original(accion))
+    original = motor.cambiar
+    motor.cambiar = lambda accion=None: (cuts.append(1), original(accion))
     _ok(running, op="preset_load", name="same")
     assert cuts == [1]
 
@@ -351,3 +351,271 @@ def test_xruns_of_either_combine_sink_are_the_combined_output(tmp_path, sink):
     [event] = [e for e in svc.session.cuts.summary()["events"] if e["kind"] == "xrun"]
     assert event["where"] == "salida combinada"
     svc.session.cuts.close()
+
+
+# -- presets, the A/B and calibrations through the chain's `transition` mode ----------------------
+
+
+class FrozenSession(FakeSession):
+    """Never processes a block: what the motor was asked for stays pending, to be looked at."""
+
+    def step(self):
+        self.steps += 1
+        time.sleep(0.002)
+
+
+@pytest.fixture
+def frozen(tmp_path):
+    _installation(tmp_path / "inst.json")
+    svc = Service(tmp_path / "inst.json", tmp_path / "presets.json", session_factory=FrozenSession, log=lambda _: None)
+    thread = threading.Thread(target=svc.run, daemon=True)
+    thread.start()
+    yield svc
+    svc.handle({"v": 1, "op": "shutdown"})
+    thread.join(timeout=5)
+    svc.close()
+
+
+def test_a_preset_of_pan_gain_and_delay_loads_without_a_cut(frozen):
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": -0.3, "gain_db": -2.0})
+    _ok(frozen, op="preset_save", name="wide")
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": 0.9, "gain_db": 0.0})
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    _ok(frozen, op="preset_load", name="wide")
+    assert not motor._corte.busy  # noqa: SLF001
+    assert motor._transicion.busy  # noqa: SLF001
+    assert motor.en_corte
+
+
+def test_a_preset_with_a_stateful_change_cuts_once(frozen):
+    _ok(frozen, op="chain_set", stage="decorrelate", params={"seed": 5})
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": -0.3})
+    _ok(frozen, op="preset_save", name="seeded")
+    _ok(frozen, op="chain_reset", stage="decorrelate", param="seed")
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": 0.9})
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    _ok(frozen, op="preset_load", name="seeded")
+    # `aplicar_cadena` asked for its cut and the fields joined it: one fade, no transition.
+    assert motor._corte.busy  # noqa: SLF001
+    assert not motor._transicion.busy  # noqa: SLF001
+    # The fields wait for the bottom of the cut with everything else.
+    assert frozen.installation.por_nombre("Go 4 Red").pan == 0.9
+    motor.procesar(np.zeros(8192), np.zeros(8192))
+    assert frozen.installation.por_nombre("Go 4 Red").pan == -0.3
+    motor.procesar(np.zeros(16384), np.zeros(16384))
+    assert not motor.en_corte
+
+
+def test_a_preset_in_cut_mode_still_cuts(frozen):
+    _ok(frozen, op="preset_save", name="same")
+    _ok(frozen, op="chain_set", stage="transition", algorithm="cut")
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    _ok(frozen, op="preset_load", name="same")
+    assert motor._corte.busy  # noqa: SLF001
+    assert not motor._transicion.busy  # noqa: SLF001
+
+
+def _two_presets(svc):
+    _ok(svc, op="preset_save", name="a")
+    _ok(svc, op="set", speaker="Go 4 Blue", changes={"ambience": 0.9})
+    _ok(svc, op="preset_save", name="b")
+    _ok(svc, op="start")
+    return FrozenSession.instances[0].motor
+
+
+def test_ab_play_between_equal_presets_requests_a_transition(frozen):
+    _ok(frozen, op="preset_save", name="a")
+    _ok(frozen, op="preset_save", name="b")
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    _ok(frozen, op="ab_start", a="a", b="b")
+    assert motor.en_corte
+    assert motor._transicion.busy  # noqa: SLF001
+    assert not motor._corte.busy  # noqa: SLF001
+
+
+def test_ab_play_compensation_joins_the_preset_transition(frozen):
+    motor = _two_presets(frozen)
+    _ok(frozen, op="ab_start", a="a", b="b")
+    began = []
+    original = motor._transicion.begin  # noqa: SLF001
+    motor._transicion.begin = lambda *args, **kw: (began.append(1), original(*args, **kw))  # noqa: SLF001
+    # Nothing was processed since the first play: the next one joins that same transition.
+    _ok(frozen, op="ab_play", which="b")
+    assert began == []
+    # ab_start played a (its fields, its compensation) and ab_play b joined: same order, one fade.
+    names = [f.__qualname__.split(".")[-1] for f in motor._transicion._starting]  # noqa: SLF001
+    assert names == ["apply_fields", "<lambda>", "apply_fields", "<lambda>"]
+    assert motor._transicion._pending == []  # noqa: SLF001
+
+
+def test_calibration_apply_crossfades_the_delays(frozen):
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    cal = type("Cal", (), {"describe": lambda _self: {}})()
+    cal.state = "done"
+    cal.results = [
+        {
+            "speaker": name,
+            "silent": False,
+            "doubtful": False,
+            "delay_ms": d,
+            "gain_db": 0.0,
+            "applied_delay_ms": 0.0,
+            "applied_gain_db": 0.0,
+        }
+        for name, d in (("Go 4 Red", 8.0), ("Go 4 Blue", 0.0))
+    ]
+    FrozenSession.instances[0].calibration = cal
+    FrozenSession.instances[0].loop = None
+    _ok(frozen, op="calibration_apply")
+    assert not motor._corte.busy  # noqa: SLF001
+    assert motor._transicion.busy  # noqa: SLF001
+    motor.procesar(np.zeros(512), np.zeros(512))
+    assert motor._lineas["Go 4 Red"].fundiendo  # noqa: SLF001
+    motor.procesar(np.zeros(1 << 16), np.zeros(1 << 16))
+    assert not motor.en_corte
+    assert motor._lineas["Go 4 Red"].actual_ms == pytest.approx(8.0, abs=0.05)  # noqa: SLF001
+
+
+def _seeded_preset_assignment(tmp_path, mode):
+    """Load a preset that changes `decorrelate.seed` and the pans; return the motor after its bottom."""
+    _installation(tmp_path / "inst.json")
+    svc = Service(tmp_path / "inst.json", tmp_path / "presets.json", session_factory=FrozenSession, log=lambda _: None)
+    thread = threading.Thread(target=svc.run, daemon=True)
+    thread.start()
+    try:
+        _ok(svc, op="chain_set", stage="decorrelate", params={"seed": 5})
+        _ok(svc, op="set", speaker="Go 4 Red", changes={"pan": 0.9, "ambience": 0.9})
+        _ok(svc, op="set", speaker="Go 4 Blue", changes={"pan": -0.9, "ambience": 0.1})
+        _ok(svc, op="preset_save", name="p")
+        _ok(svc, op="chain_reset", stage="decorrelate", param="seed")
+        _ok(svc, op="set", speaker="Go 4 Red", changes={"pan": -0.7, "ambience": 0.0})
+        _ok(svc, op="set", speaker="Go 4 Blue", changes={"pan": 0.7, "ambience": 0.5})
+        _ok(svc, op="chain_set", stage="transition", algorithm=mode)
+        _ok(svc, op="start")
+        motor = FrozenSession.instances[-1].motor
+        _ok(svc, op="preset_load", name="p")
+        assert motor._corte.busy  # noqa: SLF001
+        assert not motor._transicion.busy  # noqa: SLF001
+        motor.procesar(np.zeros(8192), np.zeros(8192))
+        motor.procesar(np.zeros(16384), np.zeros(16384))
+        assert not motor.en_corte
+        return list(motor._orden), motor._banco_actual  # noqa: SLF001
+    finally:
+        svc.handle({"v": 1, "op": "shutdown"})
+        thread.join(timeout=5)
+        svc.close()
+
+
+def test_a_stateful_preset_in_crossfade_mode_assigns_the_bank_from_the_new_mixes(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    crossfade = _seeded_preset_assignment(tmp_path / "a", "crossfade")
+    cut = _seeded_preset_assignment(tmp_path / "b", "cut")
+    assert crossfade[0] == cut[0]
+    assert crossfade[1] is not None
+    assert crossfade[1] == cut[1]
+
+
+def _through(motor, block=4096):
+    """Process until the motor is quiet again (a cut's bottom and its fade-in, or a crossfade)."""
+    for _ in range(40):
+        motor.procesar(np.zeros(block), np.zeros(block))
+        if not motor.en_corte:
+            return
+    pytest.fail("the motor never got quiet")
+
+
+def _ab_blindness(svc, first_changes, second_changes, *, plays=("x", "b", "a", "x", "a", "b")):
+    """Save `a` and `b` from two settings, start the A/B with a known compensation for B, and return,
+    per play, (cut?, crossfade?, whether the compensation waited and then landed)."""
+    for which, changes in (("a", first_changes), ("b", second_changes)):
+        for op in changes:
+            _ok(svc, **op)
+        _ok(svc, op="preset_save", name=which)
+    _ok(svc, op="start")
+    motor = FrozenSession.instances[0].motor
+    _ok(svc, op="ab_start", a="a", b="b")
+    _through(motor)
+    svc.ab.compensation = {"a": 0.0, "b": -2.0}
+    seen = []
+    for which in plays:
+        _ok(svc, op="ab_play", which=which)
+        cut, faded = motor._corte.busy, motor._transicion.busy  # noqa: SLF001
+        before = motor.ganancia_comparacion_db
+        _through(motor)
+        seen.append((which, cut, faded, before, motor.ganancia_comparacion_db, svc.ab.applied))
+    return seen
+
+
+def test_ab_presets_with_a_stateful_difference_cut_on_every_play(frozen):
+    """A and B differ in `decorrelate.seed`: every play of a, b and x cuts, whichever plays now, or
+    the hole would tell X apart (spec §4, "Blindness of the A/B"). The compensation joins the cut."""
+    seen = _ab_blindness(
+        frozen,
+        [{"op": "chain_set", "stage": "decorrelate", "params": {"seed": 5}}],
+        [{"op": "chain_set", "stage": "decorrelate", "params": {"seed": 9}}],
+    )
+    for which, cut, faded, _before, after, applied in seen:
+        assert (cut, faded) == (True, False), which
+        # The compensation waited for the bottom and landed there with everything else.
+        assert after == applied, which
+    assert any(s[3] != s[4] for s in seen)  # it did move between plays (0 and -2 dB)
+
+
+def test_ab_presets_differing_only_in_ramps_always_crossfade(frozen):
+    seen = _ab_blindness(
+        frozen,
+        [{"op": "set", "speaker": "Go 4 Red", "changes": {"pan": -0.3}}],
+        [{"op": "set", "speaker": "Go 4 Red", "changes": {"pan": 0.6, "gain_db": -2.0}}],
+    )
+    for which, cut, faded, _before, after, applied in seen:
+        assert (cut, faded) == (False, True), which
+        assert after == applied, which
+    assert any(s[3] != s[4] for s in seen)
+
+
+def test_ab_loudness_counts_only_from_the_end_of_the_transition(frozen):
+    """The 3 s loudness window starts once the switch's transition (or cut) is over: with `fade_ms`
+    up to 500 and one pending transition, a window counted from the request took in ~0.7 s of it."""
+    _ok(frozen, op="chain_set", stage="transition", params={"fade_ms": 500.0})
+    motor = _two_presets(frozen)
+    # The service's loop reads it too (its summary every 0.5 s, the same `_ab_measure`).
+    meter = type("Meter", (), {"samples": 0, "outputs_short_term": -20.0, "summary": lambda *_a: {}})()
+    FrozenSession.instances[0].quality = meter
+    _ok(frozen, op="ab_start", a="a", b="b")
+    settle = round(service_module.AB_SETTLE_S * frozen.options.rate)
+    meter.samples = frozen.ab.measure_from + 1
+    assert motor.en_corte  # frozen: the transition has not run yet
+    frozen._ab_measure(meter)  # noqa: SLF001
+    assert frozen.ab.taken["a"] is None
+    _through(motor)
+    end = meter.samples
+    frozen._ab_measure(meter)  # noqa: SLF001
+    assert frozen.ab.taken["a"] is None
+    meter.samples = end + settle - 1
+    frozen._ab_measure(meter)  # noqa: SLF001
+    assert frozen.ab.taken["a"] is None
+    meter.samples = end + settle
+    frozen._ab_measure(meter)  # noqa: SLF001
+    assert frozen.ab.taken["a"] == end + settle
+
+
+def test_a_preset_during_the_fade_in_of_a_cut_crossfades_without_a_second_dip(frozen):
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": -0.3})
+    _ok(frozen, op="preset_save", name="wide")
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": 0.9})
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    motor.cortar()
+    motor.procesar(np.zeros(4096), np.zeros(4096))  # the 80 ms fade-out and its bottom
+    assert motor._corte.state == "in"  # noqa: SLF001
+    _ok(frozen, op="preset_load", name="wide")
+    assert motor._corte.state == "in"  # noqa: SLF001  (not turned around for a second dip)
+    assert motor._transicion.busy  # noqa: SLF001
+    _through(motor)
+    assert frozen.installation.por_nombre("Go 4 Red").pan == -0.3

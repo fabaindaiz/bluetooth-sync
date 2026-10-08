@@ -26,9 +26,10 @@ correction it is a delayed impulse: switching EQ on or off keeps the timing.
 (tests/test_eq_rust.py). Every user (the EQ, the crossover, the bass protection and its
 all-pass, the virtual bass, the diffuse tail) gets Rust with no change. A filter builds its Rust
 object on its first block (one built and never run costs nothing: `VirtualBass` only rebuilds its
-filters after they ran, so its off state builds none), registers then, and moves its state into it, or back, when
-the engine switches at a cut's bottom (`on_engine_switch`): the tail and the taps; the history,
-the delay line, its head and whether it is valid. The move is exact. After a Rust failure every
+filters after they ran, so its off state builds none), registers then, and moves its state into it,
+or back, when the engine switches, between blocks (`on_engine_switch`; a cut's bottom only after a
+Rust failure): the tail and the taps; the history, the delay line, its head and whether it is valid.
+The move is exact. After a Rust failure every
 filter gives silence until the cut's bottom, then numpy; the one that failed starts afresh (its
 Rust state may be torn).
 """
@@ -179,7 +180,8 @@ class _RustOwned:
     _registered = False
 
     def on_engine_switch(self, _active: str) -> None:
-        """`backend.use` at a cut's bottom: move the state to the engine that runs now."""
+        """`backend.use`, between blocks or at a cut's bottom after a failure: move the state to the
+        engine that runs now."""
         self._follow(rust=backend.rust_active())
 
     def _ready(self) -> bool:

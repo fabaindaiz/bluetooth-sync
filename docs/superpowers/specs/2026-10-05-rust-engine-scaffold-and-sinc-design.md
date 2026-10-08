@@ -38,10 +38,13 @@ f32, the Raspberry Pi.
   `AURASYNC_ENGINE` for tests and the CLI. `rust` without the extension installed → one warning in
   the log and numpy; nothing fails.
 - **Live switch** (chosen by the user): op `engine_set {engine}` (scope `control`) changes the engine
-  while playing, at the bottom of the next cut (`motor.cortar`, 80 + 80 ms); without a session it only
+  while playing, at the bottom of the next cut (`motor.cortar`, 80 + 80 ms; superseded by
+  2026-10-08-seamless-transitions-design.md §2: between blocks); without a session it only
   changes the setting. The sinc read keeps no state, so the switch leaves nothing half-done. The
   panel (Ajustes) has a numpy/rust selector and Diagnóstico shows the active engine and, if it fell
   back, why. The snapshot carries `engine: {wanted, active, available, reason}`.
+  *Amended 2026-10-08:* the engine now switches between blocks, with no cut; see
+  `2026-10-08-seamless-transitions-design.md` §2. (A Rust failure still goes through the cut.)
 - **A Rust failure falls back to numpy by itself** (chosen by the user): a panic is caught at the
   extension's boundary and raised as `RuntimeError`; the dispatcher returns silence for that block,
   marks Rust disabled, and the engine switches to numpy at the next cut. The log and the panel say
@@ -55,7 +58,8 @@ f32, the Raspberry Pi.
 ## 3. The stage, tests and checks (section 2, for review)
 
 **Switch and fallback.** Tests: `engine_set` while playing changes the engine only at the cut's
-bottom and the output stays continuous; a planted panic in a test build (a feature flag of
+bottom (superseded by 2026-10-08-seamless-transitions-design.md §2: between blocks, no cut) and the
+output stays continuous; a planted panic in a test build (a feature flag of
 `aurasync-engine`) produces silence on every speaker from the failing block until the cut's bottom, then numpy, with the reason in the
 snapshot.
 

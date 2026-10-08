@@ -182,3 +182,56 @@ def test_la_lectura_de_banda_limitada_es_exacta_en_retardos_enteros():
     assert int(np.argmax(y)) == 10 + 48 + linea.latencia_fija
     assert np.isclose(y.max(), 1.0)
     assert np.count_nonzero(np.abs(y) > 1e-9) == 1
+
+
+@pytest.mark.parametrize("sinc", [False, True])
+def test_fundir_a_lands_on_the_new_delay(sinc):
+    x = _seno(3840 + 4000, 1000.0)
+    fundida = LineaDeRetardo(SR, retardo_ms=10.0, sinc=sinc)
+    fundida.fundir_a(40.0, 3840, "equal_gain")
+    assert fundida.fundiendo
+    salto = LineaDeRetardo(SR, retardo_ms=10.0, sinc=sinc)
+    salto.saltar_a(40.0)
+    a = np.concatenate([fundida.procesar(b) for b in np.array_split(x, 7)])
+    b = np.concatenate([salto.procesar(b) for b in np.array_split(x, 7)])
+    assert not fundida.fundiendo
+    assert fundida.actual_ms == fundida.objetivo_ms == 40.0
+    assert np.allclose(a[3840 + 100 :], b[3840 + 100 :], atol=1e-12)
+
+
+@pytest.mark.parametrize("sinc", [False, True])
+@pytest.mark.parametrize("forma", ["equal_gain", "equal_power"])
+def test_fundir_a_never_bends_the_pitch(sinc, forma):
+    from aurasync.dsp.transition import fade_weights
+
+    n = 3840
+    x = _seno(n, 1000.0)
+    linea = LineaDeRetardo(SR, retardo_ms=10.0, sinc=sinc)
+    linea.fundir_a(40.0, n, forma)
+    salida = np.concatenate([linea.procesar(b) for b in np.array_split(x, 4)])
+    viejo = LineaDeRetardo(SR, retardo_ms=10.0, sinc=sinc).procesar(x)
+    nuevo = LineaDeRetardo(SR, retardo_ms=40.0, sinc=sinc).procesar(x)
+    w_viejo, w_nuevo = fade_weights(forma, 0, n, n)
+    assert np.allclose(salida, w_viejo * viejo + w_nuevo * nuevo, atol=1e-12)
+
+
+def test_crossfade_to_clamps_to_the_maximum():
+    linea = LineaDeRetardo(SR, retardo_ms=10.0, maximo_ms=250.0)
+    linea.fundir_a(10_000.0, 480, "equal_gain")
+    linea.procesar(_seno(1000))
+    assert linea.actual_ms == linea.objetivo_ms == 250.0
+
+
+def test_saltar_a_ends_a_crossfade():
+    linea = LineaDeRetardo(SR, retardo_ms=10.0)
+    linea.fundir_a(40.0, 3840, "equal_gain")
+    linea.saltar_a(20.0)
+    assert not linea.fundiendo
+    assert linea.actual_ms == 20.0
+
+
+def test_reiniciar_ends_a_crossfade():
+    linea = LineaDeRetardo(SR, retardo_ms=10.0)
+    linea.fundir_a(40.0, 3840, "equal_gain")
+    linea.reiniciar()
+    assert not linea.fundiendo

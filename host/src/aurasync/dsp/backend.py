@@ -15,9 +15,11 @@ run: Rust without the extension, or built with constants other than numpy's, is 
 `reason`, never an error. Without a service nobody calls `use`, and the first read takes
 `AURASYNC_ENGINE` (so `AURASYNC_ENGINE=rust hatch test` runs the whole suite with Rust).
 
-**Switching** happens only through `use`, which the service calls at the bottom of a cut
-(`motor.cortar`: the output is at zero), when a session opens, or when no session plays. The
-sinc read keeps no state, so a switch leaves nothing half-done.
+**Switching** happens only through `use`, which the service calls between two blocks (an order
+on the engine thread, with no cut: every stage moves its state exactly between engines, spec
+seamless-transitions 2026-10-08 §2), at the bottom of a cut after a failure, when a session
+opens, or when no session plays. The sinc read keeps no state, so a switch leaves nothing
+half-done.
 
 **Failing.** The extension raises `RuntimeError` for a Rust panic (it catches every one at its
 boundary). Rust is disabled with the reason, and `on_failure` (the service) is told once; it asks
@@ -39,9 +41,10 @@ the stage returns silence; once it is False and `rust_active()` is False the sta
 `guarded(call, silence)` runs a per-block call with this same failure handling; `built(call,
 fallback)` does it for construction and configuration (see there). A stage with state
 registers (`register(stage)`) and hears `stage.on_engine_switch(active)` from `use`, on the engine
-thread at the cut's bottom, to move or reset its state there; it is held weakly, so a stage the
-motor drops (a render change builds a new one) is not kept alive. A failure without a cut (nobody
-listening) calls no `use`: the stage notices that `rust_active()` turned False on its next block.
+thread between blocks (or at a cut's bottom after a failure), to move or reset its state there;
+it is held weakly, so a stage the motor drops (a render change builds a new one) is not kept
+alive. A failure without a cut (nobody listening) calls no `use`: the stage notices that
+`rust_active()` turned False on its next block.
 The stage's constants join `_expected()` so a stale build is refused.
 
 Every function here runs on the engine thread (the one that calls `motor.procesar` and the
@@ -194,8 +197,9 @@ def resolve(name: str) -> Resolved:
 
 
 def use(name: str) -> None:
-    """Read with `name` from now on. Only at a cut's bottom, a session's start, or with no session
-    playing; `name` must be what `resolve` gave (Rust that cannot read is a `ValueError`)."""
+    """Read with `name` from now on. Between two blocks (on the engine thread), at a cut's
+    bottom after a failure, at a session's start, or with no session playing; `name` must be what
+    `resolve` gave (Rust that cannot read is a `ValueError`)."""
     global _selected, _silent
     if name not in ENGINES:
         msg = f"unknown engine {name!r}; the engines are {list(ENGINES)}"
@@ -217,8 +221,9 @@ def use(name: str) -> None:
 
 
 def register(stage: Any) -> None:
-    """`stage.on_engine_switch(active)` is called from every `use`, on the engine thread at the
-    cut's bottom, so a stage with state can move or reset it there. Held weakly: registering
+    """`stage.on_engine_switch(active)` is called from every `use`, on the engine thread
+    between blocks (or at a cut's bottom after a failure), so a stage with state can move or
+    reset it there. Held weakly: registering
     does not keep the stage alive, and the dead ones are dropped here too (filters built and
     dropped block after block must not pile up between two `use`)."""
     _stages[:] = [ref for ref in _stages if ref() is not None]

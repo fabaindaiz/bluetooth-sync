@@ -31,9 +31,23 @@ class Smoothed:
             msg = f"the rate must be positive; got {rate}"
             raise ValueError(msg)
         self.current = float(value)
-        self.target = float(value)
+        self._target = float(value)
         self.rate = rate
         self.sr = sr
+        self._glide_step = 0.0  # per-sample step of a glide; 0 when none is running
+        self._glide_left = 0
+
+    @property
+    def target(self) -> float:
+        return self._target
+
+    @target.setter
+    def target(self, value: float) -> None:
+        """Set the destination. A glide in progress ends if the value changes (the normal rate
+        takes over); re-assigning the same value, as the motor does every block, keeps it."""
+        if float(value) != self._target:
+            self._glide_left = 0
+        self._target = float(value)
 
     @property
     def settled(self) -> bool:
@@ -42,11 +56,24 @@ class Smoothed:
     def jump(self) -> None:
         """Reach the target at once. Only safe with the output silent (the fade gate)."""
         self.current = self.target
+        self._glide_left = 0
+
+    def glide(self, samples: int) -> None:
+        """From the next `block`, reach the current target in exactly `samples` samples,
+        linearly, ignoring `rate`; then `rate` applies again. Used by the crossfade
+        transition (`dsp/transition.py`)."""
+        if self.settled or samples <= 0:
+            self.jump()
+            return
+        self._glide_left = samples
+        self._glide_step = (self.target - self.current) / samples
 
     def block(self, n: int) -> float | np.ndarray:
         """The value for each of the next `n` samples, advancing the state."""
         if self.settled or n == 0:
             return self.current
+        if self._glide_left > 0:
+            return self._glide_block(n)
         step = self.rate / self.sr
         direction = 1.0 if self.target > self.current else -1.0
         values = self.current + direction * step * np.arange(1, n + 1)
@@ -55,6 +82,18 @@ class Smoothed:
         self.current = float(values[-1])
         if abs(self.current - self.target) < 1e-12:  # noqa: PLR2004
             self.current = self.target
+        return values
+
+    def _glide_block(self, n: int) -> np.ndarray:
+        m = min(n, self._glide_left)
+        values = np.full(n, self.target)
+        values[:m] = self.current + self._glide_step * np.arange(1, m + 1)
+        self._glide_left -= m
+        if self._glide_left == 0:
+            values[m - 1] = self.target  # land exactly, no float residue
+            self.current = self.target
+        else:
+            self.current = float(values[m - 1])
         return values
 
 
@@ -78,6 +117,10 @@ class DecibelRamp:
 
     def jump(self) -> None:
         self._db.jump()
+
+    def glide(self, samples: int) -> None:
+        """Reach the target in exactly `samples` samples, linear in dB (see `Smoothed.glide`)."""
+        self._db.glide(samples)
 
     def block(self, n: int) -> float | np.ndarray:
         return 10 ** (self.block_db(n) / 20)

@@ -32,10 +32,11 @@ dB louder without taking the localisation). Fixed-length work per block (d-7c879
 **Engine** (spec rust-engine §5, `dsp/backend.py`): with `engine=rust` the stage hands its work to
 `aurasync_engine.SpatialUpmix` (engine/crates/aurasync-dsp/src/spatial.rs), within 1e-9 of this
 code, which stays the oracle (tests/test_spatial_rust.py). The stage owns the Rust object and
-moves its whole state into it, or back, when the engine switches at a cut's bottom
-(`on_engine_switch`): the move is exact, so the sound goes on as if nothing had switched. After a
-Rust failure the stage gives silence until the cut's bottom, then starts afresh in numpy (the Rust
-state may be torn): latency and fade-in, as a new renderer does.
+moves its whole state into it, or back, when the engine switches, between blocks
+(`on_engine_switch`; a cut's bottom only after a Rust failure): the move is exact, so the sound goes
+on as if nothing had switched. After a Rust failure the stage gives silence until the cut's bottom,
+then starts afresh in numpy (the Rust state may be torn): latency and fade-in, as a new renderer
+does.
 """
 
 from __future__ import annotations
@@ -349,7 +350,8 @@ class SpatialUpmix:
     # -- the engine (dsp/backend.py) ---------------------------------------------------------
 
     def on_engine_switch(self, _active: str) -> None:
-        """`backend.use` at a cut's bottom: move the state to the engine that runs now."""
+        """`backend.use`, between blocks or at a cut's bottom after a failure: move the state to the
+        engine that runs now."""
         self._follow(rust=backend.rust_active())
 
     def _follow(self, *, rust: bool) -> None:

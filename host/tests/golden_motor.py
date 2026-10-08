@@ -141,8 +141,15 @@ def _events(m: motor.Motor) -> dict[int, object]:
 
 
 def run(motor_factory, *, ecualizar: bool) -> dict[str, np.ndarray]:
-    """Play the scenario through a motor built by `motor_factory(installation, sr, ecualizar)`."""
+    """Play the scenario through a motor built by `motor_factory(installation, sr, ecualizar)`.
+
+    In the cut mode of the `transition` stage (spec seamless-transitions 2026-10-08 §7): the run
+    was recorded when every slow change cut, and `ambience_up` and `rear_delay` reach
+    `actualizar_desde_control`'s slow branch, which crossfades by default since then. So the golden
+    pins the cut path exactly as it was; the crossfade has its own tests
+    (`tests/test_motor_transitions.py`)."""
     m = motor_factory(installation(), SR, ecualizar)
+    m.aplicar_cadena(m.cadena.with_algorithm("transition", "cut"))
     izq, der = signal()
     events = _events(m)
     out: dict[str, list[np.ndarray]] = {p.nombre: [] for p in m.instalacion.parlantes}

@@ -52,7 +52,7 @@ others (`dsp/profiles.py`: the Charge 6, 56 Hz; not the Go 4, 90 Hz)."""
 AUTO = "auto"
 """The `to` of the crossover when the listener does not name a speaker: the first one of a
 bass-capable kind."""
-PRESET_EXCLUDED_STAGES = ("volume",)
+PRESET_EXCLUDED_STAGES = ("volume", "transition")
 """A preset holds what the listener chooses as sound, not the volume: a louder preset wins
 an A/B comparison for being louder (spec 2026-09-29 §5.6)."""
 
@@ -977,6 +977,58 @@ _LIMITER_STAGE = Stage(
     "peak",
 )
 
+_TRANSITION_STAGE = Stage(
+    "transition",
+    "Transiciones",
+    "Cómo se pasa de un ajuste a otro: sin hueco o con un corte.",
+    "Con el fundido, el pan, el ambiente, las ganancias y los retardos (un preset, aplicar una "
+    "calibración) pasan de un ajuste al otro sin hueco. Cambiar el render, la ecualización, el banco "
+    "de filtros u otra etapa con estado todavía corta (etapa 1). Es una preferencia del oyente, no "
+    "parte de un preset.",
+    (
+        Algorithm(
+            "crossfade",
+            "Fundido cruzado",
+            "Pasa de un ajuste al otro sin hueco.",
+            "Cada rampa llega a su valor nuevo en lo que dura el fundido, y cada retardo que cambia se "
+            "lee en sus dos posiciones a la vez. Los cambios de etapas con estado todavía cortan.",
+            (
+                Param(
+                    "fade_ms",
+                    "Duración del fundido",
+                    "Cuánto dura el paso de un ajuste al otro.",
+                    "Más largo suena más suave; más corto llega antes al ajuste nuevo.",
+                    "float",
+                    80.0,
+                    10.0,
+                    500.0,
+                    10.0,
+                    "ms",
+                ),
+                Param(
+                    "shape",
+                    "Forma del fundido",
+                    "equal_gain: las dos partes suman 1. equal_power: suman la misma potencia.",
+                    "equal_gain conviene si los dos sonidos se parecen; equal_power si no. Se aplica a los "
+                    "fundidos entre etapas; los retardos se funden siempre a igual potencia.",
+                    "choice",
+                    "equal_gain",
+                    choices=("equal_gain", "equal_power"),
+                ),
+            ),
+            cost="una lectura más de la línea por cada retardo que cambia, durante el fundido",
+        ),
+        Algorithm(
+            "cut",
+            "Corte",
+            "Baja el sonido, cambia y lo vuelve a subir (el modo rápido).",
+            "No gasta cómputo extra, pero deja un hueco breve en cada cambio.",
+        ),
+    ),
+    "crossfade",
+    algorithm_apply="live",
+)
+
 CHAIN: tuple[Stage, ...] = (
     _AMBIENCE_STAGE,
     _SPATIAL_STAGE,
@@ -987,6 +1039,7 @@ CHAIN: tuple[Stage, ...] = (
     _BASS_STAGE,
     _VOLUME_STAGE,
     _LIMITER_STAGE,
+    _TRANSITION_STAGE,
 )
 """In the real processing order."""
 
@@ -1327,7 +1380,9 @@ class ChainValues:
     def with_preset(self, part: dict) -> ChainValues:
         """A preset's chain replaces the choices of every stage a preset holds."""
         kept = {k: v for k, v in self.choices.items() if k in PRESET_EXCLUDED_STAGES}
-        return ChainValues(copy.deepcopy({**kept, **{k: v for k, v in part.items() if k not in kept}}))
+        return ChainValues(
+            copy.deepcopy({**{k: v for k, v in part.items() if k not in PRESET_EXCLUDED_STAGES}, **kept})
+        )
 
     # -- disk ---------------------------------------------------------------------------
 

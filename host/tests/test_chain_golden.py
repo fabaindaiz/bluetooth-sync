@@ -7,6 +7,10 @@ extractor's `lam` default moved from 0.9 to 0.91 in `chain.py` (4 of 4 runs red,
 5.1e-4), and the limiter's ceiling read 0.01 dB lower in `motor.py` (4 of 4 red, 1.0e-3).
 Green again each time the plant was taken out.
 
+Since 2026-10-08 the run plays with the `transition` stage in its `cut` mode
+(`golden_motor.run`): its slow changes were recorded as cuts, and that path must stay exactly
+as it was; the default crossfade has its own tests (`tests/test_motor_transitions.py`).
+
 It runs once per engine of the stages ported to Rust (`engine` in conftest.py): the Rust read
 must reproduce the same golden within the same 1e-9.
 """

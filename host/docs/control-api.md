@@ -76,7 +76,7 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
 | `set` | `speaker` (optional), `changes` | Per speaker: `pan` [-1, 1], `ambience` [0, 1], `gain_db` [-40, 6]. Global: `rear_delay_ms` [0, 50], `volume_db` [-60, 0], `extract_ambience`, `decorrelate` (bool). Works with the session stopped |
 | `presets` | — | Every saved preset |
 | `preset_save` | `name` | Saves the artistic fields (no `delay_ms`, no `volume_db`) |
-| `preset_load` | `name` | Applies a preset; while playing, always through an 80 + 80 ms fade |
+| `preset_load` | `name` | Applies a preset; while playing, always as a transition by the chain's `transition` mode (an 80 + 80 ms fade with `cut`; with `crossfade`, everything glides in `fade_ms`, and a stateful chain change in the preset requests its own cut) |
 | `preset_delete` | `name` | Removes it |
 | `save` | — | Writes the installation file, including the loop's `delay_ms` |
 | `shutdown` | — | Replies, closes the session, exits |
@@ -86,8 +86,9 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
 - `pan`, `ambience`, `gain_db` and `volume_db` move with ramps: no clicks.
 - `ambience` also changes the speaker's rear delay (`ambience × rear_delay_ms`). When the
   delay would take more than 2 s to ramp (more than 1 ms of change), the change goes
-  through the fade instead: a short dip to silence.
-- `decorrelate` and `preset_load` always go through the fade.
+  through a transition instead: by default a crossfade between the old and the new delay, no
+  hole (with the chain's `transition` at `cut`, a short dip to silence).
+- `decorrelate` always goes through the fade. `preset_load`, the A/B (`ab_play`), `calibration_apply` and `sync_apply` are a transition, by the chain's `transition` mode (the fade with `cut`, a crossfade otherwise); a preset that changes a stage with state still cuts. The A/B always requests one, and decides once for its pair: if either preset needs a cut, every play cuts, so its blindness holds.
 - `extract_ambience` off keeps the extractor running and mixes it out, so the latency does
   not change.
 
@@ -256,7 +257,7 @@ Sent as raw messages to `POST /v1/command`. All additive to version 1.
 | `monitor_set` | `mode` (`off`, `stereo`, `mix`, `binaural`), `target`, `gain_db` [-40, 0], `volume_control` (`device`, `software`; default `device`), `device_volume_pct` [0, 100] | the headphone monitor. `device_volume_pct` **present** is a level asked for now: in `device` mode it is applied to the target sink and read back even when it equals the stored one (`monitor.device_volume_reason` says why if it did not take), and it becomes the stored ceiling; a change of only that value does not reopen the monitor. Absent, the sink is never raised: a client sends it only when the listener moves the level, never with a change of mode, target or `volume_control` |
 | `mic_check` | — | opens the microphone for 8 s from the moment it opens (a call while it is open does not extend it; a new one opens only after it closed) only to show its level (`meters.mic`, `recalibration.mic_check`), for the check before calibrating while the loop is off; never continuously. `{"opened": false}` when the loop or a calibration already has it; `conflict` without a session |
 | `calibrate` | `seconds` [5, 20], `amplitude` [0.02, 0.2] | stimulus inside the open session; pauses the loop and resumes it after |
-| `calibrate_cancel` · `calibration_apply` | — | apply goes through the fade |
+| `calibrate_cancel` · `calibration_apply` | — | apply is a transition, by the chain's `transition` mode |
 | `measurement_save` | `note` | writes `calibracion-<date>.json` to `measurements` in `service.json`; refused when simulated |
 | `scan` · `connect` · `disconnect` · `forget` | `address` (`AA:BB:…`, upper case) | `bluetoothctl`, on a worker thread; `forget` removes the pairing and is refused for a speaker of the installation |
 | `microphone_set` | `node` (or `null`) | the microphone for calibration and the loop; kept in `service.json`; a running loop restarts with it |
@@ -378,7 +379,7 @@ version 1.
 ```
 
 - **Stages**, in order: `ambience`, `decorrelate`, `diffuse`, `align`, `eq`, `bass`, `volume`,
-  `limiter`. Titles, summaries and help are Spanish (they are UI text); identifiers are English.
+  `limiter`, `transition`. Titles, summaries and help are Spanish (they are UI text); identifiers are English.
 - **Defaults are the sound the engine had before the chain** (bit-exact, `tests/test_chain_golden.py`).
 - `kind` is `float`, `int`, `bool` or `choice`; `scope` is `global` or `speaker`; `apply` is
   `live` (ramps), `cut` (the fade) or `restart`; `store` says where the knob lives: `chain`
@@ -399,6 +400,13 @@ version 1.
   - `limiter.true_peak`: 4x-oversampled detection with `lookahead_ms` of look-ahead (latency,
     on every speaker alike: `chain_latency_ms` grows by it).
   - `volume.avrcp`: the volume in the speakers (see below).
+  - `transition` (title "Transiciones", last stage, 2026-10-08): how a change that used to fade the
+    output to zero is applied. `crossfade` (default; `fade_ms` 10-500, default 80, step 10, and
+    `shape`, `equal_gain` or `equal_power`, default `equal_gain`; both `live`) passes between
+    settings without a hole; `cut` fades out and in as before (the fast mode, no params). Changing
+    it is `live` and never cuts: a `chain_set` of `transition` replies `apply: "none"` (it is read at the
+    next transition; nothing moves now). It is the listener's, like `volume`: a preset leaves it out
+    (`presets-chain.json` never has a `transition` key) and `preset_load` does not change it.
   - `eq.budget_db` and `eq.treble_cap_db` act on the curve that plays (through the cut) and keep
     the stored one; `eq.dead_band_db` is used when `eq_apply` computes a new curve.
   - `decorrelate.mean_ms` (it is latency: `chain_latency_ms` follows it) and `spread_ms`; the
@@ -416,7 +424,7 @@ version 1.
   max_boost_db, boost_energy_db}`, `bass` `{active, to, reason, removed_db: {speaker: dB the
   high-pass took}, harmonics_db: {speaker: dB of harmonics against the bass they came from},
   feed_dbfs}`, `volume` `{volume_db_now, mode}`, `limiter` `{kind, latency_ms, reduction_db,
-  active_pct}`; every stage also has `pending`.
+  active_pct}`, `transition` `{mode, busy}`; every stage also has `pending`.
 - An algorithm may be unavailable in this installation, with a reason: `bass.crossover`
   without a speaker of a bass-capable kind (`JBL Charge 6`; set `kind` on the speaker).
   Choosing it is `unavailable` (409).
@@ -469,7 +477,7 @@ delays; nothing changes until `sync_apply` (d-7c8794-2c6f91). It runs on its own
 |---|---|---|
 | `sync_state` (read) | — | `{"settings", "suggestion", "applied_id", "levels", "sources", "dropped"}`. `suggestion`: `{"id", "delays_ms", "current_ms", "sigma_ms", "spread_now_ms", "spread_after_ms", "anchor", "based_on", "at", "reason", "drift_ppm", "jumps"}`, or null. `levels` are statistics only (d-7c8794-e61118) |
 | `sync_set` (control) | `changes` (object of settings) | validated (`out_of_range` otherwise), written to `sync.json` next to `chain.json`, and the estimator refits |
-| `sync_apply` (control) | `suggestion_id` (optional) | applies the current suggestion's delays through the cut; speakers without a suggestion keep theirs. `conflict` if there is none, if `suggestion_id` is not the current one, or if it was applied already |
+| `sync_apply` (control) | `suggestion_id` (optional) | applies the current suggestion's delays as a transition (the chain's `transition` mode); speakers without a suggestion keep theirs. `conflict` if there is none, if `suggestion_id` is not the current one, or if it was applied already |
 | `sync_explain` (read) | — | every setting's recommendation, how it changes the sound, and a SIMULADO figure, plus `together` (the whole configuration). Built on the estimator's thread: `{"pending": true}` until it is ready |
 
 The snapshot carries `sync_suggestion` (the suggestion plus `applied` and `method`, never the figures).
@@ -625,10 +633,10 @@ The stages ported to Rust (today the band-limited read of each speaker's delay l
 - **The setting**: `"engine": "numpy" | "rust"` in `service.json` (default `numpy`; any other value
   stops the service at start, like the other keys). `AURASYNC_ENGINE=numpy|rust` overrides it
   when the service starts, and is what the CLI and the tests use without a service.
-- **`engine_set {"engine": "numpy" | "rust"}`** (scope `control`): while a session plays, the switch
-  happens at the bottom of the next cut (80 + 80 ms of fade, like `preset_load`); without a session,
-  at once (no audio flows). The choice is written to `service.json` (a simulation keeps nothing)
-  and wins over `AURASYNC_ENGINE` from then on. Choosing what already reads costs no cut. `rust`
+- **`engine_set {"engine": "numpy" | "rust"}`** (scope `control`): the switch happens at the next
+  block, with no cut: every stage moves its state exactly between engines (measured max difference
+  6.5e-14 on the full chain). The choice is written to `service.json` (a simulation keeps nothing)
+  and wins over `AURASYNC_ENGINE` from then on. Choosing what already reads does nothing. `rust`
   where the extension is not installed, or was built with other constants, stays `numpy`, with the
   reason and no cut. The reply is `state.engine`.
 - **A Rust failure** (a panic, caught by the extension and raised as `RuntimeError`): Rust is
@@ -646,8 +654,7 @@ The stages ported to Rust (today the band-limited read of each speaker's delay l
 
 `wanted` is what was asked (the setting, `AURASYNC_ENGINE` or `engine_set`), `active` the engine
 reading now, `available` whether the extension can be used on this machine, and `reason` why
-`active` differs from `wanted`. While a switch waits for its cut, `active` is still the old one and
-`reason` is `null`.
+`active` differs from `wanted`. `reason` is `null` while they agree.
 
 ## Remote clients: the PWA, HTTPS, pairing (d-7c8794-37f9bc)
 

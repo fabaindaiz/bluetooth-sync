@@ -2,7 +2,7 @@
 
 The setting (`"engine"` in `service.json`, numpy by default) and `AURASYNC_ENGINE` choose; Rust
 without the extension, or built with other constants, falls back to numpy and says why. The
-live switch (`engine_set`) happens only at the bottom of a cut, and a Rust failure gives silence
+live switch (`engine_set`) happens at once, between blocks, and a Rust failure gives silence
 from the failing block until the cut's bottom, then numpy, without stopping the music.
 
 The extension is replaced here by fake modules in `sys.modules`, so these tests say what the
@@ -526,29 +526,21 @@ def test_the_setting_is_read_and_checked_in_service_json(tmp_path):
 
 
 @pytest.mark.usefixtures("rust")
-def test_engine_set_switches_only_at_the_cut(tmp_path):
+def test_engine_set_switches_at_once_without_a_cut(tmp_path):
     svc = _service(tmp_path)
     svc.start()
     motor = svc.motor
     assert backend.active() == "numpy"
     result = svc.engine_set("rust")
-    # Asked, not done: the switch waits for the cut's bottom.
+    # Done between blocks: every stage moves its state exactly, so no cut is asked.
     assert result["wanted"] == "rust"
-    assert backend.active() == "numpy"
-    assert len(motor.actions) == 1
+    assert backend.active() == "rust"
+    assert motor.actions == []
     svc._publish()  # noqa: SLF001 - the engine loop publishes after every order
-    assert svc.snapshot["engine"] == {"wanted": "rust", "active": "numpy", "available": True, "reason": None}
-    motor.bottom()
-    assert backend.active() == "rust"
-    svc._publish()  # noqa: SLF001
     assert svc.snapshot["engine"]["active"] == "rust"
-    # And back: again through a cut.
+    # And back, again without a cut.
     svc.engine_set("numpy")
-    assert backend.active() == "rust"
-    motor.bottom()
     assert backend.active() == "numpy"
-    # Choosing what already plays costs no cut.
-    svc.engine_set("numpy")
     assert motor.actions == []
     svc.stop()
     svc.close()

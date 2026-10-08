@@ -30,11 +30,11 @@ paso; los otros dos están en `decorrelate` y en el retardo por parlante.
 **Engine** (spec rust-engine §5, `dsp/backend.py`): with `engine=rust` the streaming `Extractor`
 hands its work to `aurasync_engine.AmbienceExtractor` (engine/crates/aurasync-dsp/src/ambience.rs),
 within 1e-9 of this code, which stays the oracle (tests/test_ambience_rust.py). The extractor owns
-the Rust object and moves its whole state into it, or back, when the engine switches at a cut's
-bottom (`on_engine_switch`): the move is exact, so the sound goes on as if nothing had switched.
-After a Rust failure the extractor gives silence until the cut's bottom, then starts afresh in
-numpy (the Rust state may be torn), as `reiniciar` leaves it. `extraer` and `indice_ambiente`
-(whole signals, for the tests and the probes) stay numpy only.
+the Rust object and moves its whole state into it, or back, when the engine switches, between
+blocks (`on_engine_switch`; a cut's bottom only after a Rust failure): the move is exact, so the
+sound goes on as if nothing had switched. After a Rust failure the extractor gives silence until
+the cut's bottom, then starts afresh in numpy (the Rust state may be torn), as `reiniciar` leaves
+it. `extraer` and `indice_ambiente` (whole signals, for the tests and the probes) stay numpy only.
 """
 
 from __future__ import annotations
@@ -236,7 +236,8 @@ class Extractor:
     # -- the engine (dsp/backend.py) ---------------------------------------------------------
 
     def on_engine_switch(self, _active: str) -> None:
-        """`backend.use` at a cut's bottom: move the state to the engine that runs now."""
+        """`backend.use`, between blocks or at a cut's bottom after a failure: move the state to the
+        engine that runs now."""
         self._follow(rust=backend.rust_active())
 
     def _follow(self, *, rust: bool) -> None:

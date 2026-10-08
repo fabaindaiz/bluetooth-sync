@@ -241,8 +241,9 @@ CHAIN_METRICS_S = 0.2
 QUALITY_S = 0.5
 """The quality summary, at 2 Hz."""
 AB_SETTLE_S = 3.3
-"""Audio after a switch in the A/B before its loudness counts: the cut (0.16 s) plus the 3 s
-short-term window, plus a little."""
+"""Audio after a switch in the A/B before its loudness counts, from the end of its transition or cut
+(`Motor.en_corte`, which can last ~1 s with `fade_ms` at 500 and one pending): the 3 s short-term
+window, plus a little."""
 AB_RECOMPENSATE_LU = 0.3
 """The A/B's compensation moves only when the measured difference moved by more than this."""
 SLOW_ORDER_S = 0.03
@@ -1065,7 +1066,9 @@ class Service:
         if restart_loop:
             session.disable_recalibration()
         if self.motor is not None:
-            self.motor.cortar(apply)
+            # By the chain's `transition` mode; `actualizar()` inside the action only sets ramp
+            # targets, and the transition then fades each changed delay line from there.
+            self.motor.cambiar(apply)
         else:
             apply()
         if restart_loop:
@@ -1402,7 +1405,22 @@ class Service:
         self.preset = name
         return {}
 
+    def _preset_chain(self, name: str) -> ChainValues:
+        """The chain loading preset `name` leads to, from the chain in effect. Writes nothing."""
+        preset = self.preset_store.get(name)
+        part = self.presets_chain.get(name)
+        values = self.settings.chain if part is None else self.settings.chain.with_preset(part)
+        for key, value in preset["global"].items():
+            stage = chain_model.ON_OFF_ALIASES.get(key)
+            if stage is not None and (values.algorithm(stage) != "off") != value:
+                values = values.with_algorithm(stage, chain_model.on_algorithm(stage) if value else "off")
+        return values
+
     def preset_load(self, name: str) -> dict:
+        return self._preset_load(name)
+
+    def _preset_load(self, name: str, *, force_cut: bool = False) -> dict:
+        """`force_cut`: through the cut path whatever changes (the A/B decides once for its pair)."""
         preset = self.preset_store.get(name)
         installation = self._need_installation()
         known = {p.nombre for p in installation.parlantes}
@@ -1410,34 +1428,43 @@ class Service:
         if unknown:
             raise ContractError("not_found", f"preset {name!r} names speakers this installation lacks: {unknown}")
 
-        # The chain is decided (and written) now, outside the audio thread's fade; the motor
-        # takes it at the bottom of the fade, with everything else.
-        part = self.presets_chain.get(name)
-        values = self.settings.chain if part is None else self.settings.chain.with_preset(part)
-        for key, value in preset["global"].items():
-            stage = chain_model.ON_OFF_ALIASES.get(key)
-            if stage is not None and (values.algorithm(stage) != "off") != value:
-                values = values.with_algorithm(stage, chain_model.on_algorithm(stage) if value else "off")
+        # The chain is decided (and written) now, outside the audio thread; the motor takes it
+        # with a stateful change at the bottom of a cut, otherwise live and in the transition.
+        values = self._preset_chain(name)
         if values.choices != self.settings.chain.choices:
             self._write_chain(values)
             self.settings.chain = values
 
-        def apply() -> None:
+        def apply_fields() -> None:
             for speaker, fields in preset["speakers"].items():
                 target = installation.por_nombre(speaker)
                 for key, value in fields.items():
                     setattr(target, control.SPEAKER_FIELDS[key].attr, value)
             if "rear_delay_ms" in preset["global"]:
                 installation.retardo_traseros_ms = preset["global"]["rear_delay_ms"]
+
+        def apply() -> None:
+            apply_fields()
             if self.motor is not None:
                 self.motor.aplicar_cadena(values, en_corte=True)
 
-        if self.motor is not None:
+        motor = self.motor
+        if motor is None:
+            apply()
+        elif motor.cadena.algorithm("transition") == "cut":
             # Always through the fade, even when nothing changes: in a blind A/B the
             # presence or absence of the dip would give the answer away.
-            self.motor.cortar(apply)
+            motor.cortar(apply)
+        elif force_cut or motor.corte_pendiente or motor.pide_corte(values):
+            # A stateful chain change (or a cut already waiting, whose bottom would otherwise run
+            # after this load, or an A/B whose pair cuts): exactly the cut path. Its filters and
+            # renderer are computed at the bottom, from the speakers' new mixes.
+            motor.cortar(apply)
         else:
-            apply()
+            # A transition is always requested, for the same reason. The live changes of the
+            # chain move now and the fields travel in the transition.
+            motor.aplicar_cadena(values)
+            motor.cambiar(apply_fields)
         self.preset = name
         return self._changed()
 
@@ -1561,8 +1588,9 @@ class Service:
                 p.retardo_ms = round(delay - low, 3)
                 p.ganancia_db = round(max(-40.0, gains[name] - high), 2)
 
-        # At the bottom of a fade: a calibration moves delays by several ms at once.
-        self.motor.cortar(apply)
+        # By the chain's `transition` mode: a calibration moves delays by several ms at once, so
+        # the lines crossfade (or cut) instead of gliding.
+        self.motor.cambiar(apply)
         if restart_loop:
             session.enable_recalibration(self.options.microphone)
         self.log(
@@ -1904,14 +1932,19 @@ class Service:
             raise ContractError("conflict", "no A/B test is running")
         ab = self.ab
         preset = {"a": ab.a, "b": ab.b, "x": ab.x}[which]
-        self.preset_load(preset)
+        motor = self.motor
+        # Decided once for the pair, not against what plays now: if either preset needs a cut,
+        # every play cuts, or a crossfade to the one already playing would tell X apart (spec §4,
+        # "Blindness of the A/B").
+        cut = motor is not None and any(motor.pide_corte(self._preset_chain(name)) for name in (ab.a, ab.b))
+        self._preset_load(preset, force_cut=cut)
         ab.playing = which
         side = which if which != "x" else ("a" if ab.x == ab.a else "b")
         ab.applied = ab.compensation[side]
-        motor = self.motor
         if motor is not None and hasattr(motor, "ganancia_comparacion_db"):
-            # The same fade as the preset: the compensation jumps with it.
-            motor.cortar(lambda: setattr(motor, "ganancia_comparacion_db", ab.applied))
+            # The same transition as the preset: the compensation moves with it (a request made
+            # before the transition's first block joins it; a cut's bottom takes it with the rest).
+            (motor.cortar if cut else motor.cambiar)(lambda: setattr(motor, "ganancia_comparacion_db", ab.applied))
         self._ab_settle()
         # The panel must not learn which preset X is from the state.
         self.preset = None if which == "x" else preset
@@ -1926,7 +1959,13 @@ class Service:
         """While A or B plays (never X: its loudness would say which it is), take the
         short-term loudness of the sum of the outputs; with `match`, compensate the louder."""
         ab = self.ab
-        if ab is None or ab.playing not in {"a", "b"} or ab.measure_from is None or meter.samples < ab.measure_from:
+        if ab is None or ab.playing not in {"a", "b"} or ab.measure_from is None:
+            return
+        if getattr(self.motor, "en_corte", False):
+            # The window counts from the end of the switch: until then it would mix both settings.
+            self._ab_settle()
+            return
+        if meter.samples < ab.measure_from:
             return
         heard = meter.outputs_short_term
         if not math.isfinite(heard):
@@ -2068,11 +2107,12 @@ class Service:
     # -- the engine: numpy or Rust (dsp/backend.py, spec rust-engine §2) --------------------
 
     def engine_set(self, engine: str) -> dict:
-        """Choose who runs the stages ported to Rust. While a session plays the switch happens
-        at the bottom of a cut (80 + 80 ms of fade); with none, at once (no audio flows). Rust
-        that cannot run stays numpy, with the reason and no cut. Choosing Rust again lets it be
-        tried after a failure. The choice is kept in `service.json` (a simulation keeps nothing);
-        it wins over `AURASYNC_ENGINE` from now on."""
+        """Choose who runs the stages ported to Rust. The switch happens at once, between two
+        blocks (the order runs on the engine thread), with no cut: every stage moves its state
+        exactly between engines (spec seamless-transitions 2026-10-08 §2). Rust that cannot run
+        stays numpy, with the reason. Choosing Rust again lets it be tried after a failure (the
+        switch then waits for the pending failure cut's bottom). The choice is kept in
+        `service.json` (a simulation keeps nothing); it wins over `AURASYNC_ENGINE` from now on."""
         self.engine_wanted = engine
         self._save_engine(engine)
         if engine == backend.RUST:
@@ -2080,17 +2120,15 @@ class Service:
         resolved = backend.resolve(engine)
         if resolved.reason is not None:
             self.log(f"engine {engine}: numpy reads ({resolved.reason})", level=logging.WARNING, part="engine")
-        motor = self.motor
-        if resolved.active != backend.active():
-            if motor is not None and hasattr(motor, "cortar"):
-                motor.cortar(self._apply_engine)
-            else:
-                self._apply_engine()
+        # While a failure cut is pending (`silent()`), the output is fading to zero from silence:
+        # the switch waits for that cut's bottom, which resolves the wish again.
+        if resolved.active != backend.active() and backend.silent() is None:
+            self._apply_engine()
         return self.engine_view()
 
     def engine_view(self) -> dict:
         """`state.engine`: what was asked, what reads, whether Rust can run here, and why the two
-        differ (None while they agree, or while a switch waits for its cut)."""
+        differ (None while they agree)."""
         resolved = backend.resolve(self.engine_wanted)
         return {
             "wanted": self.engine_wanted,
@@ -2102,8 +2140,9 @@ class Service:
         }
 
     def _apply_engine(self, *, announce: bool = False) -> None:
-        """Switch to what the wish resolves to now: at a cut's bottom, a session's start, or with
-        no session. Resolved here and not when asked, so a failure in between is seen."""
+        """Switch to what the wish resolves to now: between blocks, at a cut's bottom (after a
+        failure), at a session's start, or with no session. Resolved here and not when asked, so
+        a failure in between is seen."""
         resolved = backend.resolve(self.engine_wanted)
         if announce and resolved.reason is not None:
             self.log(

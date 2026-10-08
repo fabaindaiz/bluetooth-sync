@@ -25,6 +25,7 @@ def test_the_stages_of_the_specs_in_processing_order():
         "bass",
         "volume",
         "limiter",
+        "transition",
     ]
     for s in chain.CHAIN:
         assert s.default_algorithm in {a.id for a in s.algorithms}
@@ -53,6 +54,7 @@ def test_the_defaults_are_todays_sound():
         "bass": "off",
         "volume": "digital",
         "limiter": "peak",
+        "transition": "crossfade",
     }
     p = ambience.Parametros()
     assert (v.param("ambience", "lam"), v.param("ambience", "threshold")) == (p.lam, p.umbral)
@@ -301,6 +303,24 @@ def test_max_boost_caps_the_stored_curve_when_it_is_read():
     assert m.metricas_cadena()["eq"]["max_boost_db"] == {"L": 2.0, "R": 2.0}
 
 
+def test_the_transition_stage_defaults():
+    stage = chain.stage("transition")
+    assert stage.default_algorithm == "crossfade"
+    assert stage.algorithm_apply == "live"
+    assert [a.id for a in stage.algorithms] == ["crossfade", "cut"]
+    v = ChainValues()
+    assert v.algorithm("transition") == "crossfade"
+    fade = stage.find_param("fade_ms", "crossfade")
+    assert (fade.default, fade.low, fade.high, fade.step) == (80, 10, 500, 10)
+    assert v.param("transition", "fade_ms") == 80
+    shape = stage.find_param("shape", "crossfade")
+    assert shape.kind == "choice"
+    assert shape.choices == ("equal_gain", "equal_power")
+    assert shape.default == "equal_gain"
+    assert fade.apply == shape.apply == "live"
+    assert stage.algorithm("cut").params == ()
+
+
 def test_limiter_knobs_are_live_and_its_activity_is_measured():
     m = motor.Motor(_inst(), SR, ecualizar=True)
     _play(m, 10)
@@ -326,3 +346,39 @@ def test_the_metrics_are_cheap_plain_data():
     assert metrics["bass"]["active"]
     assert not metrics["limiter"]["pending"]
     assert 0 < metrics["ambience"]["share"] < 1
+
+
+def _cut_class_cases():
+    v = ChainValues
+    base = v()
+    return {
+        "ambience.lam": base.with_change(chain.validate_set("ambience", params={"lam": 0.8})),
+        "decorrelate.seed": base.with_change(chain.validate_set("decorrelate", params={"seed": 7})),
+        "decorrelate.length": base.with_change(chain.validate_set("decorrelate", params={"length": 512})),
+        "decorrelate.off": base.with_algorithm("decorrelate", "off"),
+        "eq.off": base.with_algorithm("eq", "off"),
+        "eq.max_boost_db": base.with_change(chain.validate_set("eq", params={"max_boost_db": 3.0})),
+        "diffuse.on": base.with_algorithm("diffuse", "noise_tail"),
+        "bass.protect": base.with_algorithm("bass", "protect"),
+        "spatial.spatial": base.with_algorithm("spatial", "spatial"),
+        "spatial.direct": base.with_algorithm("spatial", "direct"),
+        "spatial.live_param": base.with_algorithm("spatial", "spatial").with_change(
+            chain.validate_set("spatial", params={"character": 0.9})
+        ),
+        "limiter.lookahead": base.with_change(chain.validate_set("limiter", params={"lookahead_ms": 3.0})),
+        "ambience.mix": base.with_change(chain.validate_set("ambience", params={"mix": 0.5})),
+        "ambience.move_speed": base.with_change(chain.validate_set("ambience", params={"move_speed": 0.5})),
+        "limiter.ceiling": base.with_change(chain.validate_set("limiter", params={"ceiling_db": -3})),
+        "transition.cut": base.with_algorithm("transition", "cut"),
+        "nothing": base,
+    }
+
+
+@pytest.mark.parametrize("name", list(_cut_class_cases()))
+def test_pide_corte_agrees_with_aplicar_cadena(name):
+    v = _cut_class_cases()[name]
+    m = motor.Motor(_inst(), SR, ecualizar=True)
+    fresh = motor.Motor(_inst(), SR, ecualizar=True)
+    before = m.cadena
+    assert m.pide_corte(v) == (fresh.aplicar_cadena(v) == "cut")
+    assert m.cadena == before  # a query: nothing moved

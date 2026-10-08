@@ -443,7 +443,7 @@ class AudioSession:
         old sink still exists while the new one is prepared."""
         self._last_step_at: float | None = None
         self._input_gap_since: float | None = None
-        self._was_fading = False
+        self._was_cutting = False
         self.block_ms = 0.0
         """Motor time per block, smoothed. Against `options.block / rate` it says how much
         of real time the processing takes."""
@@ -625,6 +625,7 @@ class AudioSession:
         if self._last_step_at is not None:
             late_ms = (started - self._last_step_at - seconds) * 1000
         self._last_step_at = started
+        moving = self.motor.en_corte  # what an order between steps asked for (see `_last_fade`)
         pair = self._input.leer(o.block)
         channels = None
         reader = self.multichannel
@@ -698,15 +699,21 @@ class AudioSession:
         self.lost = [n for n, state in self.outputs.states().items() if state == "lost"]
         self._follow_playing_set()
         self._check_routing()
-        if self.motor.en_corte:
+        if moving or self.motor.en_corte:
+            # The loop discards a measurement with a cut or a crossfade inside its window. Looked at
+            # before the block too: an 80 ms crossfade starts and ends within one 4096-sample block.
             self._last_fade = time.monotonic()
-            if not self._was_fading:
+        # Only a cut is logged as one: a crossfade has no hole, and the log is what the listening
+        # counts (experiment 23). A motor without the difference (the tests' fakes) logs any.
+        cutting = getattr(self.motor, "cortando", self.motor.en_corte)
+        if cutting:
+            if not self._was_cutting:
                 detail, self._fade_detail = self._fade_detail, None
                 self.cuts.add("fade", None, detail or self.cuts.context.get("last_order") or "")
         else:
             # A detail asked into a fade already under way (merged into it) is not the next one's.
             self._fade_detail = None
-        self._was_fading = self.motor.en_corte
+        self._was_cutting = cutting
         self._calibration_step()
         self._mic_check_step(blocks)
         if (

@@ -45,6 +45,13 @@ flujo continuo. `procesar` devuelve exactamente tantas muestras como recibió.
 - lo que ninguna rampa disimula —un preset, prender o apagar el decorrelador, un retardo que
   tardaría más de 2 s en llegar— pasa por el **corte**: baja a cero en 80 ms, salta todo con
   la salida en cero y vuelve a subir.
+- **`cambiar`** es el corte o el **fundido cruzado**, según la etapa `transition` (spec
+  2026-10-08-seamless-transitions §3 y §4, etapa 1). En el fundido nada salta: al empezar el
+  bloque siguiente corren las acciones pedidas, cada rampa (pan, ambiente, mezcla del extractor,
+  compensación del A/B, makeup del render y la ganancia de cada parlante) llega a su objetivo en
+  exactamente `fade_ms`, y cada línea cuyo retardo cambia funde su lectura vieja con la nueva en
+  el mismo largo, siempre a igual potencia (`equal_power`). El reloj y la cola son `dsp/transition.py`; lo que tiene
+  estado (la ecualización, el limitador, el render) sigue pasando por el corte.
 
 **La cadena** (`chain.py`, spec 2026-10-02 §4). Los parámetros de cada etapa —los del
 extractor, el decorrelador, la ecualización, el limitador y las velocidades— salen de un
@@ -94,6 +101,7 @@ from aurasync.dsp import ambience, decorrelate, decorrelation_bank, eq, interpol
 from aurasync.dsp.ramps import DecibelRamp, FadeGate, Smoothed
 from aurasync.dsp.retardo import LineaDeRetardo
 from aurasync.dsp.spatial import SPATIAL_RENDERS, SpatialParams, SpatialUpmix, from_character
+from aurasync.dsp.transition import Transition
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -314,6 +322,37 @@ class Motor:
     def _objetivo_mezcla(self, activo: bool) -> float:  # noqa: FBT001
         return self._mezcla if activo else 0.0
 
+    def _clases_de_corte(self, cambios: set, nuevo: ChainValues) -> set[str]:
+        """Qué clases de cambio de `cambios` necesitan un corte. Es pura: la comparten
+        `aplicar_cadena` y `pide_corte` para que no se separen."""
+        clases = set()
+        if {("ambience", p) for p in ("lam", "threshold", "sigma", "min_energy")} & cambios and self._extractor:
+            clases.add("ambiente")
+        claves_banco = {("decorrelate", k) for k in ("length", "seed", "mean_ms", "spread_ms", "assignment")}
+        if self.decorrelar and claves_banco & cambios:
+            clases.add("banco")
+        if (self.decorrelar and nuevo.algorithm("decorrelate") != "off") != self.decorrelacion_activa:
+            clases.add("decorrelacion")
+        ecualizar = nuevo.algorithm("eq") != "off"
+        if self.ecualizar and (
+            ecualizar != self.ecualizacion_activa
+            or {("eq", "max_boost_db"), ("eq", "budget_db"), ("eq", "treble_cap_db")} & cambios
+        ):
+            clases.add("eq")
+        if any(etapa == "diffuse" and param != "level_db" for etapa, param in cambios):
+            clases.add("difusion")
+        if any(etapa == "bass" and param != "harmonics_db" for etapa, param in cambios):
+            clases.add("graves")
+        if ("spatial", None) in cambios:
+            clases.add("espacial")
+        if ("limiter", None) in cambios or ("limiter", "lookahead_ms") in cambios:
+            clases.add("limitador")
+        return clases
+
+    def pide_corte(self, valores: ChainValues) -> bool:
+        """Si `aplicar_cadena(valores)` pediría un corte. Consulta pura, sin efectos."""
+        return bool(self._clases_de_corte(set(cadena.changed_params(self._cadena, valores.copy())), valores))
+
     def aplicar_cadena(self, valores: ChainValues, *, en_corte: bool = False) -> str:
         """Lleva el motor a `valores`. Devuelve cómo: `"none"`, `"live"` o `"cut"`.
 
@@ -329,11 +368,11 @@ class Motor:
         hubo_vivo = self._aplicar_vivo(cambios, nuevo)
 
         al_corte = []
-        if {("ambience", p) for p in ("lam", "threshold", "sigma", "min_energy")} & cambios and self._extractor:
+        clases = self._clases_de_corte(cambios, nuevo)
+        if "ambiente" in clases:
             parametros = self._parametros_ambiente()
             al_corte.append(lambda: setattr(self._extractor, "p", parametros))
-        claves_banco = {("decorrelate", k) for k in ("length", "seed", "mean_ms", "spread_ms", "assignment")}
-        if self.decorrelar and claves_banco & cambios:
+        if "banco" in clases:
             # El banco (y a qué parlante va cada filtro) se calcula ahora y no en el fondo del
             # corte, que corre dentro de `procesar`.
             banco = self._banco()
@@ -345,21 +384,13 @@ class Motor:
             # Prender o apagar el extractor cambia las mezclas: la asignación espera al corte.
             self._revisar_asignacion()
         decorrelar = self.decorrelar and nuevo.algorithm("decorrelate") != "off"
-        if decorrelar != self.decorrelacion_activa:
+        if "decorrelacion" in clases:
             al_corte.append(lambda: setattr(self, "decorrelacion_activa", decorrelar))
         ecualizar = nuevo.algorithm("eq") != "off"
         if not self.ecualizar:
             # Sin la etapa en el camino no hay nada que cambie el sonido: no hace falta el corte.
             self.ecualizacion_activa = ecualizar
-        elif (
-            ecualizar != self.ecualizacion_activa
-            or {
-                ("eq", "max_boost_db"),
-                ("eq", "budget_db"),
-                ("eq", "treble_cap_db"),
-            }
-            & cambios
-        ):
+        elif "eq" in clases:
 
             def cambiar_ecualizacion() -> None:
                 self.ecualizacion_activa = ecualizar
@@ -368,13 +399,13 @@ class Motor:
             al_corte.append(cambiar_ecualizacion)
         # Las etapas nuevas (`chain_stages.py`): se arman ahora, fuera del fondo del corte que
         # corre dentro de `procesar`, y se cambian enteras en el fondo.
-        if any(etapa == "diffuse" and param != "level_db" for etapa, param in cambios):
+        if "difusion" in clases:
             difusion = self._nueva_difusion()
             al_corte.append(lambda: setattr(self, "_difusion", difusion))
-        if any(etapa == "bass" and param != "harmonics_db" for etapa, param in cambios):
+        if "graves" in clases:
             graves = self._nuevos_graves()
             al_corte.append(lambda: setattr(self, "_graves", graves))
-        if ("spatial", None) in cambios:
+        if "espacial" in clases:
             render = nuevo.algorithm("spatial")
             espacial = self._nuevo_espacial(nuevo) if render in SPATIAL_RENDERS else None
             # The stages `direct` does not feed are built here, outside the bottom, and swapped in
@@ -386,7 +417,7 @@ class Motor:
                 else None
             )
             al_corte.append(lambda: self._switch_render(render, espacial, fresh))
-        if ("limiter", None) in cambios or ("limiter", "lookahead_ms") in cambios:
+        if "limitador" in clases:
 
             def cambiar_limitadores() -> None:
                 self._limitadores = {p.nombre: self._nuevo_limitador() for p in self.instalacion.parlantes}
@@ -543,6 +574,7 @@ class Motor:
         m["bass"].update(self._graves.metrics())
         m["spatial"].update({"render": self.render, "makeup_db": round(self._makeup.current_db, 2)})
         m["volume"]["volume_db_now"] = round(self._volumen.current_db, 2)
+        m["transition"].update({"mode": self._cadena.algorithm("transition"), "busy": self._transicion.busy})
         m["limiter"].update(
             {
                 "kind": "true_peak" if self.latencia_limitador else "peak",
@@ -620,6 +652,10 @@ class Motor:
         self._mezcla_ambiente = Smoothed(inicial, velocidad, self.sr)
         self._corte = FadeGate(self.sr)
         self._al_saltar: list[Callable[[], None]] = []
+        self._transicion = Transition()
+        self._ganancia_deslizando: dict[str, tuple[float, int]] = {}
+        """(objetivo en dB, muestras que faltan) de la ganancia de un parlante durante un fundido:
+        reemplaza el límite de `velocidad_ganancia_db_s` hasta llegar."""
         silencio = 1000 / c.param("volume", "mute_fade_ms")
         self._activo = {p.nombre: Smoothed(1.0, silencio, self.sr) for p in self.instalacion.parlantes}
         # La ecualización siempre está en el camino, aunque sea neutra: un filtro de fase
@@ -739,8 +775,89 @@ class Motor:
 
     @property
     def en_corte(self) -> bool:
-        """Si hay un corte en curso. El lazo de recalibración no mide mientras tanto."""
+        """Si hay un corte o un fundido en curso: la salida no es una configuración quieta. El lazo
+        de recalibración, el monitor y el emparejamiento de los renders no miden mientras tanto."""
+        return self._corte.busy or self._transicion.busy
+
+    @property
+    def cortando(self) -> bool:
+        """Si hay un corte en curso (la salida baja a cero o vuelve de él), no un fundido: lo que
+        la sesión anota como corte intencional (`session.py`)."""
         return self._corte.busy
+
+    @property
+    def corte_pendiente(self) -> bool:
+        """Si un corte baja hacia su fondo (no un fundido, ni un corte que ya vuelve): lo que se
+        pida ahora debe viajar en él, o su fondo lo pisaría con lo de antes. Mientras sube, lo
+        nuevo va por su propia transición: un preset no da vuelta la compuerta para otro hueco."""
+        return self._corte.state == FadeGate.OUT
+
+    def cambiar(self, accion: Callable[[], None] | None = None) -> None:
+        """Pide un cambio por la transición que elige la etapa `transition`.
+
+        Con `cut`, es exactamente `cortar(accion)`. Con `crossfade`, `accion` corre al empezar el
+        próximo bloque y desde ahí todo se desliza en `fade_ms` (`_empezar_transicion`). Lo que se
+        pide mientras un fundido suena se junta en **un** fundido pendiente, que empieza cuando
+        termina este (`dsp/transition.py`).
+
+        Con un corte bajando hacia su fondo (`corte_pendiente`), `accion` se suma a ese fondo,
+        después de lo que el corte ya lleva: un fundido empezaría antes y el fondo lo pisaría con lo
+        pedido primero.
+
+        Como todo el motor, tiene un solo escritor: el hilo del motor del servicio (`service.py`,
+        "One writer"), entre bloques o dentro de `procesar`. Ni `Motor` ni `Transition` son seguros
+        entre hilos.
+        """
+        if self._cadena.algorithm("transition") == "cut" or self.corte_pendiente:
+            self.cortar(accion)
+            return
+        if self._transicion.request(accion):
+            self._transicion.begin(self._largo_transicion())
+
+    def _largo_transicion(self) -> int:
+        return max(1, round(self._cadena.param("transition", "fade_ms") * self.sr / 1000))
+
+    def _empezar_transicion(self) -> None:
+        """Al empezar un bloque: corre las acciones pedidas y lleva cada parámetro a su objetivo
+        deslizándolo (o fundiendo dos lecturas, el retardo) en el largo del fundido."""
+        transicion = self._transicion
+        for accion in transicion.take_starting():
+            accion()
+        largo = transicion.length
+        for p in self.instalacion.parlantes:
+            for suave, objetivo in ((self._pan[p.nombre], p.pan), (self._ambiente[p.nombre], p.ambiente)):
+                suave.target = objetivo
+                suave.glide(largo)
+            self._ganancia_deslizando[p.nombre] = (p.ganancia_db, largo)
+        for rampa in (self._mezcla_ambiente, self._compensacion, self._makeup):
+            rampa.glide(largo)
+        # Las dos lecturas de una línea a retardos distintos no se parecen (música de banda ancha):
+        # se funden siempre a igual potencia, diga lo que diga `shape`; con `equal_gain` el medio
+        # bajaba ~3 dB (MEDIDO 2026-10-08). `shape` es para los fundidos entre dos instancias de una
+        # etapa con estado (etapa 2 de la spec), que sí suenan parecido.
+        for nombre, objetivo in self.retardos_efectivos_ms().items():
+            linea = self._lineas[nombre]
+            if abs(objetivo - linea.actual_ms) > _NADA:
+                linea.fundir_a(objetivo, largo, "equal_power")
+            else:
+                linea.saltar_a(objetivo)
+
+    def _avanzar_transicion(self, n: int) -> None:
+        """Después de un bloque: cuenta el fundido. Si terminó, empieza el pendiente (al próximo
+        bloque; por un corte si mientras tanto `transition` pasó a `cut`) o, si no hay, devuelve a
+        sus rampas los retardos que se pidieron mientras tanto (`objetivo_ms` no se mueve mientras
+        una línea funde)."""
+        lote = self._transicion.advance(n)
+        if lote is None:
+            return
+        if lote and self._cadena.algorithm("transition") == "cut":
+            self.cortar(lambda: [accion() for accion in lote])
+            return
+        if lote:
+            self._transicion.begin(self._largo_transicion(), lote)
+            return
+        for nombre, objetivo in self.retardos_efectivos_ms().items():
+            self._lineas[nombre].objetivo_ms = objetivo
 
     def cortar(self, accion: Callable[[], None] | None = None) -> None:
         """Pide un corte: baja a cero, corre `accion` y salta todo con la salida en cero.
@@ -764,8 +881,12 @@ class Motor:
         self._corte.request()
 
     def _saltar(self) -> None:
-        """Con la salida en cero: aplica lo pendiente y lleva cada parámetro a su objetivo."""
-        acciones, self._al_saltar = self._al_saltar, []
+        """Con la salida en cero: aplica lo pendiente y lleva cada parámetro a su objetivo.
+
+        Un fundido en curso termina acá: lo que esperaba su turno corre primero, y el salto deja
+        cada rampa y cada línea (`saltar_a` corta su fundido) en su objetivo."""
+        acciones, self._al_saltar = [*self._transicion.cancel(), *self._al_saltar], []
+        self._ganancia_deslizando.clear()
         for accion in acciones:
             accion()
         for p in self.instalacion.parlantes:
@@ -825,15 +946,19 @@ class Motor:
         self.cortar(self._cambiar_taps)
 
     def actualizar_desde_control(self) -> None:
-        """Como `actualizar`, pero un retardo que tardaría más de 2 s en llegar va por el corte.
+        """Como `actualizar`, pero un retardo que tardaría más de 2 s en llegar va por `cambiar`
+        (el fundido, o el corte con `transition=cut`).
 
         El lazo de recalibración sigue usando `actualizar`: sus correcciones se arrastran sin
         cortar, que es lo que lo hace inaudible. Un control, en cambio, pide un valor nuevo y
         quiere oírlo ya (spec §6.5).
         """
+        # Una línea que funde todavía informa el retardo viejo, pero va al nuevo: se mide desde ahí.
         lento = any(
-            abs(objetivo - self._lineas[nombre].actual_ms) / self.velocidad_retardo_ms_s > MAXIMO_RAMPA_S
+            abs(objetivo - (linea.objetivo_ms if linea.fundiendo else linea.actual_ms)) / self.velocidad_retardo_ms_s
+            > MAXIMO_RAMPA_S
             for nombre, objetivo in self.retardos_efectivos_ms().items()
+            for linea in (self._lineas[nombre],)
         )
         # Un pan o un ambiente nuevos pueden pedir otra asignación de filtros: espera a un corte.
         self._revisar_asignacion()
@@ -841,7 +966,7 @@ class Motor:
         # rear role swapped) never reached it (review 2026-10-04).
         self._actualizar_espacial()
         if lento:
-            self.cortar()
+            self.cambiar()
         else:
             self.actualizar()
 
@@ -880,6 +1005,13 @@ class Motor:
         n = len(izq)
         if n == 0:
             return {p.nombre: np.zeros(0) for p in self.instalacion.parlantes}
+        if self._transicion.busy and not self._transicion.started:
+            # Un fundido pedido empieza acá, antes de que nada lea un objetivo de este bloque.
+            self._empezar_transicion()
+        # Solo cuenta este bloque un fundido que ya corría al empezarlo: uno pedido a mitad del
+        # bloque (reentrada: una acción o un callback de `procesar` que llama a `cambiar`) empieza
+        # en el próximo, con sus acciones.
+        fundiendo = self._transicion.busy
 
         if self._extractor is not None:
             amb = self._extractor.procesar(izq, der)
@@ -978,7 +1110,11 @@ class Motor:
                 self._contar_limitador(p.nombre, n, activas=n if limitado is not x else 0)
             salida[p.nombre] = limitado
         if saltar:
+            # El fondo primero: termina el fundido y corre su lote pendiente. Contarlo antes
+            # pedía, con `transition` ya en `cut`, un segundo corte al empezar la subida.
             self._saltar()
+        elif fundiendo:
+            self._avanzar_transicion(n)
         return salida
 
     def _contar_limitador(self, nombre: str, n: int, *, activas: int) -> None:
@@ -1009,8 +1145,11 @@ class Motor:
         """
         actual = self._ganancia[nombre]
         objetivo = 10 ** (objetivo_db / 20)
+        deslizando = self._ganancia_deslizando.pop(nombre, None)
         if abs(objetivo - actual) < _NADA:
             return np.full(n, actual)
+        if deslizando is not None and deslizando[0] == objetivo_db:
+            return self._deslizar_ganancia(nombre, objetivo_db, deslizando[1], n)
         margen_db = self.velocidad_ganancia_db_s * n / self.sr
         actual_db = 20 * np.log10(max(actual, 1e-9))
         alcanzable_db = float(np.clip(objetivo_db, actual_db - margen_db, actual_db + margen_db))
@@ -1018,6 +1157,20 @@ class Motor:
         rampa = np.linspace(actual, fin, n)
         self._ganancia[nombre] = fin
         return rampa
+
+    def _deslizar_ganancia(self, nombre: str, objetivo_db: float, restantes: int, n: int) -> np.ndarray:
+        """La ganancia de un fundido: lineal en dB, llega a `objetivo_db` en exactamente
+        `restantes` muestras, sin el límite de velocidad; al llegar queda exacta."""
+        actual_db = 20 * np.log10(max(self._ganancia[nombre], 1e-9))
+        m = min(n, restantes)
+        valores = np.full(n, 10 ** (objetivo_db / 20))
+        valores[:m] = 10 ** ((actual_db + (objetivo_db - actual_db) * np.arange(1, m + 1) / restantes) / 20)
+        if m < restantes:
+            self._ganancia[nombre] = float(valores[m - 1])
+            self._ganancia_deslizando[nombre] = (objetivo_db, restantes - m)
+        else:
+            valores[m - 1] = self._ganancia[nombre] = 10 ** (objetivo_db / 20)
+        return valores
 
     def _directo_retrasado(self, izq: np.ndarray, der: np.ndarray):
         """Retrasa el camino directo tanto como tarda la extracción de ambiente."""

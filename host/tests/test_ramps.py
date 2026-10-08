@@ -89,3 +89,64 @@ def test_an_idle_gate_costs_nothing():
     env, jump = FadeGate(SR).block(4096)
     assert env == 1.0
     assert not jump
+
+
+def test_glide_reaches_the_target_in_exactly_the_samples():
+    s = Smoothed(0.0, 0.1, SR)
+    s.target = 1.0
+    s.glide(3840)
+    values = np.concatenate([np.broadcast_to(s.block(1000), (1000,)) for _ in range(4)])[:3840]
+    assert np.all(values[:3839] < 1.0)
+    assert values[3839] == 1.0
+    assert np.allclose(np.diff(np.concatenate([[0.0], values])), 1 / 3840, atol=1e-12)
+    assert s.settled
+
+
+def test_glide_then_the_rate_is_the_configured_one_again():
+    s = Smoothed(0.0, 2.0, SR)
+    s.target = 1.0
+    s.glide(100)
+    s.block(100)
+    assert s.settled
+    s.target = 0.0
+    values = np.asarray(s.block(10))
+    assert np.allclose(np.diff(np.concatenate([[1.0], values])), -2.0 / SR, atol=1e-12)
+
+
+def test_glide_to_the_same_value_is_settled_at_once():
+    s = Smoothed(0.5, 1.0, SR)
+    s.glide(1000)
+    assert s.settled
+    assert s.block(10) == 0.5
+
+
+def test_a_new_target_ends_a_glide():
+    s = Smoothed(0.0, 2.0, SR)
+    s.target = 1.0
+    s.glide(1000)
+    s.block(10)
+    s.target = 0.0
+    values = np.asarray(s.block(5))
+    assert np.max(np.abs(np.diff(values))) <= 2.0 / SR + 1e-12
+
+
+def test_decibel_ramp_glides_in_db():
+    r = DecibelRamp(-20.0, 30.0, SR)
+    r.target_db = 0.0
+    r.glide(4800)
+    db = np.concatenate([np.broadcast_to(r.block_db(1200), (1200,)) for _ in range(4)])
+    assert db[-1] == 0.0
+    assert np.allclose(np.diff(np.concatenate([[-20.0], db])), 20 / 4800, atol=1e-12)
+
+
+def test_reassigning_the_same_target_keeps_the_glide():
+    s = Smoothed(0.0, 0.1, SR)
+    s.target = 1.0
+    s.glide(3840)
+    values = []
+    for _ in range(4):
+        s.target = 1.0  # the motor does this every block
+        values.append(np.broadcast_to(s.block(1000), (1000,)))
+    values = np.concatenate(values)[:3840]
+    assert np.all(values[:3839] < 1.0)
+    assert values[3839] == 1.0

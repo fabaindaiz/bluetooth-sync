@@ -1796,6 +1796,49 @@ la 4 necesita historial de A/B. Cada fuente es una spec y un plan.
 mejorar, y después de aplicarla se mide si mejoró); la sonoridad igualada al comparar
 (`loudness_match.py`, d-7c8794-be46cb).
 
+### Prioridad del hilo del motor · i-7c8794-246f79
+**Estado: Planificado. Es LO SIGUIENTE después de la etapa 1 de transiciones sin corte.**
+
+**Qué es:** subir la prioridad del hilo del motor: `nice` −15 pedido a RealtimeKit, o −11 por
+`RLIMIT_NICE` si no está, y opcional (`service.json`). El servicio corre hoy con `nice` +1 y clase `TS`
+(VERIFICADO con `ps -L`, experimentos/23 §4), mientras PipeWire pide tiempo real.
+
+**Por qué:** MEDIDO, 179 entregas tardías del motor en 10 min mientras corría la suite completa
+(experimentos/23 §4); `motor_ms` era 13,9 de 85,3 ms, o sea que faltó CPU.
+
+**Cómo se mide:** con la suite de tests como carga, los bloques tardíos en 10 min con la prioridad y sin ella.
+
+### Escucha de la etapa 1 de transiciones sin corte · i-7c8794-93f50c
+**Estado: A medias** (construida y con tests; falta oír). Protocolo en experimentos/23 §3 y spec §7:
+cambios de motor ocultos, A/B `crossfade` contra `cut`, la pregunta del peine (10–30 ms a 80 y 200 ms)
+y el posible +3 dB en graves bajos. Se hace con el usuario en `HP-O16` (preguntar antes de tocar los audífonos).
+
+### Transiciones sin corte, etapa 2: etapas con estado por `Crossfaded` · i-7c8794-a0a68b
+**Estado: Planificado.** Cada etapa con estado (EQ, upmix espacial, ambiente...) cambia de parámetros con
+dos copias y un fundido. Spec §5. Con qué choca: el costo de CPU de correr dos copias durante el traspaso.
+
+### Transiciones sin corte, etapa 3: el render · i-7c8794-da4172
+**Estado: Planificado.** Cambiar de render (clásico, espacial, direct) con fundido en vez de corte. Spec §5.
+
+### Transiciones sin corte, etapa 4: el colchón por estiramiento · i-7c8794-1b74ad
+**Estado: Planificado.** Rellenar el colchón del monitor estirando el audio (adaptativo, 0,1 → 0,5 %, diseño) en vez
+de con silencio. Spec §5; se oye contra el relleno con silencio en la escucha de experimentos/23.
+
+### `test_a_signal_restores_it` se cuelga con la suite desacoplada de la terminal · i-7c8794-d5c5d6
+**Estado: Planificado.** `tests/test_radio_service.py::test_a_signal_restores_it` se queda esperando cuando
+pytest o `scripts/check.sh` corren en segundo plano (sin terminal), y pasa en primer plano. Mientras tanto
+la suite completa se corre con `--deselect` de ese test y el test aparte, en primer plano (etapa 1 de
+transiciones sin corte, 2026-10-08). Falta ver por qué: el test se manda a sí mismo `SIGINT`/`SIGTERM`, y
+INFERIDO que, desacoplado, la señal no llega al hilo que la espera o la toma el grupo de procesos.
+
+### Cambio del reproductor de salida con dos streams superpuestos · i-7c8794-43c2a5
+**Estado: Planificado.** Cambiar de `ReproductorCombinado` a `separado` (o al revés) sin silencio, con los dos
+streams sonando superpuestos un instante. Con qué choca: d-7c8794-a41ec9 (`dont-move`, un reloj por salida).
+
+### Cambio de volumen por AVRCP sin corte · i-7c8794-46b4d7
+**Estado: Planificado. Necesita el JBL.** Primero se mide la latencia de cada paso del volumen AVRCP; sin ese
+número no se sabe si un fundido puede esconderlo. INFERIDO hasta medirlo.
+
 ### Rendimiento del motor medido, con su informe en el panel junto a los demás datos · i-7c8794-be46cb
 **Estado: Planificado.** Pedido del usuario el 2026-10-05, mientras se construían los parlantes
 virtuales (i-7c8794-757041).

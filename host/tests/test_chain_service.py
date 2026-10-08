@@ -285,6 +285,49 @@ def test_a_preset_carries_its_chain_in_a_file_of_its_own(started, tmp_path):
     assert set(side["presets"]) == {"plain"}
 
 
+def test_presets_do_not_carry_the_transition_stage(started, tmp_path):
+    svc = started()
+    _ok(svc, op="chain_set", stage="transition", algorithm="cut")
+    _ok(svc, op="preset_save", name="fast")
+    _ok(svc, op="chain_set", stage="transition", algorithm="crossfade")
+    _ok(svc, op="preset_load", name="fast")
+    assert _ok(svc, op="state")["chain_summary"]["transition"] == "crossfade"
+    side = json.loads((tmp_path / "presets-chain.json").read_text())
+    assert all("transition" not in entry for entry in side["presets"].values())
+
+
+def test_loading_a_preset_ignores_excluded_stages_written_by_hand(started, tmp_path):
+    svc = started()
+    _ok(svc, op="preset_save", name="x")
+    path = tmp_path / "presets-chain.json"
+    side = json.loads(path.read_text())
+    side["presets"]["x"] = {
+        "transition": {"algorithm": "cut"},
+        "volume": {"algorithm": "avrcp"},
+        "bass": {"algorithm": "protect"},
+    }
+    path.write_text(json.dumps(side))
+    svc.close()
+    svc = started(install=False)
+    _ok(svc, op="preset_load", name="x")
+    summary = _ok(svc, op="state")["chain_summary"]
+    assert summary["transition"] == "crossfade"
+    assert summary["volume"] == "digital"
+    assert summary["bass"] == "protect"
+
+
+def test_changing_the_transition_mode_is_live(started):
+    svc = started()
+    _ok(svc, op="start")
+    motor = FakeSession.instances[0].motor
+    reply = _ok(svc, op="chain_set", stage="transition", algorithm="cut")
+    assert reply["apply"] == "none"  # the Motor reads the stage when it needs it: nothing to move now
+    assert reply["value"]["algorithm"] == "cut"
+    assert not motor.en_corte
+    assert motor.cadena.algorithm("transition") == "cut"
+    assert motor.aplicar_cadena(motor.cadena.with_algorithm("transition", "crossfade")) == "none"
+
+
 def test_old_files_load_as_before(started, tmp_path):
     """New reader x old files: no chain.json, no presets-chain.json, a presets.json written
     before the chain. Everything at its default, and the preset loads as it always did."""

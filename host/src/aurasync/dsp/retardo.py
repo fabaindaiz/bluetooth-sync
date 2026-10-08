@@ -28,6 +28,7 @@ from __future__ import annotations
 import numpy as np
 
 from aurasync.dsp import interpolation
+from aurasync.dsp.transition import fade_weights
 
 SR = 48000
 VELOCIDAD_POR_DEFECTO_MS_S = 0.5
@@ -62,6 +63,29 @@ class LineaDeRetardo:
         self._actual = sr * retardo_ms / 1000
         self._objetivo = self._actual
         self._historia = np.zeros(self._maximo_muestras)
+        self._fusion: tuple[float, float, int, str] | None = None  # (viejo, nuevo, largo, forma)
+        self._fusion_pos = 0
+
+    @property
+    def fundiendo(self) -> bool:
+        """Si hay un fundido entre dos posiciones de lectura en curso."""
+        return self._fusion is not None
+
+    def fundir_a(self, retardo_ms: float, muestras: int, forma: str) -> None:
+        """Pasa al retardo nuevo fundiendo dos lecturas fijas, la vieja y la nueva, en `muestras`
+        muestras desde el próximo bloque (pesos de `fade_weights`). Sin rampa de velocidad:
+        ninguna lectura se mueve, así que el tono no se dobla. Al final queda solo la nueva.
+
+        Una llamada en pleno fundido reinicia desde la posición vieja (la regla de colapso del
+        reloj lo evita); las escrituras a `objetivo_ms` se ignoran mientras se funde."""
+        fade_weights(forma, 0, 1, 1)  # valida la forma
+        nuevo = self.sr * float(np.clip(retardo_ms, 0.0, self.maximo_ms)) / 1000
+        if muestras <= 0 or nuevo == self._actual:
+            self.saltar_a(retardo_ms)
+            return
+        self._fusion = (self._actual, nuevo, muestras, forma)
+        self._fusion_pos = 0
+        self._objetivo = nuevo
 
     @property
     def actual_ms(self) -> float:
@@ -85,6 +109,7 @@ class LineaDeRetardo:
         """
         self._objetivo = self.sr * float(np.clip(retardo_ms, 0.0, self.maximo_ms)) / 1000
         self._actual = self._objetivo
+        self._fusion = None
 
     @property
     def en_objetivo(self) -> bool:
@@ -92,12 +117,16 @@ class LineaDeRetardo:
 
     def reiniciar(self) -> None:
         self._historia = np.zeros(self._maximo_muestras)
+        self._fusion = None
 
     def procesar(self, x: np.ndarray) -> np.ndarray:
         """Retarda el bloque, moviendo el retardo hacia su objetivo si hace falta."""
         n = len(x)
         if n == 0:
             return np.zeros(0)
+
+        if self._fusion is not None:
+            return self._procesar_fundiendo(x)
 
         # Trayectoria del retardo dentro de este bloque: una rampa que se detiene al llegar.
         por_muestra = self.velocidad_ms_s / 1000  # muestras de retardo por muestra de audio
@@ -112,21 +141,37 @@ class LineaDeRetardo:
         self._actual = float(d[-1])
 
         datos = np.concatenate([self._historia, x])
+        salida = self._leer(datos, n, d)
+        self._historia = datos[-len(self._historia) :]
+        return salida
+
+    def _leer(self, datos: np.ndarray, n: int, d: np.ndarray) -> np.ndarray:
+        """Lee `n` muestras de `datos` (historia + bloque) con el retardo `d` de cada una."""
         base = len(self._historia)
         posicion = base + np.arange(n) - d - self.latencia_fija
         if self.sinc:
             # La historia alcanza para la mitad del núcleo antes; después hay `latencia_fija`.
             posicion = np.clip(posicion, interpolation.HALF - 1, len(datos) - 1 - interpolation.HALF)
-            salida = interpolation.read(datos, posicion)
-            self._historia = datos[-len(self._historia) :]
-            return salida
+            return interpolation.read(datos, posicion)
         # La historia tiene el largo del retardo máximo más dos, así que la posición nunca
         # cae antes del principio; el `clip` es solo una red por si alguien cambia el máximo.
         posicion = np.clip(posicion, 0, len(datos) - 1)
         i0 = np.floor(posicion).astype(int)
         frac = posicion - i0
         i1 = np.minimum(i0 + 1, len(datos) - 1)
-        salida = datos[i0] * (1 - frac) + datos[i1] * frac
+        return datos[i0] * (1 - frac) + datos[i1] * frac
 
+    def _procesar_fundiendo(self, x: np.ndarray) -> np.ndarray:
+        """Un bloque durante un fundido: dos lecturas a retardo fijo, mezcladas por los pesos."""
+        viejo, nuevo, largo, forma = self._fusion
+        n = len(x)
+        datos = np.concatenate([self._historia, x])
+        w_viejo, w_nuevo = fade_weights(forma, self._fusion_pos, n, largo)
+        salida = w_viejo * self._leer(datos, n, np.full(n, viejo))
+        salida += w_nuevo * self._leer(datos, n, np.full(n, nuevo))
         self._historia = datos[-len(self._historia) :]
+        self._fusion_pos += n
+        if self._fusion_pos >= largo:
+            self._actual = self._objetivo = nuevo
+            self._fusion = None
         return salida
