@@ -18,11 +18,10 @@ la puerta: el motor se mantiene separado del emisor
 servicio de control, panel, la cadena con todas sus perillas (d-7c8794-114c9c), parlantes
 virtuales y monitor de audífonos (fases 1 y 2), y un motor en Rust por etapas. **Auracast avanzó:**
 las SuperMini sirven como controlador de 4 BIS (`experimentos/21`, E1 = sí), con cristal de 32 kHz,
-pero su cristal de 32 MHz corre rápido (+64/+79 ppm); falta E2–E4 con los JBL. **Lo próximo, en el
-orden acordado (roadmap, 2026-10-07):** el grupo 1 de la auditoría del panel (research/10 §10), luego
-el modo simple (spec con §7), el diagnóstico de la radio Auracast y el rendimiento del motor; en
-paralelo, la base del controlador de las placas (d-7c8794-507516) y la revisión del reloj de las
-placas B y D. El emisor Auracast entra al servicio solo si E4 sale bien. El plan anterior sigue en
+pero su cristal de 32 MHz corre rápido (+64/+79 ppm); falta E2–E4 con los JBL. **Los emisores Bluetooth
+están en pausa desde el 2026-10-08** (el roadmap dice cómo retomarlos). **Lo próximo:** el panel web y el
+motor en Rust, probados en `HP-O16`: el grupo 1 de la auditoría del panel (research/10 §10), el modo
+simple (spec con §7) y el rendimiento del motor. El emisor Auracast entra al servicio solo si E4 sale bien. El plan anterior sigue en
 `docs/roadmap.md`, "Plan desde el 2026-10-02".
 
 Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen

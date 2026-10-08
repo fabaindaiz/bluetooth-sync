@@ -361,6 +361,15 @@ todavía.
     nuevo i-7c8794-353aff);
   - D1–D3: documentos que se contradecían (frases viejas del experimento 21 frente a sus resultados
     nuevos, "41 arranques" que eran 39, "se compraron 5"), corregidos antes del merge.
+- **El push lo bloqueó el permiso automático** (lo clasificó como exfiltración de datos). No se reintentó;
+  queda para el usuario.
+- **2026-10-08:**
+  - `origin/main` había recibido `0e95d8c` desde `PC-Ryzen5`; los 6 commits se rebasaron encima, sin
+    conflictos, en `cierre-emisores-2026-10-08`;
+  - el usuario cerró por ahora los emisores Bluetooth: el roadmap tiene la tabla del estado al pausar y
+    el orden para retomarlos;
+  - la próxima sesión toma el panel web y el motor en Rust en `HP-O16`;
+  - el CLAUDE.md se puso al día.
 
 ---
 

@@ -162,6 +162,30 @@ La placa A también tiene cristal. **El cristal de 32 MHz de las dos placas corr
 fuera de los ±50 ppm de BLE: queda abierto si un JBL lo acepta (E3). El emisor autónomo para la prueba de
 distancia está listo y la prueba quedó para otra sesión.
 El sniffer está preparado (research/02 §8, experimentos S0–S5).
+**Pausa de los emisores Bluetooth (usuario, 2026-10-08).** Todo lo de Auracast y las SuperMini queda
+cerrado por ahora, documentado y en `main`. **La próxima sesión retoma el panel web y el motor en Rust,
+para probarlos en `HP-O16`.**
+
+| Qué | Estado al pausar | Dónde |
+|---|---|---|
+| E1 en la SuperMini | **Sí**: BIG de 4 BIS alineados, recibido entero | experimentos/21 |
+| Relojes | las dos placas medidas tienen cristal de 32 kHz y el de 32 MHz rápido (+64 y +79 ppm) | experimentos/21 §6, §8, §10 |
+| Placa A | controlador con cristal y toque a 1200 baudios | inventario de HP-O16 |
+| Placa C | **emisor autónomo**, listo para la prueba de distancia; vuelve al controlador por software | inventario de HP-O16 |
+| Placas B y D | sin estrenar; medir su reloj antes de elegir el emisor (d-7c8794-507516) | — |
+| Controlador | plan aprobado en su orden, sin empezar | specs/2026-10-07-supermini-controller-improvements-design.md |
+| Sniffer | preparado, sin grabar; Wireshark más adelante; hay un Android | research/02 §8 |
+
+**Para retomarlos, en orden:**
+1. la prueba de distancia con la C en un cargador;
+2. repetir el colchón a lazo abierto, que se cortó a los 16 min;
+3. la prueba LC3 de punta a punta;
+4. medir B y D;
+5. la base del controlador;
+6. E2–E4 con los JBL.
+
+E5 va en `PC-Ryzen5`, que ya tiene NCS instalado (s-7c8794-884b69).
+
 **Orden acordado con el usuario (2026-10-07, noche) para llevar esto al servicio:**
 - el panel y el diagnóstico van ya; el **backend emisor Auracast espera a E4**;
 - dentro del panel, el orden es:
