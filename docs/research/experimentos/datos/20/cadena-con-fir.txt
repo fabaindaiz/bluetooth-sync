@@ -1,0 +1,40 @@
+== corrida 1, AURASYNC_ENGINE=numpy
+ 11:51:44 up 1 day, 9 min,  1 user,  load average: 0,64, 1,52, 1,96
+motor activo: numpy Resolved(active='rust', available=True, reason=None)
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 5.13 ms, p95 6.61 ms → 17× tiempo real
+  todo encendido (protect + armónicos): mediana 7.70 ms, p95 9.44 ms → 11× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 6.21 ms, p95 7.05 ms → 14× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.680 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.051 ms
+ 11:51:48 up 1 day, 9 min,  1 user,  load average: 0,64, 1,52, 1,96
+== corrida 1, AURASYNC_ENGINE=rust
+ 11:51:48 up 1 day, 9 min,  1 user,  load average: 0,64, 1,52, 1,96
+motor activo: rust Resolved(active='rust', available=True, reason=None)
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 1.55 ms, p95 1.89 ms → 55× tiempo real
+  todo encendido (protect + armónicos): mediana 2.92 ms, p95 3.45 ms → 29× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 2.44 ms, p95 2.88 ms → 35× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.872 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.054 ms
+ 11:51:50 up 1 day, 9 min,  1 user,  load average: 0,67, 1,51, 1,96
+== corrida 2, AURASYNC_ENGINE=numpy
+ 11:51:50 up 1 day, 9 min,  1 user,  load average: 0,67, 1,51, 1,96
+motor activo: numpy Resolved(active='rust', available=True, reason=None)
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 6.11 ms, p95 6.99 ms → 14× tiempo real
+  todo encendido (protect + armónicos): mediana 7.77 ms, p95 8.99 ms → 11× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 6.93 ms, p95 9.44 ms → 12× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.696 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.059 ms
+ 11:51:54 up 1 day, 9 min,  1 user,  load average: 1,02, 1,57, 1,97
+== corrida 2, AURASYNC_ENGINE=rust
+ 11:51:54 up 1 day, 9 min,  1 user,  load average: 1,02, 1,57, 1,97
+motor activo: rust Resolved(active='rust', available=True, reason=None)
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 1.68 ms, p95 2.07 ms → 51× tiempo real
+  todo encendido (protect + armónicos): mediana 3.44 ms, p95 5.42 ms → 25× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 2.96 ms, p95 3.54 ms → 29× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.887 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.056 ms
+ 11:51:56 up 1 day, 9 min,  1 user,  load average: 1,02, 1,57, 1,97

@@ -1466,14 +1466,35 @@ tiempo-frecuencia, lo directo paneado a las cuatro esquinas y lo difuso decorrel
 de medir lo de arriba.
 
 ### Motor de audio en Rust para el camino crítico, con Python para el resto · i-7c8794-fd9732
-**Estado: A medias (2026-10-05): pasos 1 y 2 empezados** (d-7c8794-dc712e, d-7c8794-196e0c,
-d-7c8794-0d2a1e): el andamio (`engine/`, maturin, `check.sh`) y la lectura sinc en Rust están
+**Estado: A medias (2026-10-08): el andamio, la lectura sinc y las etapas 5, 6, 7, 10 y 11 del
+plan portadas** (d-7c8794-dc712e, d-7c8794-196e0c, d-7c8794-0d2a1e; el 2026-10-05 eran los pasos 1
+y 2). Son **cinco piezas portadas**, contando la lectura: la lectura sinc, el upmix espacial, el
+extractor de ambiente, los filtros FIR (`StreamingFIR` y `PartitionedFIR`, debajo del EQ, el
+crossover, la protección de graves y la cola difusa) y el generador de armónicos (`VirtualBass`);
+las ordinales de abajo (segunda a sexta) cuentan los pasos medidos en experimentos/20, no las
+piezas. El andamio (`engine/`, maturin, `check.sh`) y la lectura sinc en Rust están
 construidos, solo con tests y el costo medido en `HP-O16` (8,3–10,5× numpy,
 [experimentos/20](research/experimentos/20-costo-de-la-lectura-sinc-en-rust.md)); nada se ha
 oído ni probado con parlantes. **Segunda etapa portada (2026-10-05): el upmix espacial / frente
 intacto**, golden ≤ 2,2e-15, 3,2–3,8× numpy (experimentos/20 §2). **Tercera (2026-10-05): el
 extractor de ambiente**, golden ≤ 5,4e-14, 1,4–2,0× numpy, una vez por entrada y no por
-parlante (experimentos/20 §3). **Pendiente
+parlante (experimentos/20 §3). **Cuarta (2026-10-08): los filtros FIR por convolución FFT**
+(`StreamingFIR` y `PartitionedFIR` de `dsp/eq.py`; con ellos pasan a Rust, sin tocar quien los
+usa, el EQ por parlante, las ramas del crossover, la protección de graves y su pasa-todo, los
+graves virtuales y la cola difusa), golden ≤ 3,1e-13, 2,6–3,0× numpy por filtro; la cadena entera
+con todo encendido queda en 25–35× tiempo real con Rust contra 11–14× con numpy (experimentos/20
+§5). **Quinta (2026-10-08): el crossover y la protección de graves** sobre esos FIR: no hubo nada
+más que portar (lo que la etapa hace por bloque fuera de la convolución son 0,02–0,05 ms; el
+diseño del filtro sigue en numpy), golden ≤ 1e-9 contra numpy en `engine=rust` en los dos órdenes
+LR y cortes de 40 a 200 Hz, 2,4–2,6× numpy por etapa; de paso se quitó de `VirtualBass` el rearmado
+de dos `PartitionedFIR` por bloque con los armónicos apagados (0,64 de 0,94 ms con 3 parlantes;
+experimentos/20 §6). **Sexta (2026-10-08): el generador de armónicos de los graves virtuales**
+(`VirtualBass` de `dsp/virtual_bass.py`: banda, rectificador, banda de armónicos, calibración y rampa
+de la ganancia en un objeto Rust que posee sus dos `PartitionedFir`, una llamada por bloque), golden
+≤ 2,4e-15 contra numpy (sin punto mal condicionado: el rectificador `abs` es continuo), cambio de
+motor a mitad de ciclo exacto en los dos sentidos; 2,4–2,7× numpy, pero **1,0× frente a los FIR en
+Rust llamados desde Python** (la ganancia ya era de la cuarta etapa); la cadena con `protect` +
+armónicos queda en 32× tiempo real con Rust contra 14× con numpy (experimentos/20 §7). **Pendiente
 aparte:** la fuente de fase del upmix espacial tiene **dos** discontinuidades en el propio numpy,
 las dos superficies donde `_frame` cambia de qué toma la fase del directo: el desempate `el >= er`
 (en antifase a igual nivel, 1 ulp de entrada cambia 0,349 su salida: MEDIDO, experimentos/20 §2.3,
@@ -1501,9 +1522,13 @@ en un workspace no está probado); con la E/S de PipeWire, que se compila en cad
 **Las dudas y sus respuestas:** research/12 §5.
 
 
-**Pendiente (2026-10-05):** una etapa Rust que falla *al construirse* (no por pánico) tumba la sesión en
-vez de volver a numpy. `backend.guarded` solo atrapa `RuntimeError`. Hay que hacer que la construcción
-falle blando, con su test. Las etapas 7 a 15 siguen pendientes.
+**Corregido (2026-10-08):** una etapa Rust que falla *al construirse o configurarse* (no por
+pánico: `ValueError`, `TypeError`, `AttributeError` de una extensión vieja) ahora vuelve a numpy en
+vez de tumbar la sesión: `backend.built` atrapa cualquier `Exception` en el constructor y en
+`set_params` / `set_layout` / `state` / `set_state` / `reset`; `backend.guarded` sigue siendo solo
+`RuntimeError` en el bloque. Hechas el 2026-10-08: las etapas 5, 6, 7 (filtros FIR), 10
+(crossover) y 11 (graves virtuales). Siguen pendientes la 8, la 9 y de la 12 a la 15 (la
+convolución de la 12 ya corre en Rust a través de los FIR).
 
 ### Panel como PWA en GitHub Pages conectado por red local con HTTPS y token por cliente · i-7c8794-b10884
 **Estado: A medias (2026-10-04): publicada; falta probarla en teléfonos.** El transporte con token y

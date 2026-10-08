@@ -1,0 +1,27 @@
+uptime antes: 12:19:43 up 1 day, 37 min,  1 user,  load average: 0,89, 1,34, 2,27
+load1 antes: 0.90
+energía antes: red 1, gobernador powersave, perfil performance, no_turbo 0
+equipo HP-O16, python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras a 48 kHz = 85.3 ms; 500 bloques
+                  caso  numpy med  numpy p95  rust med  rust p95      x
+            protect, 1      0.103      0.111     0.041     0.043    2.5
+            protect, 3      0.299      0.311     0.123     0.131    2.4
+            protect, 8      0.804      0.832     0.326     0.340    2.5
+          crossover, 3      0.394      0.404     0.156     0.164    2.5
+          crossover, 8      0.890      0.916     0.358     0.372    2.5
+-- reparto (mediana, ms por bloque): dentro de StreamingFIR.process / etapa entera
+      protect, 3  numpy: convolución 0.281, etapa 0.305, resto 0.024 (8 %)
+      protect, 3   rust: convolución 0.101, etapa 0.124, resto 0.023 (18 %)
+    crossover, 3  numpy: convolución 0.372, etapa 0.396, resto 0.024 (6 %)
+    crossover, 3   rust: convolución 0.135, etapa 0.157, resto 0.022 (14 %)
+    crossover, 8  numpy: convolución 0.857, etapa 0.903, resto 0.046 (5 %)
+    crossover, 8   rust: convolución 0.312, etapa 0.356, resto 0.045 (13 %)
+-- los pasos de numpy que no son convolución (mediana, ms)
+             0,5 * (L + R): 0.0034
+     dos energías (np.dot): 0.0019
+      10 * log10 (escalar): 0.0002
+      retardo (concatenar): 0.0015
+          y + alimentación: 0.0022
+uptime despues: 12:19:46 up 1 day, 37 min,  1 user,  load average: 0,90, 1,33, 2,26
+load1 despues: 0.90
+energía después: red 1, gobernador powersave, perfil performance, no_turbo 0

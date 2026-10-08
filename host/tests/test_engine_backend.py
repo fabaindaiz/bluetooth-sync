@@ -23,7 +23,7 @@ import pytest
 
 from aurasync import clients, control
 from aurasync.config import Instalacion, Parlante
-from aurasync.dsp import ambience, backend, interpolation
+from aurasync.dsp import ambience, backend, eq, interpolation
 from aurasync.service import ConfigError, Service, load_config
 
 if TYPE_CHECKING:
@@ -61,6 +61,48 @@ class NumpyAmbienceExtractor:
         self._ex._load_state(state)  # noqa: SLF001
 
 
+class NumpyStreamingFIR:
+    """`aurasync_engine.StreamingFIR`'s interface done by numpy's own filter (its numpy paths, so
+    it never asks the fake for a Rust filter)."""
+
+    def __init__(self, taps, block=4096) -> None:  # noqa: ARG002 - the real signature
+        self._f = eq.StreamingFIR(taps)
+
+    def set_taps(self, taps) -> None:
+        self._f.set_taps(taps)
+
+    def replace_taps(self, taps) -> None:
+        self._f.taps = taps
+
+    def process(self, x):
+        return self._f._process_numpy(x)  # noqa: SLF001
+
+    def state(self):
+        return self._f._numpy_state()  # noqa: SLF001
+
+    def set_state(self, state) -> None:
+        self._f._load_state(state)  # noqa: SLF001
+
+
+class NumpyPartitionedFIR:
+    """`aurasync_engine.PartitionedFIR`'s interface done by numpy's own filter."""
+
+    def __init__(self, taps, block) -> None:
+        self._f = eq.PartitionedFIR(taps, block)
+
+    def process(self, x):
+        return self._f._process_numpy(x)  # noqa: SLF001
+
+    def skip(self, x) -> None:
+        self._f._skip_numpy(x)  # noqa: SLF001
+
+    def state(self):
+        return self._f._numpy_state()  # noqa: SLF001
+
+    def set_state(self, state) -> None:
+        self._f._load_state(state)  # noqa: SLF001
+
+
 def fake_engine(read=None, **capabilities) -> types.ModuleType:
     """A stand-in for `aurasync_engine`: numpy's read, or `read`; the real constants unless
     `capabilities` overrides one."""
@@ -73,6 +115,8 @@ def fake_engine(read=None, **capabilities) -> types.ModuleType:
 
     module.read = read or default_read
     module.AmbienceExtractor = NumpyAmbienceExtractor
+    module.StreamingFIR = NumpyStreamingFIR
+    module.PartitionedFIR = NumpyPartitionedFIR
     constants = {"half": interpolation.HALF, "beta": interpolation.BETA, "steps": interpolation._STEPS}  # noqa: SLF001
     # The other stages' constants as numpy has them, so only `capabilities` can make it stale.
     module.capabilities = lambda: {**backend._expected(), "interpolation": {**constants, **capabilities}}  # noqa: SLF001
@@ -190,6 +234,17 @@ def test_a_build_with_other_constants_is_not_used(monkeypatch):
     assert "half" in resolved.reason
 
 
+@pytest.mark.parametrize("stage", ["fir", "virtual_bass"])
+def test_a_build_with_a_stale_stage_version_is_not_used(monkeypatch, stage):
+    module = fake_engine()
+    module.capabilities = lambda: {**backend._expected(), stage: {"version": 0}}  # noqa: SLF001
+    monkeypatch.setitem(sys.modules, "aurasync_engine", module)
+    backend.reset()
+    resolved = backend.resolve("rust")
+    assert resolved.active == "numpy"
+    assert stage in resolved.reason
+
+
 @pytest.mark.usefixtures("no_extension")
 def test_use_refuses_rust_when_it_cannot_read():
     with pytest.raises(ValueError, match="not installed"):
@@ -210,6 +265,22 @@ def test_interpolation_read_goes_through_the_chosen_engine(rust, data):
     got = interpolation.read(data, position)
     assert len(rust.calls) == 1
     assert np.array_equal(got, expected)
+
+
+@pytest.mark.usefixtures("rust")
+def test_the_fake_extension_has_the_filters():
+    """The FIR filters (EQ, crossover, bass, diffuse) run through the fake as they would through
+    the real extension, so a test with a fake never fails over for a missing class."""
+    x = np.random.default_rng(5).standard_normal(5000)
+    backend.use("numpy")
+    expected = (eq.StreamingFIR(np.ones(300)).process(x), eq.PartitionedFIR(np.ones(300), 1024).process(x))
+    backend.use("rust")
+    streaming, partitioned = eq.StreamingFIR(np.ones(300)), eq.PartitionedFIR(np.ones(300), 1024)
+    got = (streaming.process(x), partitioned.process(x))
+    assert isinstance(streaming._rust, NumpyStreamingFIR)  # noqa: SLF001
+    assert isinstance(partitioned._rust, NumpyPartitionedFIR)  # noqa: SLF001
+    assert all(np.array_equal(a, b) for a, b in zip(got, expected, strict=True))
+    assert backend.failure() is None
 
 
 def test_the_dispatcher_hands_rust_contiguous_float64(rust):
@@ -272,6 +343,64 @@ def test_rust_failure_is_silent_until_the_cut_then_numpy(failing, data):
     backend.use(resolved.active)
     assert np.array_equal(backend.read(data, position), interpolation.read_numpy(data, position))
     assert len(failing.calls) == 1
+
+
+@pytest.mark.parametrize("error", [ValueError, TypeError, AttributeError, RuntimeError])
+def test_building_or_configuring_falls_back_on_any_exception(rust, error):
+    """`built` (construction and configuration) treats any `Exception` as Rust failing: the handler
+    is told once with the type, the fallback is returned, and silence lasts until the cut's bottom."""
+    del rust
+    backend.use("rust")
+    failures: list[str] = []
+    backend.on_failure = failures.append
+
+    def boom():
+        msg = "planted"
+        raise error(msg)
+
+    assert backend.built(boom, lambda: "fallback") == "fallback"
+    assert backend.built(boom, lambda: "fallback") == "fallback"
+    assert len(failures) == 1
+    assert error.__name__ in failures[0]
+    assert "planted" in failures[0]
+    assert backend.failure() == failures[0]
+    assert backend.silent() == failures[0]
+    assert not backend.rust_active()
+    backend.use("numpy")  # the cut's bottom
+    assert backend.silent() is None
+
+
+def test_building_a_value_passes_through_and_base_exceptions_propagate(rust):
+    del rust
+    backend.use("rust")
+    assert backend.built(lambda: 7, lambda: 0) == 7
+    assert backend.failure() is None
+
+    def interrupt():
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        backend.built(interrupt, lambda: 0)
+    assert backend.failure() is None
+
+
+def test_a_type_error_in_the_per_block_call_still_propagates(monkeypatch):
+    """Controller ruling: only construction and configuration are soft; a `TypeError` in the hot
+    path is a caller's bug and must stay visible."""
+
+    def read(_data, _position):
+        msg = "argument 'data': wrong type"
+        raise TypeError(msg)
+
+    monkeypatch.setitem(sys.modules, "aurasync_engine", fake_engine(read=read))
+    backend.reset()
+    backend.use("rust")
+    failures: list[str] = []
+    backend.on_failure = failures.append
+    with pytest.raises(TypeError, match="wrong type"):
+        backend.read(np.ones(100), np.array([40.5]))
+    assert failures == []
+    assert backend.failure() is None
 
 
 @pytest.mark.usefixtures("failing")
@@ -624,6 +753,29 @@ def test_a_rust_service_says_once_that_rust_reads(tmp_path):
     svc = _service(tmp_path, engine="rust", log=lines.append)
     svc.close()
     assert sum("engine: rust reads" in line for line in lines) == 1
+
+
+@pytest.mark.usefixtures("rust")
+def test_a_build_failing_inside_the_switch_hook_is_not_logged_as_rust_reading(tmp_path):
+    """`use("rust")` ran, but a stage's build failed in its hook: silence until the cut's bottom
+    and numpy active, so the log must not say that Rust reads."""
+    lines: list[str] = []
+
+    def broken(_active: str) -> None:
+        def build():
+            msg = "an older build"
+            raise AttributeError(msg)
+
+        backend.built(build, lambda: None)
+
+    stage = types.SimpleNamespace(on_engine_switch=lambda active: broken(active) if active == "rust" else None)
+    backend.register(stage)
+    svc = _service(tmp_path, log=lines.append)  # the stage is there when the service first switches
+    svc.engine_set("rust")
+    assert backend.active() == "numpy"
+    assert backend.silent() is not None
+    assert not [line for line in lines if "rust reads" in line]
+    svc.close()
 
 
 @pytest.mark.usefixtures("rust")

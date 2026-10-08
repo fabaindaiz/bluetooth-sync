@@ -90,13 +90,13 @@
 
 Each of Tasks 5 to 15 ports one stage, in the spec §5 order, with the same steps: read the numpy module completely; port to `aurasync-dsp` (state in a struct; no allocation in the per-block call; `forbid(unsafe_code)`); expose in `aurasync-engine` (panic boundary around the whole body; float64 in/out; strided copied); dispatch in `dsp/backend.py` (the numpy stage instance owns the Rust object when `engine=rust`; a Rust failure → silence for that block, numpy from the next cut); golden ≤ 1e-9 against the numpy stage on its existing tests' inputs plus random blocks of odd sizes and parameter sweeps; a planted fault seen to fail; cost per block measured (numpy vs Rust, 1/3/8 speakers) and appended to the cost experiment; `cargo test/clippy/fmt`, `hatch test`, `hatch fmt --check` green.
 
-- [ ] Task 5: spatial / front upmix (`dsp/spatial.py`)
-- [ ] Task 6: ambience extractor (`dsp/ambience.py`)
-- [ ] Task 7: EQ, FFT convolution (`dsp/eq.py` `StreamingFIR`)
+- [x] Task 5: spatial / front upmix (`dsp/spatial.py`)
+- [x] Task 6: ambience extractor (`dsp/ambience.py`)
+- [x] Task 7: EQ, FFT convolution (`dsp/eq.py` `StreamingFIR`)
 - [ ] Task 8: decorrelation (`dsp/decorrelate.py`, `dsp/decorrelation_bank.py`)
 - [ ] Task 9: limiter / true peak (`dsp/limiter.py`)
-- [ ] Task 10: crossover (`dsp/crossover.py`)
-- [ ] Task 11: virtual bass (`dsp/virtual_bass.py`)
+- [x] Task 10: crossover (`dsp/crossover.py`)
+- [x] Task 11: virtual bass (`dsp/virtual_bass.py`)
 - [ ] Task 12: diffuse tail (`dsp/diffuse.py`)
 - [ ] Task 13: ramps and the cut (`dsp/ramps.py`)
 - [ ] Task 14: loudness meters (`dsp/loudness.py`)

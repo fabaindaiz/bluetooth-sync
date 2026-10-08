@@ -2113,8 +2113,13 @@ class Service:
         # Always: `use` is idempotent and ends a silence that a failure left, whatever the state
         # says is reading (a stop or a new wish may have come before the cut's bottom).
         backend.use(resolved.active)
-        if before != resolved.active or silent is not None or (announce and resolved.active != backend.NUMPY):
-            self.log(f"engine: {resolved.active} reads", part="engine")
+        # A build that failed inside the switch hook left silence and numpy: nothing "reads" yet,
+        # and the failure has its own line (`_engine_failed`).
+        reading = backend.active()
+        if backend.silent() is None and (
+            before != reading or silent is not None or (announce and reading != backend.NUMPY)
+        ):
+            self.log(f"engine: {reading} reads", part="engine")
 
     def _on_engine_failure(self, reason: str) -> None:
         """Rust failed inside a block (`backend._fail`, on this thread): the cut is asked between

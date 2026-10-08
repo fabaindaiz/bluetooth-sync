@@ -1,10 +1,13 @@
 """Which engine runs the DSP stages that have a Rust port: numpy or Rust (spec rust-engine §2).
 
 The numpy code stays and is the oracle; `aurasync_engine` (engine/crates/aurasync-engine, PyO3)
-is an optional extension. Three stages have a port: the band-limited read of the delay line
+is an optional extension. Five stages have a port: the band-limited read of the delay line
 (`interpolation.read`, which dispatches through `read` here), the spatial / front upmix
-(`spatial.SpatialUpmix`) and the ambience extractor (`ambience.Extractor`); each of the last two
-owns its Rust object and registers for the switch.
+(`spatial.SpatialUpmix`), the ambience extractor (`ambience.Extractor`) and the FIR filters by FFT
+convolution (`eq.StreamingFIR`, `eq.PartitionedFIR`, under the EQ, the crossover, the bass stage,
+the virtual bass and the diffuse tail) and the virtual bass's harmonic generator
+(`virtual_bass.VirtualBass`, which owns two Rust FIRs directly); each of the last four owns its Rust
+object and registers for the switch.
 
 **Choosing** (d-7c8794-196e0c). `"engine"` in `service.json` (`numpy` by default), overridden by
 `AURASYNC_ENGINE` for the tests and the CLI (`wanted`). `resolve` turns the wish into what can
@@ -23,16 +26,18 @@ for a cut, whose bottom resolves again and gets numpy. From the failing block un
 anyway), so numpy enters with the fade-in and the music goes on. During that window `active()`
 says numpy (it does not claim that Rust reads) and the service reports the failure as the reason.
 Without anyone listening (`on_failure` is None), nobody would cut, so the next read is numpy.
+Building or configuring a stage's Rust object is softer (`built`): any `Exception` there falls back.
 Rust stays disabled until `clear_failure` (the user chose it again) or `reset` (the program
 restarted); `clear_failure` does not end the silence, only `use` does. Any other exception
-(`ValueError`: a position out of range) is the caller's bug and propagates, as numpy's own error
-would.
+in a per-block call (`ValueError`: a position out of range) is the caller's bug and propagates,
+as numpy's own error would.
 
 **Later stages** (spec §5) plug in the same way, with one contract for the silence window:
 `rust_active()` says whether to call the stage's Rust object (built from `module()`); it is False
 from the failing block until `use` runs at the cut's bottom. In that window `silent()` is True and
 the stage returns silence; once it is False and `rust_active()` is False the stage is numpy.
-`guarded(call, silence)` runs the call with this same failure handling. A stage with state
+`guarded(call, silence)` runs a per-block call with this same failure handling; `built(call,
+fallback)` does it for construction and configuration (see there). A stage with state
 registers (`register(stage)`) and hears `stage.on_engine_switch(active)` from `use`, on the engine
 thread at the cut's bottom, to move or reset its state there; it is held weakly, so a stage the
 motor drops (a render change builds a new one) is not kept alive. A failure without a cut (nobody
@@ -126,6 +131,12 @@ def _expected() -> dict[str, dict[str, Any]]:
         "ambience": {
             "floor": ambience._PISO_NORMA,  # noqa: SLF001 - shared with the port
         },
+        # The FIR filters share no constant with numpy: `version` is bumped (here and in lib.rs)
+        # whenever the Rust behaviour of the stage changes, so a stale build is refused here
+        # instead of failing on the first filter.
+        "fir": {"version": 1},
+        # Likewise the virtual bass (it owns two of those filters, its calibration comes per call).
+        "virtual_bass": {"version": 1},
     }
 
 
@@ -208,7 +219,9 @@ def use(name: str) -> None:
 def register(stage: Any) -> None:
     """`stage.on_engine_switch(active)` is called from every `use`, on the engine thread at the
     cut's bottom, so a stage with state can move or reset it there. Held weakly: registering
-    does not keep the stage alive."""
+    does not keep the stage alive, and the dead ones are dropped here too (filters built and
+    dropped block after block must not pile up between two `use`)."""
+    _stages[:] = [ref for ref in _stages if ref() is not None]
     if any(ref() is stage for ref in _stages):
         return
     try:
@@ -284,6 +297,33 @@ def guarded(call: Callable[[], T], silence: Callable[[], T]) -> T:
     except RuntimeError as exc:
         _fail(f"Rust failed ({exc}); numpy reads from the next cut")
         return silence()
+
+
+def built(call: Callable[[], T], fallback: Callable[[], T]) -> T:
+    """Build or configure a stage's Rust object (constructor, `set_params`, `set_layout`, `state`,
+    `set_state`, `reset`); if it raises **any** `Exception`, disable Rust and return `fallback()`.
+
+    Use this, not `guarded`, outside the per-block path. There the extension may raise things that
+    are not a Rust panic and are not a caller's bug: `ValueError` / `TypeError` from PyO3 argument
+    conversion, `AttributeError` because an older build lacks the class or method. The session must
+    not die of them, so they are a failure exactly like `RuntimeError` in `guarded` (`_fail`:
+    the handler is told once, silence until the cut's bottom, numpy after), with the exception's
+    type and message as the reason and the traceback in the log. `BaseException` still propagates.
+
+    Keep `guarded` for the per-block processing calls: a `TypeError` there is a caller's bug and
+    must stay visible (controller ruling, 2026-10-08)."""
+    try:
+        return call()
+    except Exception as exc:  # noqa: BLE001 - the whole point: nothing from building takes the session down
+        _log.exception("engine: building or configuring a Rust stage raised %s", type(exc).__name__)
+        _fail(f"Rust failed ({type(exc).__name__}: {exc}); numpy reads from the next cut")
+    return fallback()
+
+
+def log_switch_failure(exc: Exception) -> None:
+    """A stage could not read its Rust state while the switch's target is numpy: nothing to report
+    to the failure handler (the user already chose numpy and the stage restarts there), only a log."""
+    _log.warning("engine: reading the Rust state at the switch to numpy raised %s: %s", type(exc).__name__, exc)
 
 
 def _fail(reason: str) -> None:

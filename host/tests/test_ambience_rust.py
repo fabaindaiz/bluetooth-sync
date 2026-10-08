@@ -16,6 +16,7 @@ extractor. The extractor runs once per input, not per speaker.
 from __future__ import annotations
 
 import gc
+import types
 import weakref
 
 import aurasync_engine
@@ -383,6 +384,105 @@ def test_a_rust_panic_with_a_service_is_silent_until_the_cut_s_bottom():
     assert ex._rust is not None  # noqa: SLF001
     ex.procesar(*feed[5])
     assert backend.failure() is None
+
+
+class _ProxyRust:
+    """The real Rust extractor with one method replaced (a failure that is not a panic)."""
+
+    def __init__(self, inner, **replaced):
+        self._inner, self._replaced = inner, replaced
+
+    def __getattr__(self, name):
+        return self._replaced.get(name) or getattr(self._inner, name)
+
+
+def _raiser(error):
+    def raise_it(*_args):
+        msg = "planted"
+        raise error(msg)
+
+    return raise_it
+
+
+def _assert_fell_back_to_numpy(ex, feed, heard, error):
+    assert len(heard) == 1
+    assert error.__name__ in heard[0]
+    assert error.__name__ in backend.failure()
+    for left, right in feed[:2]:  # the silent window: silence, nothing raised
+        assert not np.any(ex.procesar(left, right))
+    backend.use(backend.NUMPY)  # the cut's bottom
+    assert ex._rust is None  # noqa: SLF001
+    assert np.any(ex.procesar(*feed[2]))
+    assert len(heard) == 1
+
+
+@pytest.mark.parametrize("error", [ValueError, TypeError, AttributeError])
+@pytest.mark.parametrize("failing", ["constructor", "set_params", "set_state"])
+def test_a_rust_extractor_that_fails_while_being_built_falls_back_to_numpy(monkeypatch, error, failing):
+    """Not a panic: argument conversion, or an older extension without the class or method. The
+    session keeps its audio (silence until the cut's bottom, then numpy), the handler hears once."""
+    real = aurasync_engine.AmbienceExtractor
+    if failing == "constructor":
+
+        class Broken:
+            def __init__(self, *_args):
+                msg = "planted"
+                raise error(msg)
+
+        cls = Broken
+    else:
+
+        class Fake:
+            def __new__(cls, *args):
+                return _ProxyRust(real(*args), **{failing: _raiser(error)})
+
+        cls = Fake
+    monkeypatch.setattr(backend, "module", lambda: types.SimpleNamespace(AmbienceExtractor=cls))
+    feed = blocks(*music(seconds=1.0, seed=20))
+    heard: list[str] = []
+    backend.reset()
+    backend.use(backend.RUST)
+    backend.on_failure = heard.append
+    ex = Extractor()
+    _assert_fell_back_to_numpy(ex, feed, heard, error)
+
+
+@pytest.mark.parametrize("error", [ValueError, TypeError, AttributeError])
+@pytest.mark.parametrize("call", ["set_params", "reset"])
+def test_a_live_configuration_that_fails_falls_back_to_numpy(error, call):
+    feed = blocks(*music(seconds=1.0, seed=21))
+    heard: list[str] = []
+    backend.reset()
+    backend.use(backend.RUST)
+    backend.on_failure = heard.append
+    ex = Extractor()
+    ex.procesar(*feed[0])
+    ex._rust = _ProxyRust(ex._rust, **{call: _raiser(error)})  # noqa: SLF001
+    if call == "set_params":
+        ex.p = Parametros(lam=0.5)
+    else:
+        ex.reiniciar()
+    _assert_fell_back_to_numpy(ex, feed[1:], heard, error)
+
+
+def test_a_state_read_that_fails_at_the_switch_to_numpy_restarts_without_a_second_cut():
+    """The user chose numpy: a failed state read is logged, not a Rust failure (no `_fail`, no
+    silence, no second call to the handler); the extractor restarts in numpy and produces audio."""
+    feed = blocks(*music(seconds=1.0, seed=22))
+    heard: list[str] = []
+    backend.reset()
+    backend.use(backend.RUST)
+    backend.on_failure = heard.append
+    ex = Extractor()
+    ex.procesar(*feed[0])
+    ex._rust = _ProxyRust(ex._rust, state=_raiser(TypeError))  # noqa: SLF001
+    backend.use(backend.NUMPY)
+    assert ex._rust is None  # noqa: SLF001
+    assert backend.silent() is None
+    assert backend.failure() is None
+    assert heard == []
+    assert np.any(ex.procesar(*feed[1]))
+    assert heard == []
 
 
 def test_a_rust_panic_while_setting_params_is_a_fresh_numpy_extractor_at_the_cut():

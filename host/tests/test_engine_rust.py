@@ -185,7 +185,7 @@ def test_capabilities_match_python_constants():
         "beta": interpolation.BETA,
         "steps": STEPS,
     }
-    assert set(aurasync_engine.capabilities()) == {"interpolation", "spatial", "ambience"}
+    assert set(aurasync_engine.capabilities()) == {"interpolation", "spatial", "ambience", "fir", "virtual_bass"}
 
 
 def test_a_rust_panic_is_a_runtime_error_and_reading_goes_on(data):

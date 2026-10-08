@@ -1,0 +1,36 @@
+== corrida 1, AURASYNC_ENGINE=numpy
+ 12:54:35 up 1 day,  1:12,  1 user,  load average: 0,88, 0,76, 0,88
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 4.82 ms, p95 5.10 ms → 18× tiempo real
+  todo encendido (protect + armónicos): mediana 6.10 ms, p95 6.52 ms → 14× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 5.29 ms, p95 5.61 ms → 16× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.736 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.050 ms
+ 12:54:39 up 1 day,  1:12,  1 user,  load average: 0,88, 0,76, 0,88
+== corrida 1, AURASYNC_ENGINE=rust
+ 12:54:39 up 1 day,  1:12,  1 user,  load average: 0,88, 0,76, 0,88
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 1.34 ms, p95 1.41 ms → 64× tiempo real
+  todo encendido (protect + armónicos): mediana 2.63 ms, p95 2.90 ms → 32× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 2.29 ms, p95 2.43 ms → 37× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.571 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.053 ms
+ 12:54:40 up 1 day,  1:12,  1 user,  load average: 0,89, 0,76, 0,88
+== corrida 2, AURASYNC_ENGINE=numpy
+ 12:54:40 up 1 day,  1:12,  1 user,  load average: 0,89, 0,76, 0,88
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 4.81 ms, p95 5.07 ms → 18× tiempo real
+  todo encendido (protect + armónicos): mediana 6.09 ms, p95 6.48 ms → 14× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 5.28 ms, p95 5.66 ms → 16× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.744 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.052 ms
+ 12:54:43 up 1 day,  1:12,  1 user,  load average: 0,89, 0,76, 0,88
+== corrida 2, AURASYNC_ENGINE=rust
+ 12:54:43 up 1 day,  1:12,  1 user,  load average: 0,89, 0,76, 0,88
+equipo: HP-O16 (x86_64), bloque 4096, 3 parlantes
+  por defecto: mediana 1.33 ms, p95 1.37 ms → 64× tiempo real
+  todo encendido (protect + armónicos): mediana 2.68 ms, p95 2.95 ms → 32× tiempo real
+  todo encendido (crossover a un Charge 6): mediana 2.25 ms, p95 2.36 ms → 38× tiempo real
+  medidores de sonoridad (entrada + 3 salidas): 0.629 ms por bloque (mediana)
+  resumen de calidad (2 Hz): 0.052 ms
+ 12:54:45 up 1 day,  1:12,  1 user,  load average: 0,90, 0,77, 0,88

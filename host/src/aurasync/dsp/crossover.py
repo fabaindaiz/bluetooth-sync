@@ -27,6 +27,12 @@ applied as a causal FIR by FFT overlap-add (`eq.StreamingFIR`), so the output do
 depend on the block size. With numpy only, a recursive IIR would run sample by sample in
 Python; the FIR costs ~0.03 ms per 4096-sample block (MEDIDO, Mac).
 
+**Numpy and Rust**: the design (`_butterworth`, `response`, `impulses`, `group_delay_dc_ms`) runs
+once per cutoff, not per block, and stays numpy. Per block, a branch is its `StreamingFIR`, which
+holds a Rust object when the engine is Rust (`dsp/eq.py`, `dsp/backend.py`); the rest of a block
+(two energies and a logarithm) is microseconds, so nothing here is ported on its own
+(`docs/research/experimentos/20-…` §6).
+
 **Order** (MEDIDO, `tests/test_crossover.py`): LR4 (the default) at 100 Hz takes 28.3 dB of
 pink noise's energy out of 20-60 Hz, but point by point it leaves -18.8 dB at 60 Hz and
 -24.6 dB at 50 Hz (24 dB/octave, and 60 Hz is under an octave below 100). Where every

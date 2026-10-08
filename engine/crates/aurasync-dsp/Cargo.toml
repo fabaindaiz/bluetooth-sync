@@ -1,14 +1,14 @@
 [package]
 name = "aurasync-dsp"
 version = "0.1.0"
-description = "Pure-Rust DSP for aurasync: the band-limited fractional delay read, the spatial upmix and the ambience extractor."
+description = "Pure-Rust DSP for aurasync: the band-limited fractional delay read, the spatial upmix, the ambience extractor and the FIR filters by FFT convolution."
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Exact versions, as the other pins of the repository: the FFTs of the spatial upmix and the
-# ambience extractor. realfft 3.5.0 is built on rustfft 6.x; rustfft is named too so that its
-# version is pinned, not only allowed.
+# Exact versions, as the other pins of the repository: the FFTs of the spatial upmix, the
+# ambience extractor and the FIR filters. realfft 3.5.0 is built on rustfft 6.x; rustfft is
+# named too so that its version is pinned, not only allowed.
 [dependencies]
 realfft = "=3.5.0"
 rustfft = "=6.4.1"

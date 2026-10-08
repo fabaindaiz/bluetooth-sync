@@ -15,6 +15,19 @@
 //!   extractor owns one when the engine is Rust, and moves its state in and out (`state`,
 //!   `set_state`) at a cut's bottom. Inputs are 1-D float64 arrays (a strided view is copied);
 //!   `process` gives a new 1-D float64 array as long as the block.
+//! - `StreamingFIR` and `PartitionedFIR`: `aurasync.dsp.eq`'s FFT convolutions in Rust (overlap-add
+//!   with a tail; uniform partitioned overlap-save), within 1e-9 of numpy
+//!   (host/tests/test_eq_rust.py). The numpy filters own one when the engine is Rust (so the EQ,
+//!   the crossover, the bass protection, the virtual bass and the diffuse tail all get it), and
+//!   move their state in and out (`state`, `set_state`) at a cut's bottom. Inputs are 1-D float64
+//!   arrays (a strided view is copied); `process` gives a new 1-D float64 array as long as the
+//!   block.
+//! - `VirtualBass`: `aurasync.dsp.virtual_bass.VirtualBass`'s per-block work in Rust (the bass
+//!   band, the rectifier, the harmonics band, the calibration and the gain's ramp), within 1e-9
+//!   of numpy (host/tests/test_virtual_bass_rust.py). It owns its two partitioned filters
+//!   directly, so a block is one call: `process(x, current, target)` gives the harmonics and the
+//!   two energies. The numpy stage owns one when the engine is Rust and moves the filters'
+//!   states in and out (`state`, `set_state`, `reset`) at a cut's bottom.
 //! - `capabilities()`: the constants each stage was built with, for the host to check against its
 //!   own.
 //!
@@ -30,8 +43,10 @@ use std::panic::{self, AssertUnwindSafe};
 use std::sync::{Mutex, MutexGuard};
 
 use aurasync_dsp::ambience::{self, AmbienceError};
+use aurasync_dsp::fir::{self, FirError};
 use aurasync_dsp::interpolation::{self, ReadError, Reader};
 use aurasync_dsp::spatial::{self, Params, SpatialError, State};
+use aurasync_dsp::virtual_bass;
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -151,7 +166,9 @@ fn read<'py>(
 }
 
 /// The constants each stage was built with: `{"interpolation": {"half": 16, "beta": 8.0,
-/// "steps": 2048}, "spatial": {...}, "ambience": {"floor": 1e-8}}`.
+/// "steps": 2048}, "spatial": {...}, "ambience": {"floor": 1e-8}, "fir": {}, "virtual_bass": {}}`. The FIR
+/// filters and the virtual bass share no constant with numpy; their keys say this build has them, so the host refuses an
+/// older build at load instead of failing on the first filter.
 #[pyfunction]
 fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     guard(|| {
@@ -175,6 +192,14 @@ fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
         all.set_item("interpolation", read)?;
         all.set_item("spatial", upmix)?;
         all.set_item("ambience", extractor)?;
+        // No constant shared with numpy: `version` is bumped (here and in backend.py) whenever
+        // the Rust behaviour of the stage changes, so a stale build is refused.
+        let fir = PyDict::new(py);
+        fir.set_item("version", 1)?;
+        let bass = PyDict::new(py);
+        bass.set_item("version", 1)?;
+        all.set_item("fir", fir)?;
+        all.set_item("virtual_bass", bass)?;
         Ok(all)
     })
 }
@@ -593,12 +618,388 @@ impl AmbienceExtractor {
     }
 }
 
+fn fir_error(error: FirError) -> PyErr {
+    PyValueError::new_err(error.to_string())
+}
+
+/// `taps` as a 1-D float64 numpy array's samples, owned.
+fn taps_of(taps: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
+    let taps = float64_vector("taps", taps)?;
+    Ok(samples(&taps).into_owned())
+}
+
+/// `aurasync.dsp.eq.StreamingFIR`'s work: the numpy filter owns one when the engine is Rust.
+/// Every method's whole body runs inside [`guard`]: a panic is a `RuntimeError`, after which the
+/// host never calls this object again (its state may be half-written).
+#[pyclass(name = "StreamingFIR", module = "aurasync_engine")]
+struct StreamingFir {
+    inner: fir::StreamingFir,
+    /// `_panic_next()` was called: the next call panics. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    panic_next: bool,
+}
+
+impl StreamingFir {
+    /// Panics if `_panic_next()` was called (builds with `test-panic`); nothing otherwise.
+    fn planted_panic(&mut self, _call: &str) {
+        #[cfg(feature = "test-panic")]
+        if std::mem::take(&mut self.panic_next) {
+            panic!("planted panic in StreamingFIR.{_call} (feature test-panic)");
+        }
+    }
+}
+
+#[pymethods]
+impl StreamingFir {
+    /// A filter with `taps` (a 1-D float64 array, at least one tap) and a silent tail; the FFT
+    /// size for blocks of `block` samples is built now (others on their first block).
+    #[new]
+    #[pyo3(signature = (taps, block = 4096))]
+    fn new(taps: &Bound<'_, PyAny>, block: usize) -> PyResult<Self> {
+        guard(|| {
+            let mut inner = fir::StreamingFir::new(&taps_of(taps)?).map_err(fir_error)?;
+            inner.prepare(block);
+            Ok(Self {
+                inner,
+                #[cfg(feature = "test-panic")]
+                panic_next: false,
+            })
+        })
+    }
+
+    /// numpy's `set_taps`: the tail is reset only when the length changes.
+    fn set_taps(&mut self, taps: &Bound<'_, PyAny>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("set_taps");
+            self.inner.set_taps(&taps_of(taps)?).map_err(fir_error)
+        })
+    }
+
+    /// numpy's `taps = ...`: the tail is kept as it is.
+    fn replace_taps(&mut self, taps: &Bound<'_, PyAny>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("replace_taps");
+            self.inner.replace_taps(&taps_of(taps)?).map_err(fir_error)
+        })
+    }
+
+    /// One block: a new float64 array of `len(x)` samples.
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        x: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        guard(|| {
+            self.planted_panic("process");
+            let x = float64_vector("x", x)?;
+            let x = samples(&x);
+            let mut out = vec![0.0; x.len()];
+            self.inner.process(&x, &mut out).map_err(fir_error)?;
+            Ok(PyArray1::from_vec(py, out))
+        })
+    }
+
+    /// The whole state, as numpy's filter keeps it: `{"taps": ..., "tail": ...}`.
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        guard(|| {
+            let state = self.inner.state();
+            let out = PyDict::new(py);
+            out.set_item("taps", PyArray1::from_vec(py, state.taps))?;
+            out.set_item("tail", PyArray1::from_vec(py, state.tail))?;
+            Ok(out)
+        })
+    }
+
+    /// Takes a state from numpy's filter (the keys of `state()`); a `ValueError` changes nothing.
+    fn set_state(&mut self, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("set_state");
+            let state = fir::StreamingState {
+                taps: vector(state, "taps")?,
+                tail: vector(state, "tail")?,
+            };
+            self.inner.set_state(&state).map_err(fir_error)
+        })
+    }
+
+    /// Makes the next `process`, `set_taps`, `replace_taps` or `set_state` panic inside its
+    /// guard: the tests of the filter's failure path. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    fn _panic_next(&mut self) {
+        self.panic_next = true;
+    }
+}
+
+/// A [`fir::PartitionedState`] as numpy's `PartitionedFIR` keeps it: `history` (1-D), `fdl_re`
+/// and `fdl_im` (`(partitions, bins)`), `head` (an int) and `fdl_valid` (a bool).
+fn partitioned_dict<'py>(
+    py: Python<'py>,
+    state: &fir::PartitionedState,
+    bins: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    let re: Vec<Vec<f64>> = state
+        .fdl
+        .iter()
+        .map(|row| row.iter().map(|z| z.re).collect())
+        .collect();
+    let im: Vec<Vec<f64>> = state
+        .fdl
+        .iter()
+        .map(|row| row.iter().map(|z| z.im).collect())
+        .collect();
+    let out = PyDict::new(py);
+    out.set_item("history", PyArray1::from_vec(py, state.history.clone()))?;
+    out.set_item("fdl_re", matrix(py, &re, bins)?)?;
+    out.set_item("fdl_im", matrix(py, &im, bins)?)?;
+    out.set_item("head", state.head)?;
+    out.set_item("fdl_valid", state.fdl_valid)?;
+    Ok(out)
+}
+
+/// The inverse of [`partitioned_dict`]; a `ValueError` for a missing key or shapes that differ.
+fn partitioned_state(state: &Bound<'_, PyDict>) -> PyResult<fir::PartitionedState> {
+    let re = float64_rows("fdl_re", &item(state, "fdl_re")?)?;
+    let im = float64_rows("fdl_im", &item(state, "fdl_im")?)?;
+    if re.len() != im.len() || re.iter().zip(&im).any(|(a, b)| a.len() != b.len()) {
+        return Err(PyValueError::new_err(
+            "state: fdl_re and fdl_im have different shapes",
+        ));
+    }
+    Ok(fir::PartitionedState {
+        history: vector(state, "history")?,
+        fdl: re
+            .iter()
+            .zip(&im)
+            .map(|(re, im)| {
+                re.iter()
+                    .zip(im)
+                    .map(|(&re, &im)| fir::Complex::new(re, im))
+                    .collect()
+            })
+            .collect(),
+        head: item(state, "head")?.extract()?,
+        fdl_valid: item(state, "fdl_valid")?.extract()?,
+    })
+}
+
+/// `aurasync.dsp.eq.PartitionedFIR`'s work: the numpy filter owns one when the engine is Rust.
+/// Every method's whole body runs inside [`guard`]: a panic is a `RuntimeError`, after which the
+/// host never calls this object again (its state may be half-written).
+#[pyclass(name = "PartitionedFIR", module = "aurasync_engine")]
+struct PartitionedFir {
+    inner: fir::PartitionedFir,
+    /// `_panic_next()` was called: the next call panics. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    panic_next: bool,
+}
+
+impl PartitionedFir {
+    /// Panics if `_panic_next()` was called (builds with `test-panic`); nothing otherwise.
+    fn planted_panic(&mut self, _call: &str) {
+        #[cfg(feature = "test-panic")]
+        if std::mem::take(&mut self.panic_next) {
+            panic!("planted panic in PartitionedFIR.{_call} (feature test-panic)");
+        }
+    }
+}
+
+#[pymethods]
+impl PartitionedFir {
+    /// A filter with `taps` (a 1-D float64 array, at least one tap) cut into partitions of
+    /// `block` samples, at rest.
+    #[new]
+    fn new(taps: &Bound<'_, PyAny>, block: usize) -> PyResult<Self> {
+        guard(|| {
+            Ok(Self {
+                inner: fir::PartitionedFir::new(&taps_of(taps)?, block).map_err(fir_error)?,
+                #[cfg(feature = "test-panic")]
+                panic_next: false,
+            })
+        })
+    }
+
+    /// One block (any length): a new float64 array of `len(x)` samples.
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        x: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        guard(|| {
+            self.planted_panic("process");
+            let x = float64_vector("x", x)?;
+            let x = samples(&x);
+            let mut out = vec![0.0; x.len()];
+            self.inner.process(&x, &mut out).map_err(fir_error)?;
+            Ok(PyArray1::from_vec(py, out))
+        })
+    }
+
+    /// Takes `x` as input without computing its output (numpy's `skip`).
+    fn skip(&mut self, x: &Bound<'_, PyAny>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("skip");
+            let x = float64_vector("x", x)?;
+            self.inner.skip(&samples(&x));
+            Ok(())
+        })
+    }
+
+    /// The whole state, as numpy's filter keeps it: `history` (1-D), `fdl_re` and `fdl_im`
+    /// (`(partitions, block + 1)`), `head` (an int) and `fdl_valid` (a bool).
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        guard(|| partitioned_dict(py, &self.inner.state(), self.inner.block() + 1))
+    }
+
+    /// Takes a state from numpy's filter (the keys of `state()`). Every size is checked first;
+    /// a `ValueError` changes nothing.
+    fn set_state(&mut self, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("set_state");
+            self.inner
+                .set_state(&partitioned_state(state)?)
+                .map_err(fir_error)
+        })
+    }
+
+    /// Makes the next `process`, `skip` or `set_state` panic inside its guard: the tests of the
+    /// filter's failure path. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    fn _panic_next(&mut self) {
+        self.panic_next = true;
+    }
+}
+
+/// `aurasync.dsp.virtual_bass.VirtualBass`'s per-block work: the numpy stage owns one when the
+/// engine is Rust. It owns the two partitioned filters (one call per block). Every method's whole
+/// body runs inside [`guard`]: a panic is a `RuntimeError`, after which the host never calls this
+/// object again (its state may be half-written).
+#[pyclass(name = "VirtualBass", module = "aurasync_engine")]
+struct VirtualBass {
+    inner: virtual_bass::VirtualBass,
+    block: usize,
+    /// `_panic_next()` was called: the next call panics. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    panic_next: bool,
+}
+
+impl VirtualBass {
+    /// Panics if `_panic_next()` was called (builds with `test-panic`); nothing otherwise.
+    fn planted_panic(&mut self, _call: &str) {
+        #[cfg(feature = "test-panic")]
+        if std::mem::take(&mut self.panic_next) {
+            panic!("planted panic in VirtualBass.{_call} (feature test-panic)");
+        }
+    }
+}
+
+#[pymethods]
+impl VirtualBass {
+    /// A generator for the bass band's `band` taps and the harmonics band's `out` taps (1-D
+    /// float64 arrays, at least one tap each), the `calibration` gain, filters cut into
+    /// partitions of `block` samples, at rest.
+    #[new]
+    fn new(
+        band: &Bound<'_, PyAny>,
+        out: &Bound<'_, PyAny>,
+        calibration: f64,
+        block: usize,
+    ) -> PyResult<Self> {
+        guard(|| {
+            Ok(Self {
+                inner: virtual_bass::VirtualBass::new(
+                    &taps_of(band)?,
+                    &taps_of(out)?,
+                    calibration,
+                    block,
+                )
+                .map_err(fir_error)?,
+                block,
+                #[cfg(feature = "test-panic")]
+                panic_next: false,
+            })
+        })
+    }
+
+    /// One block with the gain going from `current` to `target` across it (constant when they are
+    /// equal): `(harmonics, bass_energy, harmonics_energy)`, the harmonics a new float64 array of
+    /// `len(x)` samples.
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        x: &Bound<'py, PyAny>,
+        current: f64,
+        target: f64,
+    ) -> PyResult<(Bound<'py, PyArray1<f64>>, f64, f64)> {
+        guard(|| {
+            self.planted_panic("process");
+            let x = float64_vector("x", x)?;
+            let x = samples(&x);
+            let mut out = vec![0.0; x.len()];
+            let energies = self
+                .inner
+                .process(&x, current, target, &mut out)
+                .map_err(fir_error)?;
+            Ok((PyArray1::from_vec(py, out), energies.bass, energies.made))
+        })
+    }
+
+    /// Both filters back at rest.
+    fn reset(&mut self) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("reset");
+            self.inner.reset();
+            Ok(())
+        })
+    }
+
+    /// The whole state, as numpy's stage keeps it: `{"band": ..., "out": ...}`, each the state of
+    /// a numpy `PartitionedFIR` (`PartitionedFIR.state`'s keys).
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        guard(|| {
+            let state = self.inner.state();
+            let bins = self.block + 1;
+            let out = PyDict::new(py);
+            out.set_item("band", partitioned_dict(py, &state.band, bins)?)?;
+            out.set_item("out", partitioned_dict(py, &state.out, bins)?)?;
+            Ok(out)
+        })
+    }
+
+    /// Takes a state from numpy's stage (the keys of `state()`); a `ValueError` changes nothing.
+    fn set_state(&mut self, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        guard(|| {
+            self.planted_panic("set_state");
+            let part = |name: &str| -> PyResult<fir::PartitionedState> {
+                let dict = item(state, name)?
+                    .cast_into::<PyDict>()
+                    .map_err(|_| PyTypeError::new_err(format!("state: {name} must be a dict")))?;
+                partitioned_state(&dict)
+            };
+            let state = virtual_bass::VirtualBassState {
+                band: part("band")?,
+                out: part("out")?,
+            };
+            self.inner.set_state(&state).map_err(fir_error)
+        })
+    }
+
+    /// Makes the next `process`, `reset` or `set_state` panic inside its guard: the tests of the
+    /// stage's failure path. Only in builds with `test-panic`.
+    #[cfg(feature = "test-panic")]
+    fn _panic_next(&mut self) {
+        self.panic_next = true;
+    }
+}
+
 #[pymodule]
 fn aurasync_engine(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(read, module)?)?;
     module.add_function(wrap_pyfunction!(capabilities, module)?)?;
     module.add_class::<SpatialUpmix>()?;
     module.add_class::<AmbienceExtractor>()?;
+    module.add_class::<StreamingFir>()?;
+    module.add_class::<PartitionedFir>()?;
+    module.add_class::<VirtualBass>()?;
     #[cfg(feature = "test-panic")]
     module.add_function(wrap_pyfunction!(_panic, module)?)?;
     #[cfg(feature = "test-panic")]

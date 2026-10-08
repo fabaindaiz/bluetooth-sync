@@ -19,12 +19,27 @@ Lifting can push a loud passage past full scale; the limiter at the end of each 
 The filter is linear-phase and the same length for every speaker, so it delays all of
 them by the same `LATENCY_SAMPLES` and never moves one relative to another. With no
 correction it is a delayed impulse: switching EQ on or off keeps the timing.
+
+**Engine** (spec rust-engine §5, `dsp/backend.py`): with `engine=rust` `StreamingFIR` and
+`PartitionedFIR` hand their work to `aurasync_engine.StreamingFIR` / `PartitionedFIR`
+(engine/crates/aurasync-dsp/src/fir.rs), within 1e-9 of this code, which stays the oracle
+(tests/test_eq_rust.py). Every user (the EQ, the crossover, the bass protection and its
+all-pass, the virtual bass, the diffuse tail) gets Rust with no change. A filter builds its Rust
+object on its first block (one built and never run costs nothing: `VirtualBass` only rebuilds its
+filters after they ran, so its off state builds none), registers then, and moves its state into it, or back, when
+the engine switches at a cut's bottom (`on_engine_switch`): the tail and the taps; the history,
+the delay line, its head and whether it is valid. The move is exact. After a Rust failure every
+filter gives silence until the cut's bottom, then numpy; the one that failed starts afresh (its
+Rust state may be torn).
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
+from aurasync.dsp import backend
 from aurasync.dsp.response import THIRDS
 
 SR = 48000
@@ -146,7 +161,92 @@ def response_of(h: np.ndarray, sr: int = SR) -> np.ndarray:
     )
 
 
-class StreamingFIR:
+def _vector(x: np.ndarray) -> np.ndarray:
+    """What the Rust filters take: float64, C-contiguous (no copy when it already is)."""
+    return np.ascontiguousarray(x, dtype=np.float64)
+
+
+class _RustOwned:
+    """What both filters share to own a Rust object (`dsp/backend.py`): following the engine,
+    building, configuring and failing. A subclass gives `_build_rust`, `_numpy_state`,
+    `_load_state` and `_restart`."""
+
+    _rust: Any = None
+    """The Rust filter while the engine is Rust; the numpy state is then stale until the switch
+    back moves Rust's state into it."""
+    _rust_broken = False
+    """A Rust call failed: its state may be torn, so the next switch restarts in numpy."""
+    _registered = False
+
+    def on_engine_switch(self, _active: str) -> None:
+        """`backend.use` at a cut's bottom: move the state to the engine that runs now."""
+        self._follow(rust=backend.rust_active())
+
+    def _ready(self) -> bool:
+        """Before a block: follow the engine. False while the output must be silence (a Rust
+        failure, until the cut's bottom)."""
+        if backend.silent() is None:
+            self._follow(rust=backend.rust_active())
+        return backend.silent() is None
+
+    def _follow(self, *, rust: bool) -> None:
+        """Run on Rust (`rust`) or numpy from now on, moving the state across; after a failure,
+        restart in numpy first."""
+        if self._rust_broken:
+            self._rust, self._rust_broken = None, False
+            self._restart()
+        if rust and self._rust is None:
+            self._rust = backend.built(self._build_rust, lambda: None)
+            if self._rust is not None and not self._registered:
+                backend.register(self)
+                self._registered = True
+        elif not rust and self._rust is not None:
+            # Numpy was chosen already: a failed state read is not a Rust failure to report (no
+            # second cut); the filter just restarts in numpy.
+            try:
+                state = self._rust.state()
+            except Exception as exc:  # noqa: BLE001 - any trouble reading the state restarts numpy
+                backend.log_switch_failure(exc)
+                state = None
+            self._rust = None
+            if state is None:
+                self._restart()
+            else:
+                self._load_state(state)
+
+    def _rust_call(self, call: Any) -> None:
+        if self._rust_broken:
+            return  # torn: never called again (lib.rs); the switch restarts in numpy
+        rust = self._rust
+        backend.built(lambda: call(rust), self._broke)
+
+    def _rust_block(self, call: Any, n: int) -> np.ndarray:
+        """A per-block Rust call; a Rust failure gives `n` samples of silence."""
+
+        def silence() -> np.ndarray:
+            self._broke()
+            return np.zeros(n)
+
+        rust = self._rust
+        return backend.guarded(lambda: call(rust), silence)
+
+    def _broke(self) -> None:
+        self._rust_broken = True
+
+    def _build_rust(self) -> Any:
+        raise NotImplementedError
+
+    def _numpy_state(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    def _restart(self) -> None:
+        raise NotImplementedError
+
+
+class StreamingFIR(_RustOwned):
     """FFT overlap-add convolution that keeps state between blocks.
 
     `set_taps` swaps the filter; the caller does it at the bottom of a fade (the motor's
@@ -168,14 +268,21 @@ class StreamingFIR:
 
     @taps.setter
     def taps(self, taps: np.ndarray) -> None:
+        """New taps; the tail is kept as it is."""
         self._taps = np.asarray(taps, dtype=float)
         self._spectra = {}
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.replace_taps(_vector(self._taps)))
 
     def set_taps(self, taps: np.ndarray) -> None:
+        """New taps; the tail is reset to silence only when the length changes."""
         taps = np.asarray(taps, dtype=float)
         if len(taps) != len(self._taps):
             self._tail = np.zeros(len(taps) - 1)
-        self.taps = taps
+        self._taps = taps
+        self._spectra = {}
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.set_taps(_vector(taps)))
 
     def _spectrum(self, size: int) -> np.ndarray:
         spectrum = self._spectra.get(size)
@@ -187,6 +294,15 @@ class StreamingFIR:
         n = len(x)
         if n == 0:
             return np.zeros(0)
+        if not self._ready():
+            return np.zeros(n)
+        if self._rust is not None:
+            x = _vector(x)
+            return self._rust_block(lambda rust: rust.process(x), n)
+        return self._process_numpy(x)
+
+    def _process_numpy(self, x: np.ndarray) -> np.ndarray:
+        n = len(x)
         m = len(self._taps)
         size = 1 << int(np.ceil(np.log2(n + m - 1)))
         full = np.fft.irfft(np.fft.rfft(x, size) * self._spectrum(size), size)[: n + m - 1]
@@ -194,8 +310,27 @@ class StreamingFIR:
         self._tail = full[n:].copy()
         return full[:n]
 
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
 
-class PartitionedFIR:
+    def _build_rust(self) -> Any:
+        rust = backend.module().StreamingFIR(_vector(self._taps))
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _numpy_state(self) -> dict[str, Any]:
+        return {"taps": _vector(self._taps), "tail": _vector(self._tail)}
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        taps = np.array(state["taps"])
+        if not np.array_equal(taps, self._taps):
+            self._taps, self._spectra = taps, {}
+        self._tail = np.array(state["tail"])
+
+    def _restart(self) -> None:
+        self._tail = np.zeros(len(self._taps) - 1)
+
+
+class PartitionedFIR(_RustOwned):
     """Uniform partitioned convolution (overlap-save), for long filters, with no latency.
 
     The filter is cut into partitions of `block` samples; each block of input costs one FFT
@@ -223,7 +358,18 @@ class PartitionedFIR:
 
     def skip(self, x: np.ndarray) -> None:
         """Take `x` as input without computing its output (the caller does not need it)."""
-        self._push(np.asarray(x, dtype=float))
+        x = np.asarray(x, dtype=float)
+        if not self._ready():
+            return
+        if self._rust is not None:
+            x = _vector(x)
+            rust = self._rust
+            backend.guarded(lambda: rust.skip(x), self._broke)
+            return
+        self._skip_numpy(x)
+
+    def _skip_numpy(self, x: np.ndarray) -> None:
+        self._push(x)
         self._fdl_valid = False
 
     def _push(self, x: np.ndarray) -> None:
@@ -259,9 +405,48 @@ class PartitionedFIR:
 
     def process(self, x: np.ndarray) -> np.ndarray:
         x = np.asarray(x, dtype=float)
-        n, p = len(x), self.block
+        n = len(x)
         if n == 0:
             return np.zeros(0)
+        if not self._ready():
+            return np.zeros(n)
+        if self._rust is not None:
+            x = _vector(x)
+            return self._rust_block(lambda rust: rust.process(x), n)
+        return self._process_numpy(x)
+
+    def _process_numpy(self, x: np.ndarray) -> np.ndarray:
+        n, p = len(x), self.block
         if n <= p:
             return self._one(x)
         return np.concatenate([self._one(x[i : i + p]) for i in range(0, n, p)])
+
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
+
+    def _build_rust(self) -> Any:
+        rust = backend.module().PartitionedFIR(_vector(self.taps), self.block)
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _numpy_state(self) -> dict[str, Any]:
+        return {
+            "history": _vector(self._history),
+            "fdl_re": _vector(self._fdl.real),
+            "fdl_im": _vector(self._fdl.imag),
+            "head": int(self._head),
+            "fdl_valid": bool(self._fdl_valid),
+        }
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        self._history = np.array(state["history"])
+        self._fdl = np.empty(np.shape(state["fdl_re"]), dtype=complex)
+        self._fdl.real = state["fdl_re"]
+        self._fdl.imag = state["fdl_im"]
+        self._head = int(state["head"])
+        self._fdl_valid = bool(state["fdl_valid"])
+
+    def _restart(self) -> None:
+        self._history = np.zeros(len(self._history))
+        self._fdl = np.zeros_like(self._parts)
+        self._head = 0
+        self._fdl_valid = True

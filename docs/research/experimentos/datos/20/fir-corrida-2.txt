@@ -1,0 +1,17 @@
+uptime antes: 11:52:03 up 1 day, 9 min,  1 user,  load average: 1,34, 1,62, 1,99
+load1 antes: 1.34
+energía antes: red 1, gobernador powersave, perfil performance, no_turbo 0
+equipo HP-O16, python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras a 48 kHz = 85.3 ms; 500 bloques
+coeficientes: EQ 2048, crossover 2048, banda de graves virtuales 10239
+                  caso  numpy med  numpy p95  rust med  rust p95      x  solo rust
+     EQ, 1 parlante(s)      0.108      0.161     0.036     0.043    3.0      0.035
+     EQ, 3 parlante(s)      0.321      0.515     0.113     0.197    2.8      0.115
+     EQ, 8 parlante(s)      0.891      1.207     0.328     0.529    2.7      0.311
+    crossover, 2 ramas      0.206      0.386     0.078     0.101    2.6          -
+   graves virtuales, 1      0.139      0.192     0.046     0.055    3.0      0.048
+numpy: ms (mediana de 30): construir 0.002, primer 4096 0.156, primer 1000 0.077, segundo 1000 0.053, particionado 0.302
+rust: ms (mediana de 30): construir 0.003, primer 4096 0.063, primer 1000 0.026, segundo 1000 0.016, particionado 0.317
+uptime despues: 11:52:05 up 1 day, 9 min,  1 user,  load average: 1,71, 1,70, 2,01
+load1 despues: 1.71
+energía después: red 1, gobernador powersave, perfil performance, no_turbo 0

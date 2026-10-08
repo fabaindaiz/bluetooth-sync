@@ -246,9 +246,15 @@ class Extractor:
             self._rust, self._rust_broken = None, False
             self._reiniciar_numpy()
         if rust and self._rust is None:
-            self._rust = backend.guarded(self._build_rust, lambda: None)
+            self._rust = backend.built(self._build_rust, lambda: None)
         elif not rust and self._rust is not None:
-            state = backend.guarded(self._rust.state, lambda: None)
+            # Numpy was chosen already: a failed state read is not a Rust failure to report (no
+            # second cut); the stage just restarts in numpy.
+            try:
+                state = self._rust.state()
+            except Exception as exc:  # noqa: BLE001 - any trouble reading the state restarts numpy
+                backend.log_switch_failure(exc)
+                state = None
             self._rust = None
             if state is None:
                 self._reiniciar_numpy()
@@ -263,7 +269,7 @@ class Extractor:
 
     def _rust_call(self, call: Any) -> Any:
         rust = self._rust
-        return backend.guarded(lambda: call(rust), self._broke)
+        return backend.built(lambda: call(rust), self._broke)
 
     def _broke(self) -> None:
         self._rust_broken = True

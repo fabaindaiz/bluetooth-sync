@@ -1,0 +1,16 @@
+uptime antes: 12:54:22 up 1 day,  1:11,  1 user,  load average: 0,85, 0,75, 0,88
+load1 antes: 0.85
+energía antes: red 1, gobernador powersave, perfil performance, no_turbo 0
+equipo HP-O16, python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras a 48 kHz = 85.3 ms; 500 bloques
+ parlantes  numpy med  numpy p95  FIR-R med  FIR-R p95   rust med   rust p95      x num    x FIR-R
+         1      0.266      0.275      0.097      0.102      0.098      0.105        2.7        1.0
+         3      0.802      0.971      0.305      0.349      0.301      0.331        2.7        1.0
+         8      2.188      2.366      0.860      0.922      0.855      0.971        2.6        1.0
+-- la parte fija (mediana, ms)
+    armar el objeto Rust (con su estado): 0.1803
+                leer su estado (a numpy): 0.0657
+               cargar el estado en numpy: 0.0969
+uptime despues: 12:54:26 up 1 day,  1:11,  1 user,  load average: 0,86, 0,75, 0,88
+load1 despues: 0.86
+energía después: red 1, gobernador powersave, perfil performance, no_turbo 0

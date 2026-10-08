@@ -15,6 +15,7 @@ silence for that block, then numpy from a fresh stage.
 from __future__ import annotations
 
 import gc
+import types
 import weakref
 
 import aurasync_engine
@@ -453,6 +454,115 @@ def test_a_rust_panic_with_a_service_is_silent_until_the_cut_s_bottom():
     assert up._rust is not None  # noqa: SLF001
     up.process(*feed[5])
     assert backend.failure() is None
+
+
+class _ProxyRust:
+    """The real Rust stage with one method replaced (to plant a failure that is not a panic)."""
+
+    def __init__(self, inner, **replaced):
+        self._inner, self._replaced = inner, replaced
+
+    def __getattr__(self, name):
+        return self._replaced.get(name) or getattr(self._inner, name)
+
+
+def _raiser(error):
+    def raise_it(*_args):
+        msg = "planted"
+        raise error(msg)
+
+    return raise_it
+
+
+def _fake_module(**kwargs):
+    """A module with a `SpatialUpmix` that wraps the real one, `kwargs` replacing methods."""
+    real = aurasync_engine.SpatialUpmix
+
+    class Fake:
+        def __new__(cls, *args):
+            return _ProxyRust(real(*args), **kwargs)
+
+    return types.SimpleNamespace(SpatialUpmix=Fake)
+
+
+def _assert_fell_back_to_numpy(up, feed, heard, error):
+    assert len(heard) == 1
+    assert error.__name__ in heard[0]
+    assert error.__name__ in backend.failure()
+    for left, right in feed[:2]:  # the silent window: silence on every speaker, nothing raised
+        out = up.process(left, right)
+        assert all(not np.any(d) and not np.any(a) for d, a in out.values())
+    backend.use(backend.NUMPY)  # the cut's bottom
+    assert up._rust is None  # noqa: SLF001
+    out = up.process(*feed[2])
+    assert set(out) == set(up.names)
+    assert any(np.any(d) or np.any(a) for d, a in out.values())
+    assert len(heard) == 1
+
+
+@pytest.mark.parametrize("error", [ValueError, TypeError, AttributeError])
+@pytest.mark.parametrize("failing", ["constructor", "set_params", "set_layout", "set_state"])
+def test_a_rust_stage_that_fails_while_being_built_falls_back_to_numpy(monkeypatch, error, failing):
+    """Not a panic: PyO3 argument conversion, or an older extension without the class or method.
+    The session keeps its audio (silence until the cut's bottom, then numpy), the handler hears
+    once, and nothing escapes."""
+    if failing == "constructor":
+
+        class Broken:
+            def __init__(self, *_args):
+                msg = "planted"
+                raise error(msg)
+
+        module = types.SimpleNamespace(SpatialUpmix=Broken)
+    else:
+        module = _fake_module(**{failing: _raiser(error)})
+    monkeypatch.setattr(backend, "module", lambda: module)
+    feed = blocks(*music(seconds=1.0, seed=20))
+    heard: list[str] = []
+    backend.reset()
+    backend.use(backend.RUST)
+    backend.on_failure = heard.append
+    up = stage(["L", "R", "A"], {"L": -60.0, "R": 60.0}, {"A"})()
+    _assert_fell_back_to_numpy(up, feed, heard, error)
+
+
+@pytest.mark.parametrize("error", [ValueError, TypeError, AttributeError])
+@pytest.mark.parametrize("call", ["set_params", "set_layout"])
+def test_a_live_configuration_that_fails_falls_back_to_numpy(error, call):
+    feed = blocks(*music(seconds=1.0, seed=21))
+    heard: list[str] = []
+    backend.reset()
+    backend.use(backend.RUST)
+    backend.on_failure = heard.append
+    up = stage(["L", "R", "A"], {"L": -60.0, "R": 60.0}, {"A"})()
+    up.process(*feed[0])
+    up._rust = _ProxyRust(up._rust, **{call: _raiser(error)})  # noqa: SLF001
+    if call == "set_params":
+        up.set_params(SpatialParams(haas_ms=3.0))
+    else:
+        up.set_layout({"L": -60.0, "R": 60.0}, {"A"})
+    _assert_fell_back_to_numpy(up, feed[1:], heard, error)
+
+
+def test_a_state_read_that_fails_at_the_switch_to_numpy_restarts_without_a_second_cut():
+    """The user chose numpy: a failed state read is logged, not a Rust failure (no `_fail`, no
+    silence, no second call to the handler); the stage restarts in numpy and produces audio."""
+    feed = blocks(*music(seconds=1.0, seed=22))
+    heard: list[str] = []
+    backend.reset()
+    backend.use(backend.RUST)
+    backend.on_failure = heard.append
+    up = stage(["L", "R", "A"], {"L": -60.0, "R": 60.0}, {"A"})()
+    up.process(*feed[0])
+    up._rust = _ProxyRust(up._rust, state=_raiser(TypeError))  # noqa: SLF001
+    backend.use(backend.NUMPY)
+    assert up._rust is None  # noqa: SLF001
+    assert backend.silent() is None
+    assert backend.failure() is None
+    assert heard == []
+    out = up.process(*feed[1])
+    assert any(np.any(d) or np.any(a) for d, a in out.values())
+    assert heard == []
 
 
 def test_the_backend_does_not_keep_a_dropped_stage_alive():

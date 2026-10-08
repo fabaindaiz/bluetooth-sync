@@ -45,11 +45,12 @@ any IIR NLD.
 from __future__ import annotations
 
 import functools
+from typing import Any
 
 import numpy as np
 
-from aurasync.dsp import crossover
-from aurasync.dsp.eq import PartitionedFIR
+from aurasync.dsp import backend, crossover
+from aurasync.dsp.eq import PartitionedFIR, _RustOwned, _vector
 
 LOW_EDGE_HZ = 20.0
 """The bottom of the band taken to make harmonics: only DC and rumble are left out."""
@@ -104,11 +105,19 @@ def harmonics(x: np.ndarray, sr: int, cutoff_hz: float = 90.0, harmonics_db: flo
     return _fft_convolve(np.abs(_fft_convolve(x, band)), out) * calibration * _gain(harmonics_db)
 
 
-class VirtualBass:
+class VirtualBass(_RustOwned):
     """The NLD, by blocks. `process(x)` returns the harmonics to add to the high-passed path.
 
     `harmonics_db` can be changed live: the gain moves linearly across the next block. While
     it is off the filters are not run (and restart from rest when it comes back on).
+
+    **The engine** (`dsp/backend.py`). With `engine=rust` the stage owns one Rust `VirtualBass`
+    that holds the two partitioned filters itself, so a block is one call (band, rectifier,
+    harmonics band, calibration, gain ramp). It is built on the first block that runs the filters
+    (a stage whose harmonics stay off builds nothing and registers nothing). The numpy
+    `_fir_band` / `_fir_out` stay as the numpy path's filters and as the place where the Rust
+    state lands at a switch; they never build a Rust object of their own. The gain's position
+    (`_current`) and `_dirty` live here, in both engines.
     """
 
     latency = 0
@@ -118,11 +127,24 @@ class VirtualBass:
         self._band, self._out, self._calibration = _filters(sr, self.cutoff_hz)
         self.harmonics_db = harmonics_db
         self._current = _gain(harmonics_db)
+        self._dirty = True
         self._reset()
         self.added_db: float | None = None
         """Energy of the last block's harmonics relative to the bass band they came from (dB)."""
 
     def _reset(self) -> None:
+        # Fresh filters are only needed after the old ones ran: while the harmonics stay off the
+        # ones already there are at rest, and building two partitioned filters costs ~0.2 ms in
+        # numpy (their partitions' spectra), which was paid on every block of the default chain.
+        if not self._dirty:
+            return
+        self._dirty = False
+        if self._rust is not None:
+            # The Rust filters rest; the numpy ones are stale and are overwritten at a switch.
+            # A torn object is not called again (`_restart` at the switch rebuilds everything).
+            if not self._rust_broken:
+                self._rust_call(lambda rust: rust.reset())
+            return
         self._fir_band = PartitionedFIR(self._band, self.block)
         self._fir_out = PartitionedFIR(self._out, self.block)
 
@@ -131,9 +153,37 @@ class VirtualBass:
         n = len(x)
         target = _gain(self.harmonics_db)
         if target == 0.0 and self._current == 0.0:
+            if self._rust is not None or self._rust_broken:
+                self._ready()  # follows the engine; a stage that never ran Rust is not built here
             self._reset()
             self.added_db = None
             return np.zeros(n)
+        if not self._ready():
+            return np.zeros(n)  # a Rust failure: silence until the cut's bottom
+        self._dirty = True
+        if self._rust is not None:
+            return self._process_rust(_vector(x), target)
+        return self._process_numpy(x, target)
+
+    def _process_rust(self, x: np.ndarray, target: float) -> np.ndarray:
+        n, current = len(x), self._current
+
+        def silence() -> tuple[np.ndarray, float, float]:
+            self._broke()
+            return np.zeros(n), 0.0, 0.0
+
+        rust = self._rust
+        made, e_bass, e_made = backend.guarded(lambda: rust.process(x, current, target), silence)
+        if self._rust_broken:
+            self.added_db = None
+            return made
+        if n:
+            self._current = target
+        self.added_db = 10 * np.log10(e_made / e_bass) if e_bass > 0 and e_made > 0 else None
+        return made
+
+    def _process_numpy(self, x: np.ndarray, target: float) -> np.ndarray:
+        n = len(x)
         bass = self._fir_band.process(x)
         made = self._fir_out.process(np.abs(bass)) * self._calibration
         if n and target != self._current:
@@ -146,3 +196,23 @@ class VirtualBass:
         e_bass, e_made = float(np.dot(bass, bass)), float(np.dot(made, made))
         self.added_db = 10 * np.log10(e_made / e_bass) if e_bass > 0 and e_made > 0 else None
         return made
+
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
+
+    def _build_rust(self) -> Any:
+        rust = backend.module().VirtualBass(_vector(self._band), _vector(self._out), self._calibration, self.block)
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _numpy_state(self) -> dict[str, Any]:
+        return {"band": self._fir_band._numpy_state(), "out": self._fir_out._numpy_state()}  # noqa: SLF001
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        self._fir_band._load_state(state["band"])  # noqa: SLF001
+        self._fir_out._load_state(state["out"])  # noqa: SLF001
+
+    def _restart(self) -> None:
+        """After a Rust failure: fresh filters and the gain where the level asks it to be."""
+        self._current = _gain(self.harmonics_db)
+        self._dirty = True
+        self._reset()

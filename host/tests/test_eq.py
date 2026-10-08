@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from aurasync.dsp import eq
+from aurasync.dsp import backend, eq
 from aurasync.dsp.response import THIRDS
 
 
@@ -130,6 +130,8 @@ def test_the_cached_fir_gives_the_same_output_as_before():
 
 
 def test_the_taps_spectrum_is_computed_once_per_size(monkeypatch):
+    """numpy's own cache (with `engine=rust` the filter's FFTs are Rust's: tests/test_eq_rust.py)."""
+    backend.use(backend.NUMPY)
     calls = []
     real = np.fft.rfft
 
