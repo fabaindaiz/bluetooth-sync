@@ -7,6 +7,36 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-08 · s-7c8794-884b69 — Instalación del stack completo en PC-Ryzen5
+**Qué.** Se instalaron rustup con la toolchain 1.99.0, el motor en Rust, las dependencias de
+`host/web` con la PWA compilada, `nrfutil` y nRF Connect SDK v3.4.1 en `PC-Ryzen5`, y se
+verificaron. La lista, cómo revertir cada pieza y lo comprobado quedaron en el inventario. También
+se corrigió la nota de `engine/README.md` que decía que este equipo no tenía rustup.
+**Archivos.** `docs/research/experimentos/00-inventario-linux.md`, `engine/README.md`.
+**Por qué.** El usuario pidió dejar el stack instalado en este equipo, incluido el SDK de nRF.
+**Arquitectura.** ✅ Cumple: no cambia código. Todo lo instalado queda fuera del repo, salvo
+`node_modules` y `dist-pwa`, que git ignora.
+**Qué salió mal en el camino.**
+1. `sudo` no funciona desde el `!` de la sesión, porque no hay terminal para pedir la contraseña: el
+   usuario corrió `pacman` en su propia terminal.
+2. El primer build de `hci_uart` apuntó a `nrf/samples/zephyr/bluetooth/hci_uart`, que en NCS
+   v3.4.1 solo trae overlays para nRF54 y no tiene `prj.conf`. El sample correcto está en
+   `zephyr/samples/bluetooth/hci_uart`.
+3. Los tests de la PWA fallan sin `npm run build:pwa`. Su mensaje de error lo dice.
+4. `hatch run browser:test <ruta>` corre siempre todo `tests_browser` (el script es
+   `pytest tests_browser {args}`). Para correr un solo test: `hatch run browser:python -m pytest <test>`.
+**Qué quedó pendiente.**
+- `tests_browser/test_panel.py::test_the_pairing_qr_is_an_svg[firefox]` es intermitente: falló 1 vez
+  en la suite completa y pasó 5 de 5 corrido solo. Comprueba `naturalWidth > 0` justo después de
+  `complete`. No se arregló.
+- La Pico 2 W (`arm-none-eabi-gcc`, Pico SDK) y J-Link/`nrfutil device`, a propósito (ver el inventario).
+**No verificado.** No se flasheó ninguna placa nRF porque no había ninguna conectada.
+**Medido.** `check.sh`: 1477 tests bien. Tests de navegador: 251 bien, 2 saltados y 1 intermitente.
+Firmware: `hci_uart` usa 19 % de flash en la SuperMini; `nrf_auraconfig` usa 30 % de flash en la
+app y 66 % en el núcleo de red.
+
+---
+
 ## 2026-10-05 · s-7c8794-dac510 — Parlantes virtuales y sesión sin parlantes reales (fase 1), en HP-O16
 **Qué.** La sesión empezó corriendo el servicio en `--simular` en `HP-O16`; el usuario quería uso real
 y probar solo con audífonos, y de ahí salió el diseño (spec

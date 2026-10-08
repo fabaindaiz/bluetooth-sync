@@ -26,7 +26,8 @@ un `RustMotor` (d-7c8794-0d2a1e, i-7c8794-fd9732).
 rustup`) y `engine/rust-toolchain.toml` fija la toolchain **1.99.0**, que rustup baja sola la
 primera vez que se corre `cargo` dentro de `engine/`. Sin cargo, `hatch test` y
 `scripts/check.sh` fallan con un mensaje que lo dice, y el servicio corre igual con numpy.
-**`PC-Ryzen5` necesita rustup antes de su próximo `check.sh`.**
+`PC-Ryzen5` lo tiene desde el 2026-10-07
+([00-inventario-linux](../docs/research/experimentos/00-inventario-linux.md)).
 
 ## Cómo se usa
 

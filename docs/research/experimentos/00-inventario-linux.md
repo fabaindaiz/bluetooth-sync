@@ -115,6 +115,42 @@ lectura que decide E1** y queda pendiente.
 `bluetoothctl`, `dmesg` y `systemctl {start,stop,restart,status} bluetooth`.
 **Se revierte con `sudo rm /etc/sudoers.d/bluetooth-sync`.**
 
+### Toolchains instaladas (2026-10-07): MEDIDO
+Lo que se instaló para dejar el equipo con todo el stack, cada cosa con cómo revertirla:
+
+| Pieza | Cómo se instaló | Cómo se revierte |
+|---|---|---|
+| `rustup` 1.29.1 y la toolchain **1.99.0** (la fija `engine/rust-toolchain.toml`) | `sudo pacman -S --needed rustup && rustup default stable`; la 1.99.0 la bajó rustup sola | `sudo pacman -Rns rustup; rm -rf ~/.rustup ~/.cargo` |
+| Motor en Rust (`aurasync_engine`) | `hatch run engine-build` en `host/` | se borra con el entorno de hatch (`hatch env remove`) |
+| Dependencias de `host/web` y la PWA | `npm ci` y `npm run build:pwa` en `host/web` | `rm -rf host/web/node_modules host/web/dist-pwa` (los dos están en `.gitignore`) |
+| `nrfutil` 8.2.1 | binario oficial de `files.nordicsemi.com` en `~/.local/bin`, más `nrfutil install sdk-manager` | `rm ~/.local/bin/nrfutil; rm -rf ~/.nrfutil` |
+| **nRF Connect SDK v3.4.1** con su toolchain (13 GB) | `nrfutil sdk-manager install v3.4.1`, en `~/ncs`, sin sudo | `nrfutil sdk-manager uninstall v3.4.1`, o `rm -rf ~/ncs` |
+
+Ya estaban antes y no se tocaron: Python 3.12.12 en hatch, `clang`, `elc3`/`dlc3` de liblc3,
+`picotool` con su regla udev (`60-picotool.rules`), Node 26.10 / npm 12.2, Bumble 0.0.235 (es
+dependencia del host) y los navegadores de Playwright (Chromium y Firefox). El usuario ya estaba en
+`uucp`, lo que pide la SuperMini por `/dev/ttyACM*`.
+
+Comprobado (kernel 7.2.9-1-cachyos):
+- `PY=python3.14 scripts/check.sh` pasa: **1477 tests**, incluido el motor en Rust
+  (`engine rust: available`).
+- Las tres partes de `probes/17-e-s-nativa-rust` compilan con `cargo build --release`.
+- `hatch run browser:test`: 251 bien, 2 saltados y 1 fallo,
+  `test_the_pairing_qr_is_an_svg[firefox]`. Corrido solo, pasa 5 de 5 veces en los dos navegadores.
+- La toolchain de NCS (`west` 1.5.0, `cmake` 4.2.1, `arm-zephyr-eabi-gcc` 14.3.0 del Zephyr SDK
+  1.0.1, `dtc`) compila `zephyr/samples/bluetooth/hci_uart` para `promicro_nrf52840/nrf52840/uf2`
+  (SoftDevice Controller, 19 % de flash, sale `zephyr.uf2`) y `nrf/samples/bluetooth/nrf_auraconfig`
+  con `--sysbuild` para `nrf5340_audio_dk/nrf5340/cpuapp`.
+- **No se flasheó nada:** no había ninguna placa nRF conectada.
+
+Las herramientas de NCS no quedan en el `PATH`. Se usan desde
+`nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 --shell`.
+
+**No se instaló, a propósito:**
+- `arm-none-eabi-gcc` y el Pico SDK, para la Pico 2 W (P3): el usuario lo dejó para más adelante.
+- J-Link de SEGGER, `nrfutil device` y las reglas udev de Nordic: solo se necesitan para
+  `west flash` con un nRF5340 Audio DK. La SuperMini se flashea por UF2.
+
 ## Veredicto
 
 - **El equipo Linux es el mejor candidato para E1–E4 que hay hoy**, y mejor que el
