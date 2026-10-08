@@ -7,6 +7,120 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-08 · s-7c8794-402f44 — Transiciones sin corte, etapa 1: motor entre bloques y fundido por defecto (HP-O16)
+**Qué.**
+- **Experimento 23**, un ensayo de las pruebas A/B del motor y del EQ escuchadas por el monitor de
+  audífonos en `HP-O16`, sin parlantes. Datos en `datos/23/` y sonda desechable en `probes/24-ab-monitor/`.
+  - El EQ hace lo que dice, medido en la salida: el tope de agudos queda a 0,23 dB y el encendido/apagado
+    a 0,61 dB, con un ruido de la medición de 0,89 dB.
+  - numpy y Rust no se distinguen. Rust cuesta 5,0 ms por bloque contra 10,8 ms de numpy.
+  - El usuario oyó cada cambio de motor por su corte de 80 + 80 ms, y pidió quitarlo.
+- **La spec `2026-10-08-seamless-transitions-design.md`**, revisada de forma interactiva y aprobada. Tiene
+  cuatro etapas: (1) el motor entre bloques, el reloj, las rampas y los retardos; (2) las etapas con
+  estado; (3) el render; (4) el colchón estirando el audio. **Se construyó la etapa 1** con su plan, en
+  7 tareas con subagentes y revisión por tarea:
+  - `engine_set` cambia entre bloques, sin corte; después de una falla de Rust sigue el corte de siempre;
+  - `Smoothed.glide` / `DecibelRamp.glide`;
+  - `dsp/transition.py`, el reloj, que junta los pedidos seguidos en un solo lote pendiente;
+  - `LineaDeRetardo.fundir_a`: dos lecturas de la misma historia, siempre a igual potencia;
+  - la etapa de cadena `transition`: `crossfade` por defecto, `cut` como modo rápido, `fade_ms` 80 y
+    `shape`. No va en los presets;
+  - `Motor.cambiar` y `pide_corte` / `corte_pendiente`;
+  - el servicio usa `cambiar` en presets, A/B, calibración y sugerencia de sincronía. Un preset que
+    toca una etapa con estado sigue por el corte.
+- **Experimento 23 §4:** los cortes por CPU ajena mientras corrían los tests: 179 entregas tardías en
+  10 min. El motor tardaba 13,9 de 85 ms; corre con `nice` +1.
+**Archivos.**
+- `host/src/aurasync/{motor,service,chain}.py` y `host/src/aurasync/dsp/{transition,ramps,retardo,backend,eq,spatial,ambience}.py`.
+- `host/tests/{test_motor_transitions,test_transition,test_ramps,test_retardo,test_engine_backend,test_chain,test_chain_service,test_chain_golden,test_service}.py` y `host/tests/golden_motor.py`.
+- `host/docs/control-api.md`.
+- `docs/{decisions,roadmap}.md`, `docs/research/experimentos/23-…md`, `docs/research/experimentos/datos/23/` y `probes/24-ab-monitor/`.
+- `docs/superpowers/specs/2026-10-08-seamless-transitions-design.md`, `docs/superpowers/plans/2026-10-08-seamless-transitions-stage-1.md`, la nota de enmienda en `docs/superpowers/specs/2026-10-05-rust-engine-scaffold-and-sinc-design.md`, y `CLAUDE.md` (la regla de `nice`).
+**Por qué.** El usuario pidió probar los A/B del motor y del EQ con el monitor y sacar la mayor cantidad
+posible de datos. Al oír los cortes pidió los cambios sin corte: «duplicar solo lo que cambia», «no tan
+complejo», los dos modos con el fundido por defecto, y explorar quitar el corte de todo. Pidió también
+dar prioridad al motor, que va después de la etapa 1.
+**Arquitectura.** ✅ Cumple.
+- El modo `cut` queda byte a byte igual que antes (el golden corre en `cut`).
+- `Transition` va al lado de `FadeGate` y no en su lugar, por un dictamen del plan anotado en la spec.
+- El servicio sigue con un solo escritor.
+- Decisión nueva: d-7c8794-cdc30f, que enmienda d-7c8794-196e0c.
+**Qué salió mal en el camino.**
+1. El primer implementador de la tarea 1 invirtió un test existente para que pasara su cambio, y elegir
+   Rust durante la falla cortaba el silencio a mitad del fundido. Lo detectó la revisión de la tarea.
+2. `equal_gain` salió lineal y no cos²/sin². Además, el setter de `Smoothed.target` cortaba cualquier
+   `glide`, porque el motor reasigna objetivos en cada bloque. Lo detectó la revisión; lo segundo, el
+   controlador antes de revisar.
+3. Un preset hecho a mano podía colar `transition` y `volume` (fuga en `with_preset`). Lo detectó la revisión.
+4. Un preset con un cambio con estado calculaba la asignación del decorrelador con los pan viejos. Lo
+   detectó la revisión de la tarea 6.
+5. **La suite completa a prioridad normal cortó el audio del usuario**: 179 entregas tardías en 10 min,
+   y lo detectó su oído. Desde ahí, todo trabajo pesado corre con `nice -n 19`, y la regla quedó en `CLAUDE.md`.
+6. La revisión final encontró tres problemas que las revisiones por tarea no vieron:
+   - el A/B dejaba de ser ciego si A y B difieren en una etapa con estado;
+   - un `cambiar` pedido detrás de un corte pendiente perdía frente al pedido anterior;
+   - cada fundido se registraba como un corte.
+   Se arreglaron en la tanda final, que quedó sin verificar (ver pendientes).
+7. El análisis H1 de las capturas daba coherencia casi nula con música a través de esta cadena; se cambió a
+   razones de energía por tercio.
+8. `check.sh` no termina cuando corre desprendido: `test_a_signal_restores_it` se cuelga (pasa en
+   primer plano). Aparece por primera vez en el registro.
+**Qué quedó pendiente.**
+- **La tanda de arreglos de la revisión final quedó hecha pero sin verificar.** El usuario pidió cerrar
+  rápido y se detuvo durante su suite: iban 1111 tests bien, 0 fallas, y se interrumpió.
+  - En el árbol están los arreglos de los tres problemas, con sus tests, y la evidencia de rojo y verde
+    en el informe: `pide_corte` decide el camino por par en `ab_play`; `cambiar` va al corte si hay uno
+    bajando; el registro de cortes solo anota los cortes de verdad.
+  - También están casi todos los menores: textos, docstrings, spec, control-api y registros.
+  - **Falta:** terminar la suite (`cd host && nice -n 19 hatch test tests`), revisar la tanda (una
+    re-revisión acotada) y anotar aquí el resultado.
+  - La lista de lo pedido está al final del plan de la etapa 1. El informe y la instantánea `8d80a14`
+    son locales (`.superpowers/`).
+- **La rama `seamless-transitions` está publicada sin merge**, a pedido del usuario, en tres commits: el experimento 23, la etapa 1 y este registro. **Se commiteó sin el chequeo completo, a pedido explícito del usuario** («no los revises, solo cierra rápido»). La última suite completa con resultado fue la de la tarea 7 (1897 bien), antes de la tanda final; la de la tanda llegó a 1111 bien y 0 fallas antes de interrumpirse. `test_a_signal_restores_it` pasa en primer plano (2 bien) y se cuelga cuando corre desprendido. **No mergear** hasta cerrar la verificación de la tanda final y la escucha.
+- **La escucha de la etapa 1** (i-7c8794-93f50c, A medias), en `HP-O16` con los audífonos:
+  - contar otra vez los cambios de motor ocultos;
+  - A/B de los presets de prueba con fundido frente a corte;
+  - la pregunta del filtro peine (un salto de 10–30 ms a 80 y 200 ms);
+  - el posible +3 dB en graves del fundido de retardo a igual potencia.
+- **Lo siguiente después: la prioridad del hilo del motor** (i-7c8794-246f79): `nice` −15 con
+  RealtimeKit, −11 de respaldo, opcional en `service.json`, medido con la suite como carga.
+- **Las etapas 2, 3 y 4** (i-7c8794-a0a68b, -da4172, -1b74ad), el cambio de `pw-play` con dos streams
+  (i-7c8794-43c2a5) y el volumen AVRCP (i-7c8794-46b4d7).
+- **El ensayo A/B del EQ en el panel no se hizo**: la prueba se detuvo a pedido del usuario. La curva de
+  prueba sigue puesta en los 4 parlantes virtuales del servicio en uso (respaldo en
+  `~/.local/share/aurasync/ab-ensayo-respaldo.json`); se quita con `python3 probes/24-ab-monitor/ab.py
+  restaurar`, o se deja para la escucha. El servicio quedó corriendo desde la rama con el código de antes
+  de los cambios (el proceso no recarga).
+- **`probes/24-ab-monitor/` es desechable**: se borra cuando el experimento 23 esté cerrado.
+- Siguen pendientes de sesiones anteriores, sin cambios: la spec del modo simple (§7.1–§7.3) por aprobar y
+  el plan del grupo 1 del panel por ejecutar.
+**Desvío del plan.**
+- Las tareas 2 y 3 se hicieron juntas, y la suite completa solo al final de las tareas 5, 6 y 7. Lo
+  aprobó el usuario para ganar tiempo.
+- La tarea 6 sumó `Motor.pide_corte` y `corte_pendiente`, que el plan no tenía, por la regresión del punto 4.
+**Decisiones que tomó el asistente** (cada una con su costo si es errónea):
+- Sin commits; las revisiones usan commits sueltos de instantánea. Costo: ninguno, el usuario commitea al final.
+- La transición empieza al inicio del bloque siguiente, no dentro de `cambiar`; así los pedidos antes del
+  primer bloque se unen. Costo: los campos se escriben hasta 85 ms después del pedido.
+- La tarea 4 corrió en paralelo con la revisión de las tareas 2 y 3, en archivos disjuntos. Costo: una
+  instantánea mezclada, separable por archivo.
+- El golden del motor corre en modo `cut`. Costo: el golden no cubre el camino por defecto, que cubren
+  los tests de transición.
+- Todo trabajo pesado con `nice -n 19`. Costo: suites algo más lentas.
+- Un fundido de retardo es siempre a igual potencia y `shape` aplica a la etapa 2. Costo: hasta +3 dB en
+  los graves correlacionados durante un fundido de retardo; lo comprueba la escucha.
+- Existe `pide_corte` y un preset con cambio con estado toma el camino del corte. Costo: un método más que
+  mantener alineado, vigilado por un test de paridad.
+**No verificado.** Nada de la etapa 1 se escuchó todavía: todo es de tests (numpy, ruido sintético).
+`check.sh` no corrió de una sola vez porque se cuelga desprendido; se corrió por partes y todas pasaron.
+**Medido.**
+- Cambio de motor en caliente con la cadena completa: ≤ 6,5e-14 frente a no cambiar.
+- `equal_gain` baja entre 2,5 y 3,2 dB en un fundido de retardo; `equal_power`, ≤ 0,8 dB.
+- Suite: 1897 tests bien (antes de la tanda final).
+- Experimento 23: los números de arriba; §4: 179 entregas tardías en 10 min.
+
+---
+
 ## 2026-10-08 · s-7c8794-884b69 — Instalación del stack completo en PC-Ryzen5
 **Qué.** Se instalaron rustup con la toolchain 1.99.0, el motor en Rust, las dependencias de
 `host/web` con la PWA compilada, `nrfutil` y nRF Connect SDK v3.4.1 en `PC-Ryzen5`, y se

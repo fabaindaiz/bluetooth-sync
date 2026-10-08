@@ -136,6 +136,9 @@ es lo único que avisa a la siguiente.
   alejarlas) se pide con una pregunta explícita, con opciones del tipo "Ya lo hice" y "Explícame
   más", no como una línea dentro de un mensaje mientras se espera la placa (usuario, 2026-10-07). Hay
   solo 2 puertos USB a la vez. Para regrabar, se prefiere el toque a 1200 baudios a un doble reset.
+- **El trabajo pesado (la suite de tests, compilaciones) corre con `nice -n 19`** cuando el servicio
+  está sonando en el mismo equipo: a prioridad normal, la suite completa le quitó CPU al motor y
+  causó 179 entregas tardías en 10 min, que el usuario oyó (`experimentos/23` §4, 2026-10-08).
 - **Nunca `pkill -f`/`pgrep -f` con un patrón que aparece en la propia línea de comandos**: mata el shell
   que lo corre. Pasó 5 veces en 4 sesiones (contado en el registro el 2026-10-07). Se busca el PID con
   `pgrep -af` en una llamada aparte y se mata por número.
