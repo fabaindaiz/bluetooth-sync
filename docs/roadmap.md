@@ -1530,6 +1530,37 @@ vez de tumbar la sesión: `backend.built` atrapa cualquier `Exception` en el con
 (crossover) y 11 (graves virtuales). Siguen pendientes la 8, la 9 y de la 12 a la 15 (la
 convolución de la 12 ya corre en Rust a través de los FIR).
 
+**Los menores diferidos del motor Rust**, copiados el 2026-10-08 del ledger local
+(`.superpowers/sdd/…/progress.md`, que git ignora), para retomarlos desde cualquier equipo. Ninguno bloquea; la
+revisión final de la rama los clasificó como "pueden esperar".
+- **Del arreglo de construcción:**
+  - `built()` registra el traceback aunque ya haya una falla, así que cada falla sale dos veces en el log;
+  - el motivo tiene dos formatos ("Rust failed (RuntimeError: …)" frente a "Rust failed (…)");
+  - `built()` también envuelve código de numpy, así que un error de numpy se informa como falla de Rust;
+  - los ayudantes de test `_ProxyRust`/`_raiser` y el try/except del cambio de motor están copiados en 3
+    archivos.
+- **De la tarea 7:**
+  - `register` reescribe `_stages` mientras `use()` quita referencias muertas: sería un `ValueError` si
+    `register` corriera durante `use()`, cosa que hoy no pasa;
+  - el cerrojo `_registered` de `eq.py` no se limpia tras `backend.reset()` (solo afecta a los tests).
+- **De la tarea 11:**
+  - dos casos de `SWITCH_CASES` no prueban lo que dice su nombre, porque Rust nunca corrió antes del
+    cambio;
+  - `PartitionedFir::reset` no tiene un test directo en Rust;
+  - los `PartitionedFIR` de numpy se siguen construyendo bajo Rust (~0,2 ms por etapa), a sabiendas.
+- **De la ronda R6 (2026-10-05):**
+  - en el titular del experimento 20, "sin un punto mal condicionado" figura como MEDIDO y debe decir
+    INFERIDO;
+  - el test del borde de energía mínima no puede detectar una divergencia en ese borde;
+  - `_rust_call` de spatial/ambience puede tocar un objeto roto tras una falla (resuelto ya en `eq.py` y
+    `virtual_bass.py` por la revisión del 2026-10-08);
+  - el falso `NumpyAmbienceExtractor` copia campos privados;
+  - no hay test de asignación de memoria después de `set_state`;
+  - `test_motor::test_la_ganancia_se_aplica_en_decibeles` divide 0/0 con `AURASYNC_ENGINE=rust`: hay que
+    comparar `b` con `0,5·a`.
+- **Para usarlo:** después de cada cambio en Rust, `cd host && hatch run engine-build`. Una extensión vieja
+  se rechaza por la versión de `capabilities()` y el servicio vuelve a numpy, con el motivo.
+
 ### Panel como PWA en GitHub Pages conectado por red local con HTTPS y token por cliente · i-7c8794-b10884
 **Estado: A medias (2026-10-04): publicada; falta probarla en teléfonos.** El transporte con token y
 ticket, la pantalla de conexión y emparejamiento, la administración de clientes, el service worker
