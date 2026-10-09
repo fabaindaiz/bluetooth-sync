@@ -1009,8 +1009,9 @@ _TRANSITION_STAGE = Stage(
                     "shape",
                     "Forma del fundido",
                     "equal_gain: las dos partes suman 1. equal_power: suman la misma potencia.",
-                    "equal_gain conviene si los dos sonidos se parecen; equal_power si no. Se aplica a los "
-                    "fundidos entre etapas; los retardos se funden siempre a igual potencia.",
+                    "equal_gain conviene si los dos sonidos se parecen; equal_power si no. Se aplicará a los "
+                    "fundidos entre etapas (etapa 2); hoy no cambia nada: los retardos se funden siempre a "
+                    "igual potencia.",
                     "choice",
                     "equal_gain",
                     choices=("equal_gain", "equal_power"),

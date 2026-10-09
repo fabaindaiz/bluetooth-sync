@@ -194,6 +194,28 @@ def test_a_cut_in_cut_mode_is_logged_once(monkeypatch):
     assert len(_fades(s)) == 1
 
 
+def test_the_render_match_freezes_on_a_crossfade_inside_one_block(monkeypatch):
+    """The render match freezes on whatever moves the speakers' gains. With the default 80 ms the
+    whole crossfade fits in one 4096-sample block, so `en_corte` is already down when the match
+    looks after the block: it is told from the look before the block, as the loop is."""
+    s, clock, motor = _real_motor_session(monkeypatch, "crossfade")
+    holds = []
+
+    class _Spy:
+        def after_block(self, _motor, _meter, _n, *, hold=False, **_kw):
+            holds.append(hold)
+
+    s.render_match = _Spy()
+    motor.cambiar(lambda: setattr(s.installation.parlantes[0], "pan", 0.4))
+    clock[0] += 4096 / 48000
+    s.step()
+    assert not motor.en_corte  # the whole crossfade was inside this block
+    assert holds == [True]
+    clock[0] += 4096 / 48000
+    s.step()
+    assert holds == [True, False]
+
+
 class _Done:
     """A measurement of the loop that finished, with a result, and nothing launched after it."""
 

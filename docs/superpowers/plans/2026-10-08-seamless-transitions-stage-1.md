@@ -303,6 +303,17 @@ stage 1, §5 stage 1, §7). Stages 2–4 get their own plans after stage 1 is li
 
 ---
 
+## Status on 2026-10-09 (wave verified)
+
+Session s-7c8794-816f05, on the Mac. The full suite ran: 1905 passed, 4 failed. All 4 are macOS-only and fail without this branch too: `F_GETPIPE_SZ` and numpy's FFT rounding (roadmap i-7c8794-437907). The scoped re-review found items 1–10 below FIXED. For each Important item and for items 6 and 7, it built a mutant reverting the fix and saw the covering test fail.
+
+The re-review also found one defect outside the wave, same class as the loop's pre-block read: the render match freezes only on `en_corte` after the block, so an 80 ms crossfade inside one block went unseen. It is fixed test-first in session.py: the pre-block `moving` read now also holds the match (`test_session.py::test_the_render_match_freezes_on_a_crossfade_inside_one_block`).
+
+Left open:
+- Item 6's residual of up to ~0.2 s, because the measurement is polled at 2 Hz (i-7c8794-ee3f38).
+- The `shape` help text says it applies to stage-to-stage fades, but in stage 1 it has no effect. It is panel text, so the user decides it.
+- Step 3, the listening (i-7c8794-93f50c).
+
 ## Status on 2026-10-08 (hand-off)
 
 Tasks 1–7 complete, each reviewed (ledger kept locally in `.superpowers/sdd/2026-10-08-seamless-transitions-stage-1/progress.md`). The final whole-branch review asked for the fix wave below; it was dispatched on 2026-10-08 and its result is recorded in `.claude/logs/agent-changelog.md` (entry s-7c8794-402f44). The wave was stopped by the user's request during its full-suite run (1111 passed, 0 failed when interrupted): its fixes for all three Important findings and most minors are in the working tree, with tests. Still to do: finish the suite, one scoped re-review of the wave against this list, then record the result. Nothing is committed (repository rule); branch `seamless-transitions`.

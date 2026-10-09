@@ -687,6 +687,7 @@ class AudioSession:
         self._match_render(
             calibrating=self.calibration is not None and self.calibration.state == "running",
             multichannel=channels is not None,
+            moving=moving,
         )
         gone = self.outputs.refresh()
         for name in gone:
@@ -728,16 +729,19 @@ class AudioSession:
 
     # -- the render's loudness match (render_match.py) ------------------------------------
 
-    def _match_render(self, *, calibrating: bool, multichannel: bool) -> None:
+    def _match_render(self, *, calibrating: bool, multichannel: bool, moving: bool = False) -> None:
         """After the quality meter took the block. Frozen while a calibration plays its stimulus
-        (the speakers do not play the render); a multichannel source (made elsewhere) plays with no
-        makeup.
+        (the speakers do not play the render), and on a block that a cut or a crossfade moved
+        (`moving`: an 80 ms crossfade starts and ends within one block, so `en_corte` after it
+        misses it); a multichannel source (made elsewhere) plays with no makeup.
         A failure never stops the audio: the makeup stays where it is."""
         match = self.render_match
         if match is None or not hasattr(self.motor, "render"):
             return
         try:
-            match.after_block(self.motor, self.quality, self.options.block, hold=calibrating, bypass=multichannel)
+            match.after_block(
+                self.motor, self.quality, self.options.block, hold=calibrating or moving, bypass=multichannel
+            )
         except Exception:  # noqa: BLE001 - a side channel: the speakers go on at the makeup they have
             self._render_match_failures = getattr(self, "_render_match_failures", 0) + 1
             if self._render_match_failures == 1:
