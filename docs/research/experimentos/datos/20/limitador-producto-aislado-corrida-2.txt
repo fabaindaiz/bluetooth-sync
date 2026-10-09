@@ -1,0 +1,11 @@
+uptime antes: 12:24  up 12:04, 4 users, load averages: 7.44 7.07 9.47
+equipo Fabians-MacBook-Neo.local, macOS 27.0.1, Apple A18 Pro
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+v4<4> 71.8 us, v4<8> 64.7 us, identical true true
+vorig 39.1 us, needed loop 0.4 us
+round 0: v0 plain 42.3 us, v1 taps-outer 49.2 us, v2 regblock 57.4 us, v3 tiles 62.4 us
+v4<4> 78.2 us, v4<8> 66.4 us, identical true true
+vorig 46.5 us, needed loop 0.5 us
+round 1: v0 plain 39.6 us, v1 taps-outer 51.2 us, v2 regblock 59.0 us, v3 tiles 62.8 us
+identical: v1 true v2 true v3 true
+uptime despues: 12:24  up 12:04, 4 users, load averages: 8.05 7.20 9.51

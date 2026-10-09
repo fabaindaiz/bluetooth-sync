@@ -84,7 +84,15 @@ def solo_rust(n: int, frente: bool):
     nombres, angulos = anillo(n)
     up = aurasync_engine.SpatialUpmix(n, SR, spatial.N_FFT, spatial.HOP)
     p = SpatialParams(front_intact=frente)
-    up.set_params(p.arc_deg, p.ambience, p.ambient_level_db, p.haas_ms, p.threshold, p.lam, p.front_intact)
+    up.set_params(
+        arc_deg=p.arc_deg,
+        ambience=p.ambience,
+        ambient_level_db=p.ambient_level_db,
+        haas_ms=p.haas_ms,
+        threshold=p.threshold,
+        lam=p.lam,
+        front_intact=p.front_intact,
+    )
     up.set_layout([angulos[nm] for nm in nombres], [False] * n, None)
     return up.process
 

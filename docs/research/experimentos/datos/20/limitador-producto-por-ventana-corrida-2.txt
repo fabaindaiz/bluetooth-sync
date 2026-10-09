@@ -1,0 +1,18 @@
+uptime antes: 11:40  up 11:20, 4 users, load averages: 6.54 7.04 6.25
+load1 antes: 6.54
+equipo Fabians-MacBook-Neo.local, macOS-27.0.1-arm64-arm-64bit, Apple A18 Pro
+python 3.12.13, numpy 2.5.3, cpus 6
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+bloque 4096 muestras = 85.3 ms; 500 bloques tras 50
+    senal parlantes    activa    np med    np p95  rust med  rust p95   np/rust
+   fuerte         1      1.00     0.241     0.274     0.162     0.205       1.5
+   fuerte         3      1.00     0.746     0.889     0.449     0.574       1.7
+   fuerte         8      1.00     2.017     2.546     1.188     1.269       1.7
+    medio         1      0.00     0.076     0.085     0.092     0.112       0.8
+    medio         3      0.00     0.226     0.251     0.276     0.306       0.8
+    medio         8      0.00     0.605     0.730     0.731     0.802       0.8
+     bajo         1      0.00     0.008     0.009     0.006     0.007       1.3
+     bajo         3      0.00     0.026     0.027     0.020     0.021       1.3
+     bajo         8      0.00     0.068     0.075     0.049     0.053       1.4
+uptime despues: 11:40  up 11:20, 4 users, load averages: 6.97 7.12 6.28
+load1 despues: 6.97

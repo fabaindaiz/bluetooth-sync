@@ -4,12 +4,21 @@ The EQ only lifts (`dsp/eq.py`), so a loud passage can go past full scale. Clipp
 is the harshest distortion there is; this turns the gain down instead, sample-exact on
 the way down (no overshoot, no look-ahead latency) and slowly on the way back up, so the
 gain change is not heard as pumping.
+
+**The engine** (`dsp/backend.py`): `TruePeakLimiter`'s per-block work has a Rust port
+(`aurasync_engine.TruePeakLimiter`), which the limiter owns when the engine is Rust; `PeakLimiter`
+stays numpy in both engines.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+
+from aurasync.dsp import backend
+from aurasync.dsp.eq import _RustOwned, _vector
 
 CEILING = 10 ** (-1 / 20)
 """-1 dBFS: the resampler and the codec after it can add a little on top."""
@@ -30,6 +39,12 @@ NEAR_CEILING = 0.25
 
 
 class PeakLimiter:
+    """The engine's limiter of always (`limiter.peak`): instant attack, linear release.
+
+    It stays numpy under either engine (`dsp/backend.py`): a closed form of a few vectorised
+    operations per block, which costs next to nothing, so a Rust port would save nothing.
+    """
+
     def __init__(self, sr: int, ceiling: float = CEILING, release_s: float = RELEASE_S) -> None:
         self.ceiling = ceiling
         self.step = 1.0 / (release_s * sr)
@@ -57,7 +72,7 @@ class PeakLimiter:
         return x * gain
 
 
-class TruePeakLimiter:
+class TruePeakLimiter(_RustOwned):
     """A look-ahead limiter on the true peak (4x oversampled), with a cosine attack.
 
     Why (`docs/research/11-…` R2, INFERIDO there): `PeakLimiter` changes the gain from one
@@ -93,6 +108,14 @@ class TruePeakLimiter:
     The detection and smoothing are vectorised; the release, a recursion, becomes a running
     maximum in the log domain. Same input and same parameters give the same output whatever
     the block size (tested to 1e-9).
+
+    **The engine** (`dsp/backend.py`). With `engine=rust` the limiter owns one Rust
+    `TruePeakLimiter`, built on its first block with the design computed here (the look-ahead,
+    attack and hold lengths and the interpolation kernels) and this limiter's state (`_x` and
+    `gain`); every block is one call, which returns the output and the three metrics kept here.
+    `configure` reaches it too. The state moves at an engine switch between blocks, so the
+    output is the same samples (within 1e-9, `tests/test_limiter_rust.py`); after a Rust failure
+    the block is silence and numpy starts again from a limiter at rest.
     """
 
     def __init__(
@@ -106,6 +129,7 @@ class TruePeakLimiter:
         from aurasync.dsp import loudness  # noqa: PLC0415 - loudness imports nothing from here
 
         self.sr = sr
+        self._ceiling_db, self._release_ms = ceiling_db, release_ms
         self.ceiling = 10 ** (ceiling_db / 20)
         self._target = 10 ** ((ceiling_db - MARGIN_DB) / 20)
         self.latency = round(lookahead_ms / 1000 * sr)
@@ -134,10 +158,14 @@ class TruePeakLimiter:
     def configure(self, ceiling_db: float | None = None, release_ms: float | None = None) -> None:
         """Change the live knobs (the chain's `limiter.ceiling_db` and `release_ms`)."""
         if ceiling_db is not None:
+            self._ceiling_db = ceiling_db
             self.ceiling = 10 ** (ceiling_db / 20)
             self._target = 10 ** ((ceiling_db - MARGIN_DB) / 20)
         if release_ms is not None:
+            self._release_ms = release_ms
             self._rate = 1.0 / (release_ms / 1000 * self.sr)
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.configure(ceiling_db=ceiling_db, release_ms=release_ms))
 
     @property
     def reduction_db(self) -> float:
@@ -161,6 +189,26 @@ class TruePeakLimiter:
         n = len(x)
         if n == 0:
             return np.zeros(0)
+        if not self._ready():
+            self.max_reduction_db, self.active_fraction = 0.0, 0.0
+            return np.zeros(n)  # a Rust failure: silence until the cut's bottom
+        if self._rust is not None:
+            return self._process_rust(_vector(x))
+        return self._process_numpy(x)
+
+    def _process_rust(self, x: np.ndarray) -> np.ndarray:
+        n = len(x)
+
+        def silence() -> tuple[np.ndarray, float, float, float]:
+            self._broke()
+            return np.zeros(n), self.gain, 0.0, 0.0
+
+        rust = self._rust
+        out, self.gain, self.max_reduction_db, self.active_fraction = backend.guarded(lambda: rust.process(x), silence)
+        return out
+
+    def _process_numpy(self, x: np.ndarray) -> np.ndarray:
+        n = len(x)
         seg = np.concatenate([self._x, x])
         self._x = seg[-self._keep :]
         # Output j is seg[o + j] (the input `latency` samples ago). Its gain looks at the need
@@ -214,6 +262,35 @@ class TruePeakLimiter:
         start = np.log(1.0 - self.gain) if self.gain < 1.0 else -np.inf
         carried = np.maximum.accumulate(np.maximum(logs, start))
         return 1.0 - np.exp(carried - k * self._rate)
+
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
+
+    def _build_rust(self) -> Any:
+        kernels = _vector(np.ascontiguousarray(self._kernels.T).ravel())
+        rust = backend.module().TruePeakLimiter(
+            kernels,
+            self._w,
+            self._ceiling_db,
+            self.latency,
+            self._attack,
+            self._hold,
+            self._release_ms,
+            self.sr,
+        )
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _numpy_state(self) -> dict[str, Any]:
+        return {"x": _vector(self._x), "gain": float(self.gain)}
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        self._x = np.array(state["x"])
+        self.gain = float(state["gain"])
+
+    def _restart(self) -> None:
+        """After a Rust failure: a limiter at rest (silence kept, unity gain)."""
+        self._x = np.zeros(self._keep)
+        self.gain = 1.0
 
 
 def _running_min(x: np.ndarray, width: int) -> np.ndarray:

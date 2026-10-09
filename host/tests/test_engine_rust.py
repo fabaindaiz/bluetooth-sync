@@ -12,7 +12,7 @@ import aurasync_engine
 import numpy as np
 import pytest
 
-from aurasync.dsp import interpolation
+from aurasync.dsp import backend, interpolation
 
 HALF = interpolation.HALF
 FEW = interpolation._FEW  # noqa: SLF001
@@ -188,7 +188,15 @@ def test_capabilities_match_python_constants():
         "beta": interpolation.BETA,
         "steps": STEPS,
     }
-    assert set(aurasync_engine.capabilities()) == {"interpolation", "spatial", "ambience", "fir", "virtual_bass", "api"}
+    assert set(aurasync_engine.capabilities()) == {
+        "interpolation",
+        "spatial",
+        "ambience",
+        "fir",
+        "virtual_bass",
+        "limiter",
+        "api",
+    }
 
 
 def test_the_api_version_is_in_the_capabilities():
@@ -233,6 +241,40 @@ def test_a_rust_panic_is_a_runtime_error_and_a_new_reader_reads(data):
     assert type(caught.value).__name__ != "PanicException"
     # The torn reader is dropped by the host; a new one reads.
     assert_golden(data, moving(4096))
+
+
+def test_the_host_drops_a_torn_reader_and_builds_a_new_one_after_the_cut(data):
+    """The real extension under the host's dispatcher: a panic planted on `backend._reader` is one
+    silent block and a reported failure; at the cut's bottom numpy reads, and once Rust is chosen
+    again a new `Reader` reads, within 1e-9 of numpy."""
+    backend.reset()
+    try:
+        heard: list[str] = []
+        backend.use(backend.RUST)
+        backend.on_failure = heard.append
+        position = moving(4096)
+        expected = interpolation.read_numpy(data, position)
+        assert np.max(np.abs(backend.read(data, position) - expected)) <= TOLERANCE
+        torn = backend._reader  # noqa: SLF001
+        assert isinstance(torn, aurasync_engine.Reader)
+        torn._panic_next()  # noqa: SLF001
+        assert not np.any(backend.read(data, position))
+        assert len(heard) == 1
+        assert "panicked" in heard[0]
+        assert backend._reader is None  # noqa: SLF001
+        # The cut's bottom: numpy.
+        backend.use(backend.resolve(backend.RUST).active)
+        assert backend.active() == backend.NUMPY
+        assert np.array_equal(backend.read(data, position), expected)
+        # Rust chosen again: a new reader, never the torn one.
+        backend.clear_failure()
+        backend.use(backend.RUST)
+        assert np.max(np.abs(backend.read(data, position) - expected)) <= TOLERANCE
+        assert isinstance(backend._reader, aurasync_engine.Reader)  # noqa: SLF001
+        assert backend._reader is not torn  # noqa: SLF001
+        assert len(heard) == 1
+    finally:
+        backend.reset()
 
 
 def test_a_block_larger_than_max_block_rebuilds_the_table_and_matches_numpy(data):

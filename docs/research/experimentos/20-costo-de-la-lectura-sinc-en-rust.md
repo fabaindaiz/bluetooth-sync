@@ -44,6 +44,14 @@ los dos órdenes LR y cortes de 40 a 200 Hz; 2,4–2,6× numpy por etapa. De pas
 `VirtualBass` el rearmado de dos `PartitionedFIR` por bloque con los armónicos apagados (0,64 de
 0,94 ms por bloque con 3 parlantes), en numpy y sin tocar Rust.
 
+**Séptima etapa, el limitador de pico real (§9, MEDIDO, 2026-10-09): Rust es 1,6 a 2,5 veces más
+rápido** que numpy cuando limita (8 parlantes de ~2,0 a ~1,0 ms por bloque), **1,0 a 1,2 veces**
+cuando solo detecta (la música a nivel normal: el producto de núcleos de numpy va a BLAS) y 1,1 a 1,5
+veces en una señal baja; en las dos corridas. Golden: la salida difiere de numpy ≤ 1,6e-15 y las
+métricas ≤ 1,8e-15 (1,55e-15 y 1,78e-15, MEDIDO en dos corridas). **La cola
+difusa (§10, MEDIDO): no queda nada que portar**: fuera de su convolución (ya en Rust) gasta
+0,025–0,026 ms por bloque con 3 parlantes.
+
 ## Entorno (MEDIDO)
 
 - Equipo `HP-O16` (i5-11400H, 12 hilos), CachyOS, kernel 7.2.8-1-cachyos; python 3.12.12, numpy
@@ -121,6 +129,8 @@ cd host && hatch test -k engine_rust   # deja compilada la extensión en el ento
 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo.py
 ```
 Compara `uptime` antes y después; si la carga pasa de 4, no se tomen los números por limpios.
+Desde el 2026-10-09 la sonda llama a `aurasync_engine.Reader().read`: la función `read` del módulo
+ya no existe. Los números de arriba se midieron con la función.
 
 ## 2 · El upmix espacial / frente intacto (`dsp/spatial.py`), 2026-10-05
 
@@ -655,4 +665,245 @@ todo encendido): numpy 14–16× (no llega), Rust 32–38× (sí).
 cd host && hatch test tests/test_virtual_bass_rust.py
 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_graves_virtuales.py
 AURASYNC_ENGINE=rust $(hatch env find hatch-test.py3.12)/bin/python ../probes/18-costo-de-la-cadena/costo.py
+```
+
+## 8 · La convolución del decorrelador sobre `StreamingFIR` (MEDIDO, 2026-10-09)
+
+La tarea 6 del plan de idiomas de Rust (la 8 del port) cambia la convolución por bloque del
+decorrelador. `Motor._convolucionar` era un solapar y sumar exacto de `np.convolve` con una cola
+por parlante (`_cola_filtro`); ahora el motor tiene un `eq.StreamingFIR` por parlante
+(`Motor._decorreladores`, `None` sin filtro), que es la misma semántica y que ya es dueño de un
+objeto Rust cuando el motor es Rust (§5). El diseño del banco (la semilla, la asignación) sigue en
+numpy: corre en un corte, no por bloque. Un filtro nuevo sale de `_cambiar_filtros`, de `reiniciar`
+y del cambio a y desde `direct` (que antes ponía las colas en cero): todos arrancan desde el
+silencio, como las colas.
+
+**Golden (MEDIDO):** el oráculo numpy cambió (de `np.convolve` directo a FFT con solapar y sumar) y
+`host/tests/test_chain_golden.py`, sin tocarse y a su 1e-9, sigue verde con los dos motores (22
+tests con `test_decorrelate.py`). Entre los 13 tests de `host/tests/test_decorrelate_rust.py`, los
+que comparan Rust con numpy ≤ 1e-9 son `procesar_completo` con el decorrelador prendido, un cambio
+de semilla en el fondo de un corte, `classic → direct → classic` y el cambio de motor a mitad de la
+corrida en los dos sentidos. Los demás comprueban quién es dueño de los filtros y que un filtro
+nuevo arranca del silencio, y dos plantan un pánico: un bloque en silencio y después numpy desde un
+filtro nuevo, comparado con numpy corriendo solo (numpy contra numpy, igualdad exacta: no es una
+comparación de Rust con numpy).
+
+### 8.1 Entorno y método (MEDIDO)
+
+**El Mac**, no `HP-O16`: MacBook con Apple A18 Pro (6 núcleos), macOS 27.0.1 (arm64), python
+3.12.13, numpy 2.5.3, rustc 1.99.0; la extensión del entorno `hatch-test` (release, `test-panic`).
+Bajo `nice -n 19`, carga de 1 minuto 1,4–1,6 (equipo en uso: la comparación vale dentro de cada
+corrida). Sonda: `probes/20-costo-sinc-rust/costo_decorrelador.py`. Bloque de 4096 muestras
+(85,3 ms), ruido de 0,1 de escala, 50 bloques de calentamiento y **500 medidos**, mediana y p95;
+los filtros son los 256 coeficientes del banco real del motor (`length` por defecto); un
+filtro por parlante y el tiempo es el de todos juntos. "np.convolve" es la función de antes
+copiada en la sonda; "FFT numpy" es `StreamingFIR` con `engine=numpy` (lo que hace hoy el motor
+numpy); "Rust" es `StreamingFIR` con `engine=rust`.
+
+### 8.2 Resultado (ms por bloque; mediana y p95; corrida 1 / corrida 2)
+
+| parlantes | np.convolve med | np.convolve p95 | FFT numpy med | FFT numpy p95 | Rust med | Rust p95 | convolve / Rust | FFT / Rust |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 0,115 / 0,125 | 0,122 / 0,137 | 0,056 / 0,062 | 0,059 / 0,067 | 0,031 / 0,034 | 0,085 / 0,087 | 3,7 / 3,7 | 1,8 / 1,9 |
+| 3 | 0,386 / 0,378 | 0,832 / 0,432 | 0,172 / 0,188 | 0,193 / 0,202 | 0,096 / 0,106 | 0,106 / 0,116 | 4,0 / 3,6 | 1,8 / 1,8 |
+| 8 | 0,969 / 1,160 | 1,100 / 1,461 | 0,483 / 0,584 | 0,532 / 1,146 | 0,267 / 0,321 | 0,282 / 0,554 | 3,6 / 3,6 | 1,8 / 1,8 |
+
+Datos crudos: [datos/20/decorrelador-corrida-1.txt](datos/20/decorrelador-corrida-1.txt) y
+[datos/20/decorrelador-corrida-2.txt](datos/20/decorrelador-corrida-2.txt).
+
+**Qué dice:**
+- **Pasar de `np.convolve` a la FFT ya ahorra la mitad en numpy** (0,97 → 0,48 ms con 8
+  parlantes), aun con filtros de solo 256 coeficientes: con un bloque de 4096, la convolución
+  directa cuesta del orden de 4096 × 256 multiplicaciones por parlante y la FFT de 8192 puntos
+  bastante menos. Es un cambio del oráculo numpy y el golden a 1e-9 lo cubre (arriba).
+- **Rust es 1,8 veces más rápido que la FFT de numpy** y 3,6–4,0 veces más que lo de antes,
+  en las dos corridas y con 1, 3 y 8 parlantes. La razón es la de §5: lo que Rust ahorra es la
+  sobrecarga de numpy por llamada más que la FFT (INFERIDO; no se perfiló).
+- En tiempo real, con 8 parlantes el decorrelador pasa de 0,97–1,16 ms por bloque (1,1–1,4 % de
+  los 85,3 ms) a 0,27–0,32 ms (0,3–0,4 %). Con los 3 parlantes del uso real, de 0,38 a 0,10 ms.
+- El p95 de Rust con **1 parlante** se aleja de su mediana **en las dos corridas** (0,085 contra
+  0,031 y 0,087 contra 0,034): se repite, así que no es el ruido de una corrida. Su causa está
+  abierta: que con un bloque de ~0,03 ms cualquier interrupción del equipo en uso pese casi el
+  triple de la mediana es INFERIDO, no se comprobó. El p95 con **8 parlantes** (0,554 contra 0,321)
+  es de **una sola corrida** (en la otra, 0,282 contra 0,267): el equipo en uso (carga 1,4–1,6), no
+  un efecto del filtro. Las medianas coinciden entre corridas.
+
+### 8.3 Cómo reproducirlo
+
+```bash
+cd host && hatch test tests/test_decorrelate_rust.py tests/test_chain_golden.py
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_decorrelador.py
+```
+
+## 9 · El limitador de pico real (`dsp/limiter.py`, `TruePeakLimiter`) en Rust (MEDIDO, 2026-10-09)
+
+La tarea 7 del plan de idiomas de Rust (la 9 del port) porta el trabajo por bloque de
+`TruePeakLimiter`: la necesidad de cada muestra sobre el pico verdadero (los tres puntos entre
+muestras con los núcleos de `loudness.interpolation_kernels`, salvo que todo el bloque esté bajo un
+cuarto del techo), el mínimo móvil de van Herk / Gil-Werman, el promedio de coseno elevado con sumas
+corridas y tablas de ángulos, la liberación en el dominio logarítmico y las tres métricas (`gain`,
+`max_reduction_db`, `active_fraction`). El diseño sigue en numpy: la clase calcula la anticipación,
+el ataque, la retención y los núcleos, y se los pasa al objeto Rust (`aurasync_engine.TruePeakLimiter`),
+que la clase numpy posee cuando el motor es Rust. `PeakLimiter`, el limitador de siempre, sigue en
+numpy en los dos motores: es una forma cerrada que no cuesta casi nada.
+
+**Golden (MEDIDO):** los tests de `host/tests/test_limiter_rust.py` (41 en la tarea 7, 44 desde la
+corrección final) comparan Rust con numpy ≤ 1e-9, salida y métricas después de cada bloque: el seno
+de 60 Hz 6 dB sobre el techo y el corpus
+de picos entre muestras hasta +11 dBTP de `test_limiter.py`, bloques aleatorios de largos impares,
+4096/1024 alternados y bloques más cortos que la anticipación, el barrido de `lookahead_ms`
+1/3/5, `release_ms` 50/250/1000 y `hold_ms` 0/15, un `configure` en vivo entre bloques, silencio
+tras un pico, un NaN en la entrada (da los mismos NaN que numpy) y el cambio de motor a mitad de la
+corrida en los dos sentidos. La diferencia real en el corpus es 1,55e-15 en la salida y 1,78e-15
+en las métricas (MEDIDO, dos corridas de `probes/20-costo-sinc-rust/identidad_limitador.py`: seis
+órdenes bajo la tolerancia). Depende de la señal: el mismo corpus armado con los FIR de Rust (que
+lo cambian en el orden de 1e-16) da 1,63e-14 y 7,11e-15 (MEDIDO, las mismas corridas), cinco
+órdenes bajo la tolerancia. Un pánico plantado en `process` o en `configure` da silencio hasta el
+fondo del corte y luego numpy desde un limitador en reposo; en `set_state` (al cargar el estado de
+numpy en un objeto Rust nuevo) numpy sigue desde su propio estado, que nunca entregó (numpy contra
+numpy, igualdad exacta, en los dos casos). `test_chain_golden.py` sigue verde.
+
+### 9.1 Entorno y método (MEDIDO)
+
+El Mac, como §8: Apple A18 Pro (6 núcleos), macOS 27.0.1 (arm64), python 3.12.13, numpy 2.5.3,
+rustc 1.99.0; la extensión del entorno `hatch-test` (release, `test-panic`). Bajo `nice -n 19`,
+carga de 1 minuto 5,9–6,5 (el equipo en uso: la comparación vale dentro de cada corrida). Sonda:
+`probes/20-costo-sinc-rust/costo_limitador.py`. Bloque de 4096 muestras (85,3 ms), un limitador por
+parlante con los valores por defecto (techo -1 dB, 3 ms, 15 ms, 250 ms), 50 bloques de
+calentamiento y **500 medidos**, mediana y p95; el tiempo es el de todos juntos. Tres señales de
+ruido, porque el limitador toma caminos distintos según el nivel: **fuerte** (desviación 0,5, pasa
+el techo todo el tiempo: el camino entero), **medio** (0,1: se sobremuestrea, pero nada pide
+reducir; la música a nivel normal) y **bajo** (0,02: todo bajo un cuarto del techo, ni se
+sobremuestrea).
+
+### 9.2 Resultado (ms por bloque; mediana y p95; corrida 1 / corrida 2)
+
+| señal | parlantes | numpy med | numpy p95 | Rust med | Rust p95 | numpy / Rust |
+|---|---|---|---|---|---|---|
+| fuerte | 1 | 0,392 / 0,231 | 0,643 / 0,253 | 0,159 / 0,119 | 0,348 / 0,141 | 2,5 / 1,9 |
+| fuerte | 3 | 1,099 / 0,722 | 2,911 / 0,954 | 0,699 / 0,363 | 2,774 / 0,414 | 1,6 / 2,0 |
+| fuerte | 8 | 1,993 / 1,932 | 2,278 / 2,216 | 0,971 / 0,954 | 1,095 / 1,054 | 2,1 / 2,0 |
+| medio | 1 | 0,080 / 0,074 | 0,092 / 0,088 | 0,068 / 0,073 | 0,081 / 0,080 | 1,2 / 1,0 |
+| medio | 3 | 0,233 / 0,228 | 0,291 / 0,260 | 0,205 / 0,219 | 0,247 / 0,241 | 1,1 / 1,0 |
+| medio | 8 | 0,618 / 0,606 | 0,697 / 0,696 | 0,557 / 0,539 | 0,649 / 0,636 | 1,1 / 1,1 |
+| bajo | 1 | 0,007 / 0,008 | 0,009 / 0,008 | 0,006 / 0,007 | 0,013 / 0,007 | 1,1 / 1,2 |
+| bajo | 3 | 0,026 / 0,026 | 0,029 / 0,027 | 0,019 / 0,020 | 0,021 / 0,020 | 1,4 / 1,3 |
+| bajo | 8 | 0,069 / 0,060 | 0,082 / 0,067 | 0,046 / 0,048 | 0,050 / 0,056 | 1,5 / 1,3 |
+
+Datos crudos: [datos/20/limitador-corrida-1.txt](datos/20/limitador-corrida-1.txt) y
+[datos/20/limitador-corrida-2.txt](datos/20/limitador-corrida-2.txt).
+
+**Cómo se llegó a esta forma.** La primera versión era **más lenta que numpy** sin limitar:
+0,8–0,9× en `medio` y 0,5–0,6× en `bajo`. Es **una sola corrida, con carga 10**
+([datos/20/limitador-antes-de-optimizar.txt](datos/20/limitador-antes-de-optimizar.txt)), que no se
+repitió (la primera versión no quedó en el repositorio): una referencia, no una medición que pase el
+filtro de la repetición. Dos causas, y dos cambios que dan **los mismos bits**. MEDIDO el 2026-10-09
+en dos corridas con `probes/20-costo-sinc-rust/identidad_limitador.py`: 1 698 318 valores (el corpus
+de `test_limiter.py` y dos ruidos, tres diseños, bloques de 4096, 1000, 7 y 333 muestras, la salida
+y las métricas) con el mismo SHA-256 (`b473c23b…a6d913`) en la forma final
+([datos/20/limitador-identidad-corrida-1.txt](datos/20/limitador-identidad-corrida-1.txt),
+[datos/20/limitador-identidad-corrida-2.txt](datos/20/limitador-identidad-corrida-2.txt)) y en la
+forma de un producto por ventana (`probes/20-costo-sinc-rust/limitador-producto-por-ventana.patch`;
+[datos/20/limitador-identidad-por-ventana-corrida-1.txt](datos/20/limitador-identidad-por-ventana-corrida-1.txt),
+[datos/20/limitador-identidad-por-ventana-corrida-2.txt](datos/20/limitador-identidad-por-ventana-corrida-2.txt)).
+Las dos dan también, valor a valor, la salida que la tarea 7 guardó fuera del repositorio; que esa
+salida sea la de la primera versión es INFERIDO (se guardó 51 s después de la corrida de la primera
+versión y antes de cualquier otro dato), así que lo comprobado de punta a punta es la identidad
+entre la forma por ventana y la final:
+
+- las reducciones `max` y `min` con la regla de numpy para NaN no se vectorizaban; ahora llevan ocho
+  carriles y el NaN se anota aparte (un `max` o un `min` da lo mismo en cualquier orden). Con eso
+  `bajo` pasó a 1,1–1,5× en todas las corridas siguientes;
+- el producto de núcleos: un producto por ventana (24 sumas en cadena) contra el `@` de numpy, que
+  va a BLAS. Recorrerlo coeficiente por coeficiente sobre todas las ventanas (cada ventana suma en
+  el mismo orden, así que da los mismos bits) bajó `medio` de 0,092 / 0,276 / 0,73–0,75 ms a
+  0,068–0,073 / 0,205–0,219 / 0,539–0,557 ms con 1 / 3 / 8 parlantes, en dos corridas de cada forma
+  ([datos/20/limitador-producto-por-ventana-corrida-1.txt](datos/20/limitador-producto-por-ventana-corrida-1.txt),
+  [datos/20/limitador-producto-por-ventana-corrida-2.txt](datos/20/limitador-producto-por-ventana-corrida-2.txt)).
+  Una prueba aislada en Rust, fuera del limitador, dice lo contrario: que el producto por ventana es
+  el más rápido. Ahora está guardada (`probes/20-costo-sinc-rust/producto_aislado/`) y repetida dos
+  veces el 2026-10-09
+  ([datos/20/limitador-producto-aislado-corrida-1.txt](datos/20/limitador-producto-aislado-corrida-1.txt),
+  [datos/20/limitador-producto-aislado-corrida-2.txt](datos/20/limitador-producto-aislado-corrida-2.txt)),
+  y lo sigue diciendo: 37,8–46,5 µs por bloque el producto por ventana contra 46,0–51,5 µs la forma
+  elegida (MEDIDO, dos corridas de dos rondas, carga 7,1–8,1). Lo que vale es la medición dentro del
+  limitador, que es lo que corre. Otra forma, ocho ventanas con sus 24 sumas en registros, dio
+  0,086–0,090 ms con 1 parlante dentro del limitador en dos corridas cuya salida **no se guardó** y que
+  no se pueden repetir desde el repositorio (REPORTADO por la tarea 7, sin datos crudos), y se
+  descartó; en la prueba aislada es la más lenta de las tres (55,8–59,0 µs, MEDIDO). Además, la
+  liberación se salta `ln(0)` y `exp(-inf)`, que dan -inf y 0 exactos.
+
+**Qué dice:**
+- **Cuando limita, Rust hace el trabajo en la mitad del tiempo** (1,6–2,5×; con 8 parlantes de ~2,0
+  a ~1,0 ms por bloque, de 2,3 % a 1,1 % del tiempo real). Es el caso en que el limitador importa.
+- **Cuando solo detecta, Rust empata** (1,0–1,2×): el sobremuestreo de numpy es un producto de
+  matrices que hace BLAS (VERIFICADO: este numpy 2.5.3 está compilado con Accelerate, según
+  `np.show_config()`; que esa sea la diferencia es INFERIDO, no se perfiló), y el orden fijo dentro
+  de cada ventana impide vectorizarla en Rust sin cambiar los bits. Con 3
+  parlantes son ~0,22 ms de 85,3 ms en los dos motores.
+- El p95 de la corrida 1 con 3 parlantes en `fuerte` (2,9 y 2,8 ms en los dos motores) no se repite
+  en la corrida 2: es el equipo en uso, no el limitador.
+- Como en §7, la razón de fondo para tenerlo en Rust no es la velocidad de hoy sino que el
+  limitador quede en Rust de punta a punta para el `RustMotor`, sin asignar memoria por bloque
+  (`engine/crates/aurasync-dsp/tests/limiter.rs`).
+
+### 9.3 Cómo reproducirlo
+
+```bash
+cd host && hatch test tests/test_limiter_rust.py tests/test_limiter.py tests/test_chain_golden.py
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_limitador.py
+# los bits y el golden; el SHA-256 tiene que ser b473c23b6164bc7509703fd3d28a530cd3417cdf10a9f1a5b64dac5846a6d913
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/identidad_limitador.py
+# la prueba aislada del producto de núcleos (desde la raíz del repositorio)
+nice -n 19 cargo run --release --manifest-path probes/20-costo-sinc-rust/producto_aislado/Cargo.toml
+```
+
+La forma por ventana se arma sobre una copia de `engine/` (`patch -p1 <
+probes/20-costo-sinc-rust/limitador-producto-por-ventana.patch` desde la carpeta que contiene la
+copia de `engine/`), se compila con `maturin build --release --features test-panic` y se corre la
+misma sonda con la rueda descomprimida delante en `PYTHONPATH`.
+
+## 10 · La cola difusa (`chain_stages.DiffuseStage`): nada más que portar (MEDIDO, 2026-10-09)
+
+La tarea 12 del port era la cola difusa (`dsp/diffuse.py`). Su trabajo por bloque es un
+`eq.PartitionedFIR` por parlante (la respuesta al impulso de la cola, 29 520 muestras con los
+valores por defecto), que ya corre en Rust desde §5. Como §6.1 con el crossover, se midió cuánto
+gasta `DiffuseStage.process` fuera de esa convolución: la ganancia (constante o en rampa), las dos
+energías (`np.dot`), el logaritmo de su proporción y la suma `x + wet`.
+
+**Método (MEDIDO):** el mismo entorno que §9.1 (el Mac, `nice -n 19`, carga 6,7–7,0). Sonda:
+`probes/20-costo-sinc-rust/costo_difusion.py`. La cadena por defecto con `diffuse` =
+`noise_tail`, ruido de 0,1 de escala como entrada y como alimentación, 50 + 500 bloques de 4096.
+Tres columnas: la etapa entera como la llama el motor; solo la convolución de cada cola; y la etapa
+con el filtro reemplazado por uno que devuelve una copia de una salida ya calculada (lo de fuera de
+la convolución, con esa copia de más: una cota por arriba).
+
+| motor | parlantes | etapa med | convolución med | fuera de la convolución med (p95) |
+|---|---|---|---|---|
+| Rust | 1 | 0,075 / 0,071 | 0,057 / 0,060 | 0,010 / 0,010 (0,014 / 0,012) |
+| Rust | 3 | 0,215 / 0,219 | 0,189 / 0,204 | **0,026 / 0,025** (0,037 / 0,028) |
+| Rust | 8 | 0,608 / 0,601 | 0,519 / 0,546 | 0,101 / 0,074 (0,198 / 0,121) |
+| numpy | 1 | 0,174 / 0,174 | 0,169 / 0,168 | 0,009 / 0,011 (0,010 / 0,013) |
+| numpy | 3 | 0,511 / 0,535 | 0,481 / 0,498 | 0,025 / 0,027 (0,035 / 0,030) |
+| numpy | 8 | 1,383 / 1,466 | 1,324 / 1,386 | 0,067 / 0,072 (0,077 / 0,075) |
+
+(ms por bloque; corrida 1 / corrida 2. Datos crudos:
+[datos/20/difusion-corrida-1.txt](datos/20/difusion-corrida-1.txt) y
+[datos/20/difusion-corrida-2.txt](datos/20/difusion-corrida-2.txt).)
+
+**Qué dice:**
+- **Fuera de la convolución la cola difusa gasta 0,025–0,026 ms por bloque con 3 parlantes**, en las
+  dos corridas: menos de la décima de milisegundo que la tarea pedía para portar algo más, y un
+  11–12 % de la etapa con Rust. **No se portó nada**; la tarea 12 del port queda cumplida por los FIR
+  de §5. El diseño de la respuesta al impulso (`impulse_response`) es de diseño, no de bloque, y
+  sigue en numpy.
+- Lo de fuera es el mismo código numpy en los dos motores (el filtro de reemplazo no llama a Rust), y
+  da lo mismo en las dos filas salvo el 0,101 de la corrida 1 con 8 parlantes, que no se repite en la
+  corrida 2 (0,074, como numpy): el equipo en uso.
+- La suma cuadra: etapa ≈ convolución + fuera (0,215 ≈ 0,189 + 0,026 con 3 parlantes en Rust).
+
+### 10.1 Cómo reproducirlo
+
+```bash
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_difusion.py
 ```

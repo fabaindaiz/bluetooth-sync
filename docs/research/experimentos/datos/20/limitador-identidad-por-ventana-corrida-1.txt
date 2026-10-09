@@ -1,0 +1,7 @@
+equipo Fabians-MacBook-Neo.local, macOS-27.0.1-arm64-arm-64bit
+python 3.12.13, numpy 2.5.3, rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+extensión: /private/tmp/claude-501/-Users-fadiaz-Desktop-Projects-bluetooth-sync/134bcaa5-8cac-4117-828b-927b0a01e678/scratchpad/plain-site/aurasync_engine/__init__.py
+identidad: 1698318 valores, sha256 b473c23b6164bc7509703fd3d28a530cd3417cdf10a9f1a5b64dac5846a6d913
+contra before.npy: mismos bits True, diferencia máxima 0
+golden (Rust contra numpy, corpus de test_limiter.py armado con numpy): salida 1.55e-15, métricas 1.78e-15
+golden (Rust contra numpy, corpus de test_limiter.py armado con rust): salida 1.63e-14, métricas 7.11e-15

@@ -1,8 +1,10 @@
 """The engine selector in Ajustes and the engine in Diagnóstico (spec rust-engine §2). SIMULATED.
 
 The browser environment does not build the Rust extension, so `aurasync_engine` is a stand-in
-here (numpy's read behind the extension's interface): what is tested is the panel and the
-service's switch through the cut, not Rust (`tests/test_engine_rust.py` tests that).
+here (`tests/engine_stand_in.py`: numpy behind the extension's interface, for the read and every
+ported stage): what is tested is the panel and the service's switch, not Rust
+(`tests/test_engine_rust.py` tests that; `tests/test_engine_stand_in.py` runs the motor on the
+stand-in, so it cannot fall behind the extension's interface unnoticed).
 """
 
 from __future__ import annotations
@@ -16,65 +18,16 @@ from collections.abc import Iterator
 import pytest
 from playwright.sync_api import Page, expect
 
-from aurasync.dsp import ambience, backend, interpolation, spatial
+from aurasync.dsp import backend
+from tests import engine_stand_in
 
 from .test_panel import TOKEN, Running
-
-
-def _stand_in() -> types.ModuleType:
-    module = types.ModuleType("aurasync_engine")
-    module.calls = 0
-
-    def read(data, position):
-        module.calls += 1
-        return interpolation.read_numpy(data, position)
-
-    module.read = read
-    # Every ported stage's constants as numpy has them (the spatial upmix and the ambience
-    # extractor too since they were ported): a stand-in that lists only one reads as stale.
-    module.capabilities = backend._expected  # noqa: SLF001
-    return module
-
-
-class _Through:
-    """The stand-in for a ported stage's Rust object (`SpatialUpmix`, `AmbienceExtractor`): the
-    extension's interface over the owning stage's own numpy path, so the session plays through the
-    switch. Its state is the owner's, so the switch back to numpy carries it unchanged."""
-
-    def __init__(self, owner) -> None:
-        self.owner = owner
-
-    def set_params(self, *_args) -> None:
-        pass
-
-    def set_layout(self, *_args) -> None:
-        pass
-
-    def set_state(self, _state) -> None:
-        pass
-
-    def reset(self) -> None:
-        pass
-
-    def state(self) -> dict:
-        return self.owner._numpy_state()  # noqa: SLF001
-
-    def process(self, left, right):
-        owner = self.owner
-        if isinstance(owner, ambience.Extractor):
-            return owner._procesar_numpy(left, right)  # noqa: SLF001
-        out = owner._process_numpy(left, right)  # noqa: SLF001
-        return [out[n][0] for n in owner.names], [out[n][1] for n in owner.names]
 
 
 @pytest.fixture
 def rust(monkeypatch) -> Iterator[types.ModuleType]:
     """Before `svc`: the service looks for the extension when it starts."""
-    module = _stand_in()
-    monkeypatch.setitem(sys.modules, "aurasync_engine", module)
-    monkeypatch.setattr(spatial.SpatialUpmix, "_build_rust", lambda stage: _Through(stage))
-    monkeypatch.setattr(ambience.Extractor, "_build_rust", lambda stage: _Through(stage))
-    backend.reset()
+    module = engine_stand_in.install(monkeypatch)
     yield module
     backend.reset()
 

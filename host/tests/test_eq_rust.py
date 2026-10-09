@@ -745,8 +745,9 @@ def test_the_backend_does_not_keep_a_dropped_filter_alive(kind):
 
 
 def test_capabilities_carry_the_fir_key():
-    """No constant is shared with numpy; the key says the build has the filters."""
-    assert aurasync_engine.capabilities()["fir"] == {"version": 1}
+    """No constant is shared with numpy; the key says the build has the filters. Version 2 is for
+    a host from before the `api` key, which must refuse a build without the module's `read`."""
+    assert aurasync_engine.capabilities()["fir"] == {"version": 2}
 
 
 # -- inside the motor -----------------------------------------------------------------------

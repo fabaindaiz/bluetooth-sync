@@ -1,13 +1,14 @@
 """Which engine runs the DSP stages that have a Rust port: numpy or Rust (spec rust-engine §2).
 
 The numpy code stays and is the oracle; `aurasync_engine` (engine/crates/aurasync-engine, PyO3)
-is an optional extension. Five stages have a port: the band-limited read of the delay line
+is an optional extension. Six stages have a port: the band-limited read of the delay line
 (`interpolation.read`, which dispatches through `read` here), the spatial / front upmix
-(`spatial.SpatialUpmix`), the ambience extractor (`ambience.Extractor`) and the FIR filters by FFT
+(`spatial.SpatialUpmix`), the ambience extractor (`ambience.Extractor`), the FIR filters by FFT
 convolution (`eq.StreamingFIR`, `eq.PartitionedFIR`, under the EQ, the crossover, the bass stage,
-the virtual bass and the diffuse tail) and the virtual bass's harmonic generator
-(`virtual_bass.VirtualBass`, which owns two Rust FIRs directly); each of the last four owns its Rust
-object and registers for the switch.
+the virtual bass, the diffuse tail and the decorrelator), the virtual bass's harmonic generator
+(`virtual_bass.VirtualBass`, which owns two Rust FIRs directly) and the true-peak limiter
+(`limiter.TruePeakLimiter`); each of the last five owns its Rust object and registers for the
+switch.
 
 **Choosing** (d-7c8794-196e0c). `"engine"` in `service.json` (`numpy` by default), overridden by
 `AURASYNC_ENGINE` for the tests and the CLI (`wanted`). `resolve` turns the wish into what can
@@ -114,7 +115,7 @@ _loaded = False
 
 def _expected() -> dict[str, dict[str, Any]]:
     """The constants each ported stage must have been built with: numpy's own."""
-    from aurasync.dsp import ambience, spatial  # noqa: PLC0415 - both import this module
+    from aurasync.dsp import ambience, limiter, spatial  # noqa: PLC0415 - they import this module
 
     curve = ambience.Parametros()
     return {
@@ -137,14 +138,21 @@ def _expected() -> dict[str, dict[str, Any]]:
         "ambience": {
             "floor": ambience._PISO_NORMA,  # noqa: SLF001 - shared with the port
         },
-        # The FIR filters share no constant with numpy: `version` is bumped (here and in lib.rs)
-        # whenever the Rust behaviour of the stage changes, so a stale build is refused here
-        # instead of failing on the first filter.
-        "fir": {"version": 1},
+        # The FIR filters share no constant with numpy: `version` is bumped (here and in
+        # capabilities.rs) whenever the Rust behaviour of the stage changes, so a stale build is
+        # refused here instead of failing on the first filter. Version 2 changed no filter: it is
+        # there for a host from before `api` (main without a rebuild), which checks only this key
+        # and would otherwise take a build without `read` and fail every block.
+        "fir": {"version": 2},
         # Likewise the virtual bass (it owns two of those filters, its calibration comes per call).
         "virtual_bass": {"version": 1},
-        # The binding's own Python-visible shape (the exceptions, the names): bumped, here and in
-        # the Rust `capabilities`, when it changes. Version 2 added `EngineError` and `EnginePanic`.
+        # Likewise the true-peak limiter: its design values come from numpy per call; its two own
+        # constants are numpy's, checked here like the other stages' constants.
+        "limiter": {"version": 1, "margin_db": limiter.MARGIN_DB, "near_ceiling": limiter.NEAR_CEILING},
+        # The binding's own Python-visible shape: bumped, here and in the Rust `capabilities`, when
+        # it changes. Version 2: the exceptions `EngineError` and `EnginePanic`, the `Reader` class
+        # in place of the module's `read`, keyword-only `set_params`, and no `_panic` function. A host
+        # from before this key cannot check it: `fir` at 2 is what makes such a host refuse the build.
         "api": {"version": 2},
     }
 
@@ -357,13 +365,20 @@ def _fail(reason: str) -> None:
 
 
 def _rust_read(data: np.ndarray, position: np.ndarray) -> np.ndarray:
-    """The extension's `Reader.read`; a failure drops the reader, so a torn one is never used again."""
+    """The extension's `Reader.read`; a failure drops the reader, so a torn one is never used again.
+
+    The reader is built through `built` (any exception from its constructor disables Rust and is
+    reported), and the read gives silence when it could not be."""
     global _reader  # noqa: PLW0603
     if _reader is None:
-        _reader = _module.Reader()
+        _reader = built(lambda: _module.Reader(), lambda: None)
+        if _reader is None:
+            return np.zeros(np.shape(position))
     try:
         return _reader.read(data, position)
     except RuntimeError:
+        # Only a Rust failure tears the reader; a `ValueError` (a position out of range) is the
+        # caller's bug, raised before anything is written, and the reader stays usable.
         _reader = None
         raise
 

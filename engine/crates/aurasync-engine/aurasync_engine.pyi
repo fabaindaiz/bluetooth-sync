@@ -37,7 +37,8 @@ class Reader:
 
 def capabilities() -> dict[str, dict[str, float | int]]:
     """The constants each stage was built with, for the host to check against its own:
-    `interpolation`, `spatial`, `ambience`, and the `version` of `fir`, `virtual_bass` and `api`.
+    `interpolation`, `spatial`, `ambience`, `limiter` (its `margin_db` and `near_ceiling`), and the
+    `version` of `fir`, `virtual_bass`, `limiter` and `api`.
     """
 
 class SpatialUpmix:
@@ -181,4 +182,38 @@ class VirtualBass:
 
     def set_state(self, state: dict[str, _State]) -> None:
         """Takes a state from numpy's stage (the keys of `state()`); a `ValueError` changes
+        nothing."""
+
+class TruePeakLimiter:
+    """`aurasync.dsp.limiter.TruePeakLimiter`'s per-block work. The numpy limiter keeps the design
+    and passes it here."""
+
+    def __init__(
+        self,
+        kernels: _Vector,
+        half_width: int,
+        ceiling_db: float,
+        latency: int,
+        attack: int,
+        hold: int,
+        release_ms: float,
+        sr: int,
+    ) -> None:
+        """The limiter numpy's `TruePeakLimiter` builds, at rest: `kernels` three rows of
+        `2 * half_width` taps (numpy's `_kernels.T` flattened), the look-ahead `latency`, `attack`
+        and `hold` in samples, and the knobs `ceiling_db` and `release_ms` at `sr` Hz."""
+
+    def configure(self, *, ceiling_db: float | None = None, release_ms: float | None = None) -> None:
+        """The live knobs (numpy's `configure`), from the next block; a `ValueError` changes
+        neither."""
+
+    def process(self, x: _Vector) -> tuple[_Vector, float, float, float]:
+        """One block: `(out, gain, max_reduction_db, active_fraction)`, the output a new float64
+        array of `len(x)` samples."""
+
+    def state(self) -> dict[str, _Vector | float]:
+        """The whole state, as numpy's limiter keeps it: `{"x": ..., "gain": ...}`."""
+
+    def set_state(self, state: dict[str, _Vector | float]) -> None:
+        """Takes a state from numpy's limiter (the keys of `state()`); a `ValueError` changes
         nothing."""

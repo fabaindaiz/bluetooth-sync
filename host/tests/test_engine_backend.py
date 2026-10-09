@@ -23,7 +23,7 @@ import pytest
 
 from aurasync import clients, control
 from aurasync.config import Instalacion, Parlante
-from aurasync.dsp import ambience, backend, eq, interpolation
+from aurasync.dsp import ambience, backend, eq, interpolation, limiter
 from aurasync.service import ConfigError, Service, load_config
 
 if TYPE_CHECKING:
@@ -247,7 +247,7 @@ def test_a_build_with_other_constants_is_not_used(monkeypatch):
     assert "half" in resolved.reason
 
 
-@pytest.mark.parametrize("stage", ["fir", "virtual_bass"])
+@pytest.mark.parametrize("stage", ["fir", "virtual_bass", "limiter"])
 def test_a_build_with_a_stale_stage_version_is_not_used(monkeypatch, stage):
     module = fake_engine()
     module.capabilities = lambda: {**backend._expected(), stage: {"version": 0}}  # noqa: SLF001
@@ -256,6 +256,40 @@ def test_a_build_with_a_stale_stage_version_is_not_used(monkeypatch, stage):
     resolved = backend.resolve("rust")
     assert resolved.active == "numpy"
     assert stage in resolved.reason
+
+
+@pytest.mark.parametrize(("key", "value"), [("margin_db", 0.02), ("near_ceiling", 0.5), ("margin_db", None)])
+def test_a_build_with_other_limiter_constants_is_not_used(monkeypatch, key, value):
+    """`MARGIN_DB` and `NEAR_CEILING` are checked like the other stages' constants: another value,
+    or none (a build from before they were listed), is refused with the build hint."""
+    module = fake_engine()
+    peak = dict(backend._expected()["limiter"])  # noqa: SLF001
+    if value is None:
+        del peak[key]
+    else:
+        peak[key] = value
+    module.capabilities = lambda: {**backend._expected(), "limiter": peak}  # noqa: SLF001
+    monkeypatch.setitem(sys.modules, "aurasync_engine", module)
+    backend.reset()
+    resolved = backend.resolve("rust")
+    assert resolved.active == "numpy"
+    assert resolved.available is False
+    assert "limiter" in resolved.reason
+    assert backend.BUILD_HINT in resolved.reason
+
+
+def test_the_expected_limiter_constants_are_numpy_s():
+    assert backend._expected()["limiter"] == {  # noqa: SLF001
+        "version": 1,
+        "margin_db": limiter.MARGIN_DB,
+        "near_ceiling": limiter.NEAR_CEILING,
+    }
+
+
+def test_the_expected_fir_version_is_2():
+    """2 although no filter changed: a host from before `api` checks only this key, and must refuse
+    a build without the module's `read` (see `_expected`)."""
+    assert backend._expected()["fir"] == {"version": 2}  # noqa: SLF001
 
 
 def test_the_expected_api_version_is_2():
@@ -365,6 +399,29 @@ def test_a_failed_reader_is_dropped_and_a_new_one_is_built_after_the_cut(failing
     position = still()
     assert np.array_equal(backend.read(data, position), interpolation.read_numpy(data, position))
     assert len(failing.readers) == 2
+
+
+@pytest.mark.parametrize("listening", [True, False])
+def test_a_reader_that_cannot_be_built_is_a_failure_and_silence_not_an_exception(rust, data, listening):
+    """Building the `Reader` goes through `built`: an older build without the class (an
+    `AttributeError`), or any exception from its constructor, disables Rust and is reported; the
+    read gives silence and nothing escapes `backend.read`."""
+    del rust.Reader  # an extension without the class
+    backend.use("rust")
+    failures: list[str] = []
+    if listening:
+        backend.on_failure = failures.append
+    position = still()
+    assert np.array_equal(backend.read(data, position), np.zeros(len(position)))
+    assert "AttributeError" in backend.failure()
+    assert failures == ([backend.failure()] if listening else [])
+    assert backend._reader is None  # noqa: SLF001
+    # Then silence until the cut's bottom (or numpy at once with nobody to cut), and numpy after.
+    if listening:
+        assert np.array_equal(backend.read(data, position), np.zeros(len(position)))
+        backend.use(backend.resolve("rust").active)
+    assert np.array_equal(backend.read(data, position), interpolation.read_numpy(data, position))
+    assert rust.calls == []
 
 
 def test_rust_failure_is_silent_until_the_cut_then_numpy(failing, data):

@@ -218,6 +218,7 @@ class Motor:
             self._banco_actual, self._orden = None, list(range(n))
             filtros = dict.fromkeys((p.nombre for p in instalacion.parlantes), None)
         self._filtros = filtros
+        self._decorreladores = self._nuevos_decorreladores()
         # La extracción de ambiente tiene latencia propia: hay que retrasar el camino
         # directo lo mismo, o el ambiente llegaría corrido respecto de él y el efecto de
         # precedencia haría lo contrario de lo que se busca.
@@ -529,7 +530,13 @@ class Motor:
 
     def _cambiar_filtros(self, filtros: dict[str, np.ndarray]) -> None:
         self._filtros = filtros
-        self._cola_filtro = {n: np.zeros(len(h) - 1) for n, h in filtros.items()}
+        # Filtros nuevos: un cambio de largo (o de banco) arranca desde el silencio, como la cola.
+        self._decorreladores = self._nuevos_decorreladores()
+
+    def _nuevos_decorreladores(self) -> dict[str, eq.StreamingFIR | None]:
+        """One fresh `StreamingFIR` per speaker (None without a filter), tails empty. It follows the
+        engine like every other filter, so the convolution runs in Rust when the engine is Rust."""
+        return {n: None if h is None else eq.StreamingFIR(h) for n, h in self._filtros.items()}
 
     def _cambiar_taps(self) -> None:
         for p in self.instalacion.parlantes:
@@ -620,7 +627,7 @@ class Motor:
     def reiniciar(self) -> None:
         """Vacía el estado. Hay que llamarlo al empezar una reproducción nueva."""
         # Cola de la convolución: la parte del bloque anterior que todavía no salió.
-        self._cola_filtro = {n: np.zeros(len(h) - 1 if h is not None else 0) for n, h in self._filtros.items()}
+        self._decorreladores = self._nuevos_decorreladores()
         # Una línea de retardo **variable** por parlante. Se arranca con `saltar_a`, que no
         # usa rampa: antes de que empiece a sonar no hay nada que pueda producir un clic.
         efectivos = self.retardos_efectivos_ms()
@@ -750,7 +757,7 @@ class Motor:
             # What `direct` does not feed belongs to the render that is leaving: the decorrelator's
             # tails, the diffuse tail and the bass filters start empty; the EQ plays flat in direct.
             # All of it changes here, with the output at zero.
-            self._cola_filtro = {n: np.zeros_like(c) for n, c in self._cola_filtro.items()}
+            self._decorreladores = self._nuevos_decorreladores()
             if fresh is not None:
                 self._difusion, self._graves = fresh
             if self.ecualizar:
@@ -1184,25 +1191,10 @@ class Motor:
         return ext_izq[:n], ext_der[:n]
 
     def _convolucionar(self, nombre: str, x: np.ndarray) -> np.ndarray:
-        """Overlap-add exacto: el resultado es idéntico a convolucionar todo de una vez."""
-        h = self._filtros[nombre]
-        if h is None:
-            return x
-        completa = np.convolve(x, h)
-        cola = self._cola_filtro[nombre]
-        salida = completa[: len(x)].copy()
-        solape = min(len(cola), len(salida))
-        salida[:solape] += cola[:solape]
-        nueva_cola = completa[len(x) :]
-        if len(cola) > solape:
-            resto = cola[solape:]
-            largo = max(len(nueva_cola), len(resto))
-            acumulada = np.zeros(largo)
-            acumulada[: len(nueva_cola)] += nueva_cola
-            acumulada[: len(resto)] += resto
-            nueva_cola = acumulada
-        self._cola_filtro[nombre] = nueva_cola
-        return salida
+        """Overlap-add exacto (`eq.StreamingFIR`, en Rust si el motor es Rust): el resultado es
+        idéntico a convolucionar todo de una vez."""
+        filtro = self._decorreladores[nombre]
+        return x if filtro is None else filtro.process(x)
 
 
 def procesar_completo(motor: Motor, izq: np.ndarray, der: np.ndarray, bloque: int = 4096) -> dict[str, np.ndarray]:

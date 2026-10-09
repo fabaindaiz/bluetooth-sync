@@ -20,6 +20,7 @@ use std::panic::{self, AssertUnwindSafe};
 use aurasync_dsp::ambience::AmbienceError;
 use aurasync_dsp::fir::FirError;
 use aurasync_dsp::interpolation::ReadError;
+use aurasync_dsp::limiter::LimiterError;
 use aurasync_dsp::spatial::SpatialError;
 use aurasync_dsp::virtual_bass::VirtualBassError;
 use numpy::{AsSliceError, BorrowError};
@@ -104,7 +105,11 @@ impl From<PyErr> for EngineError {
 
 impl From<FirError> for EngineError {
     fn from(error: FirError) -> Self {
-        Self::Invalid(error.to_string())
+        match error {
+            // The binding sizes `out` for the block, so this is a bug here, not the caller's.
+            FirError::OutputMismatch => Self::Internal(error.to_string()),
+            _ => Self::Invalid(error.to_string()),
+        }
     }
 }
 
@@ -117,6 +122,16 @@ impl From<AmbienceError> for EngineError {
 impl From<SpatialError> for EngineError {
     fn from(error: SpatialError) -> Self {
         Self::Invalid(error.to_string())
+    }
+}
+
+impl From<LimiterError> for EngineError {
+    fn from(error: LimiterError) -> Self {
+        match error {
+            // The binding sizes `out` for the block, so this is a bug here, not the caller's.
+            LimiterError::OutputMismatch => Self::Internal(error.to_string()),
+            _ => Self::Invalid(error.to_string()),
+        }
     }
 }
 
@@ -168,5 +183,39 @@ pub fn guard<T>(body: impl FnOnce() -> Result<T, EngineError>) -> PyResult<T> {
                 .unwrap_or("(no message)");
             Err(EngineError::Panic(message.to_owned()).into())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_output_of_the_wrong_length_is_the_binding_s_bug_not_the_caller_s() {
+        // The binding sizes `out` for the block: a mismatch is an invariant of this crate.
+        assert!(matches!(
+            EngineError::from(FirError::OutputMismatch),
+            EngineError::Internal(_)
+        ));
+        assert!(matches!(
+            EngineError::from(LimiterError::OutputMismatch),
+            EngineError::Internal(_)
+        ));
+        assert!(matches!(
+            EngineError::from(VirtualBassError::Filter(FirError::OutputMismatch)),
+            EngineError::Internal(_)
+        ));
+        // What the caller passes stays a `ValueError`.
+        assert!(matches!(
+            EngineError::from(FirError::NoTaps),
+            EngineError::Invalid(_)
+        ));
+        assert!(matches!(
+            EngineError::from(LimiterError::InvalidConfig {
+                field: "sr",
+                got: 0.0
+            }),
+            EngineError::Invalid(_)
+        ));
     }
 }

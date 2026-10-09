@@ -1,0 +1,13 @@
+# Prueba aislada del producto de núcleos del limitador de pico real (experimentos/20 §9): cinco
+# formas del mismo producto, fuera del limitador. Desechable; sin dependencias.
+[package]
+name = "producto-aislado"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[profile.release]
+codegen-units = 1
+lto = "fat"

@@ -28,6 +28,13 @@
 //!   directly, so a block is one call: `process(x, current, target)` gives the harmonics and the
 //!   two energies. The numpy stage owns one when the engine is Rust and moves the filters'
 //!   states in and out (`state`, `set_state`, `reset`) at a cut's bottom.
+//! - `TruePeakLimiter`: `aurasync.dsp.limiter.TruePeakLimiter`'s per-block work in Rust (the
+//!   4x-oversampled need, the hold and raised-cosine attack, the release in the log domain and
+//!   the metrics), within 1e-9 of numpy (`host/tests/test_limiter_rust.py`). The numpy limiter
+//!   keeps the design (the look-ahead, attack and hold lengths and the interpolation kernels) and
+//!   owns one when the engine is Rust; `process(x)` gives `(out, gain, max_reduction_db,
+//!   active_fraction)`, and the state (`x`, `gain`) moves in and out (`state`, `set_state`) at a
+//!   switch.
 //! - `capabilities()`: the constants each stage was built with, for the host to check against its
 //!   own.
 //!
@@ -42,7 +49,8 @@
 //!
 //! The source is one file per concern: `error` (the error type and the exceptions), `convert`
 //! (Python values to Rust ones), `planted` (the `test-panic` switch), `reader` (`Reader`),
-//! `capabilities`, and one file per class (`spatial`, `ambience`, `fir`, `virtual_bass`). The
+//! `capabilities`, and one file per class (`spatial`, `ambience`, `fir`, `virtual_bass`,
+//! `limiter`). The
 //! module itself is declared below, and `aurasync_engine.pyi` is its type stub.
 #![forbid(unsafe_code)]
 
@@ -51,6 +59,7 @@ mod capabilities;
 mod convert;
 mod error;
 mod fir;
+mod limiter;
 mod planted;
 mod reader;
 mod spatial;
@@ -68,6 +77,7 @@ mod aurasync_engine {
     #[pymodule_export]
     use super::fir::{PartitionedFir, StreamingFir};
     #[pymodule_export]
+    use super::limiter::TruePeakLimiter;
     #[cfg(feature = "test-panic")]
     #[pymodule_export]
     use super::planted::_panic_outside_the_read;

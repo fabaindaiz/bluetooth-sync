@@ -7,6 +7,10 @@ de recalibración (muchas fracciones). Mediana y p95 de 500 bloques, tras 50 de 
 
     cd host && hatch run hatch-test.py3.12:python ../probes/20-costo-sinc-rust/costo.py
     (o el python de ese entorno directamente; la extensión tiene que estar compilada)
+
+Desde el 2026-10-09 la lectura de Rust es `aurasync_engine.Reader().read`: la función del módulo,
+`aurasync_engine.read`, ya no existe. Las cifras ya registradas en experimentos/20 se midieron con
+esa función.
 """
 
 from __future__ import annotations
@@ -61,7 +65,7 @@ def main() -> None:
         for moving in (False, True):
             pos = positions(n, moving)
             nm, n95 = measure(interpolation.read_numpy, data, pos)
-            rm, r95 = measure(aurasync_engine.read, data, pos)
+            rm, r95 = measure(aurasync_engine.Reader().read, data, pos)
             kind = "movimiento" if moving else "quieto"
             print(f"{n:>9} {kind:>10} {nm:>10.3f} {n95:>10.3f} {rm:>9.3f} {r95:>9.3f} {nm / rm:>6.1f}")
     print("uptime despues:", subprocess.run(["uptime"], capture_output=True, text=True).stdout.strip())

@@ -1,0 +1,108 @@
+--- a/engine/crates/aurasync-dsp/src/limiter.rs
++++ b/engine/crates/aurasync-dsp/src/limiter.rs
+@@ -12,10 +12,9 @@
+ //! 1. the kept input and the block are one segment; the last `keep` samples are kept;
+ //! 2. **need** (`_needed`): unless every sample is under [`NEAR_CEILING`] of the target, each
+ //!    window of `2 * half_width` samples gives the three points between its two middle samples
+-//!    (a plain left-to-right dot per kernel row, run tap by tap over all the windows; numpy's is
+-//!    a BLAS product, whose order the golden's tolerance covers); a sample's peak is the largest
+-//!    of its magnitude and the points on both sides; its need is
+-//!    `min(1, target / max(peak, 1e-12))`;
++//!    (a plain left-to-right dot per kernel row; numpy's is a BLAS product, whose order the
++//!    golden's tolerance covers); a sample's peak is the largest of its magnitude and the points
++//!    on both sides; its need is `min(1, target / max(peak, 1e-12))`;
+ //! 3. the shortcut: at unity gain with nothing needed, the block is the delayed input;
+ //! 4. **hold and attack**: a running minimum over `attack + hold + 1` needs (van Herk /
+ //!    Gil-Werman: prefix and suffix minima per run of that width, padded with infinity), then the
+@@ -144,7 +143,6 @@
+     fits: usize,
+     seg: Vec<f64>,
+     needed: Vec<f64>,
+-    point: Vec<f64>,
+     between: Vec<f64>,
+     prefix: Vec<f64>,
+     suffix: Vec<f64>,
+@@ -324,7 +322,6 @@
+             fits: 0,
+             seg: Vec::new(),
+             needed: Vec::new(),
+-            point: Vec::new(),
+             between: Vec::new(),
+             prefix: Vec::new(),
+             suffix: Vec::new(),
+@@ -395,7 +392,6 @@
+         let width = a + self.hold + 1;
+         self.seg.resize(self.x.len() + n, 0.0);
+         self.needed.resize(needs, 0.0);
+-        self.point.resize(needs + 1, 0.0);
+         self.between.resize(needs + 1, 0.0);
+         self.prefix.resize(needs.div_ceil(width) * width, 0.0);
+         self.suffix.resize(needs.div_ceil(width) * width, 0.0);
+@@ -447,7 +443,6 @@
+             &self.kernels,
+             w,
+             self.target,
+-            &mut self.point[..=needs],
+             &mut self.between[..=needs],
+             needed,
+         );
+@@ -583,19 +578,17 @@
+ }
+ 
+ /// numpy's `_needed`: the gain each of `x[w .. len - w]` needs so that it and the points on both
+-/// sides of it stay under `target`. `between` takes the windows' points (one more than `needed`)
+-/// and `point` is scratch of the same length.
++/// sides of it stay under `target`. `between` takes the windows' points (one more than `needed`).
+ ///
+-/// Each point is a plain left-to-right dot of a kernel row and a window, from 0. The loops run
+-/// tap by tap over all the windows: each window's sum still adds its taps in order, so the result
+-/// is the same to the bit as one window at a time, and in the limiter this was ~25 % faster than
+-/// one window at a time (MEDIDO, two runs, `docs/research/experimentos/20-…` §9).
++/// Each point is a plain left-to-right dot of a kernel row and a window, from 0. (Running the taps
++/// over many windows at once gives the same bits but was slower here, MEDIDO: the windows' sums
++/// are independent, so the processor already overlaps them, and the order inside a window rules
++/// out vectorising it.)
+ fn need(
+     x: &[f64],
+     kernels: &[f64],
+     w: usize,
+     target: f64,
+-    point: &mut [f64],
+     between: &mut [f64],
+     needed: &mut [f64],
+ ) {
+@@ -604,22 +597,19 @@
+         return;
+     }
+     // Window i is x[i .. i + 2w]; its points lie between x[i + w - 1] and x[i + w].
+-    let (taps, windows) = (2 * w, between.len());
+-    for (p, row) in kernels.chunks_exact(taps).enumerate() {
+-        point.fill(0.0);
+-        for (m, &k) in row.iter().enumerate() {
+-            for (sum, &v) in point.iter_mut().zip(&x[m..m + windows]) {
+-                *sum += k * v;
+-            }
+-        }
++    let taps = 2 * w;
++    for (i, b) in between.iter_mut().enumerate() {
++        let window = &x[i..i + taps];
+         // numpy's np.abs(...).max(axis=0): the first row, then the larger with each next one.
+-        for (b, &sum) in between.iter_mut().zip(point.iter()) {
+-            *b = if p == 0 {
+-                sum.abs()
+-            } else {
+-                maximum(*b, sum.abs())
+-            };
+-        }
++        let mut points = kernels.chunks_exact(taps).map(|row| {
++            let mut sum = 0.0;
++            for (k, v) in row.iter().zip(window) {
++                sum += k * v;
++            }
++            sum.abs()
++        });
++        let first = points.next().unwrap_or(0.0);
++        *b = points.fold(first, maximum);
+     }
+     for (i, slot) in needed.iter_mut().enumerate() {
+         let peak = maximum(x[w + i].abs(), maximum(between[i], between[i + 1]));
