@@ -86,6 +86,9 @@ escritor y el motor sigue separado del emisor.
 6. **Varios agentes no pudieron escribir su informe** («Subagents should return findings as text»), y el
    controlador los guardó.
 7. **El reinicio del servicio falló una vez** porque el viejo no soltaba el puerto. Se reintentó.
+8. **El chequeo de `rust-ramps-loudness` falló al cerrar**: en `HP-O16`, `test_engine_gil` con
+   `PartitionedFIR` tardó 19,6 ms, bajo los 20 ms que el test necesita para juzgar. Es un test que depende de
+   la velocidad del equipo. Se le dio un bloque 4 veces más largo, sin bajar el umbral, y pasó.
 **Qué quedó pendiente** (para la próxima sesión, en este orden):
 1. **Integrar Rust 13–14 y el GIL** desde `../bluetooth-sync-rust`.
    - Condición de la revisión: medir el **efecto convoy del GIL** en el servicio con el panel activo, o
@@ -100,7 +103,8 @@ escritor y el motor sigue separado del emisor.
    - etapa 2 (i-7c8794-a0a68b);
    - monitor (i-7c8794-6c2a37: la hora de la línea `lost`, rechazar `monitor_set`);
    - presets (i-7c8794-dcbd24).
-6. **Commits**: todo está sin commit en `seamless-transitions` y en `rust-ramps-loudness`.
+6. **Commits hechos y subidos**: `seamless-transitions` hasta `47983c2` y `rust-ramps-loudness` en `a08b8a2`,
+   las dos en `origin`. La integración de Rust parte de esa rama.
 **Desvío del plan.**
 - Las tareas 3 a 5 de la etapa 2 y las 4 tareas de la etapa 4 se hicieron en lote, con una sola revisión
   cada una, para ganar tiempo.
@@ -111,7 +115,8 @@ escritor y el motor sigue separado del emisor.
 **No verificado.**
 - No se escucharon las etapas 2 y 4.
 - `check.sh` entero pasó sobre el estado final (2162 tests, 12 min con `nice -n 19`), con
-  `test_a_signal_restores_it` deseleccionado. Ese test pasó aparte, corrido en primer plano.
+  `test_a_signal_restores_it` deseleccionado. Ese test pasó aparte, en primer plano, en `seamless-transitions`;
+  en `rust-ramps-loudness` (2034 tests) no se corrió aparte.
 - Nada se midió con los JBL.
 **Medido.**
 - Prioridad: p99 de 52–58 → 21 ms con la CPU saturada.
