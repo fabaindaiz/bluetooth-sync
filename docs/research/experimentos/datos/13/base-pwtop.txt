@@ -1,0 +1,38 @@
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+C   29      0      0    ---     ---   ---   ---     0                  Dummy-Driver
+C   30      0      0    ---     ---   ---   ---     0                  Freewheel-Driver
+C   45      0      0    ---     ---   ---   ---     0                  Midi-Bridge
+C   49      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI3__sink
+C   50      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI2__sink
+C   51      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI1__sink
+C   52      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Speaker__sink
+C   53      0      0    ---     ---   ---   ---     0                  alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic2__source
+C   54      0      0    ---     ---   ---   ---     0                  alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source
+C   55      0      0    ---     ---   ---   ---     0                  bluez_midi.server
+C   87      0      0    ---     ---   ---   ---     0                  v4l2_input.pci-0000_00_14.0-usb-0_6_1.0
+C   48      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_01_00.1.hdmi-stereo
+C  114      0      0    ---     ---   ---   ---     0                  spotify
+C  124      0      0    ---     ---   ---   ---     0                  aurasync
+C   94      0      0    ---     ---   ---   ---     0                  bluez_input.14:06:A7:6B:E3:F0
+C  101      0      0    ---     ---   ---   ---     0                  bluez_capture_internal.14:06:A7:6B:E3:F0
+C  120      0      0    ---     ---   ---   ---     0                  bluez_output.14_06_A7_6B_E3_F0.1
+C  146      0      0    ---     ---   ---   ---     0                  pw-play
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+I   29      0      0   0,0us   0,0us  ???   ???     0                  Dummy-Driver
+S   30      0      0    ---     ---   ---   ---     0                  Freewheel-Driver
+S   45      0      0    ---     ---   ---   ---     0                  Midi-Bridge
+S   49      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI3__sink
+S   50      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI2__sink
+S   51      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI1__sink
+S   52      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Speaker__sink
+S   53      0      0    ---     ---   ---   ---     0                  alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic2__source
+S   54      0      0    ---     ---   ---   ---     0                  alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source
+S   55      0      0    ---     ---   ---   ---     0                  bluez_midi.server
+S   87      0      0    ---     ---   ---   ---     0                  v4l2_input.pci-0000_00_14.0-usb-0_6_1.0
+S   48      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_01_00.1.hdmi-stereo
+S   94      0      0    ---     ---   ---   ---     0                  bluez_input.14:06:A7:6B:E3:F0
+I  101      0      0   0,0us   0,0us  ???   ???     0         F32P 1 0 bluez_capture_internal.14:06:A7:6B:E3:F0
+R  120   2048  48000  25,3us 262,5us  0,00  0,01    0    S16LE 2 48000 bluez_output.14_06_A7_6B_E3_F0.1
+R  114      0  44100  24,3us  78,8us  0,00  0,00    0    F32LE 2 44100  = spotify
+R  124      0  48000 119,6us  17,1us  0,00  0,00    0    F32LE 2 48000  = aurasync
+R  146   4800  48000  20,3us  20,8us  0,00  0,00   39    F32LE 2 48000  = pw-play

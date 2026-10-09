@@ -852,7 +852,8 @@ entre la forma por ventana y la final:
 ```bash
 cd host && hatch test tests/test_limiter_rust.py tests/test_limiter.py tests/test_chain_golden.py
 nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_limitador.py
-# los bits y el golden; el SHA-256 tiene que ser b473c23b6164bc7509703fd3d28a530cd3417cdf10a9f1a5b64dac5846a6d913
+# los bits y el golden; el SHA-256 depende de la plataforma: b473c23b…a6d913 en el Mac (arm64),
+# 2bb7439f…06b601 en HP-O16 (x86_64) (§11). Lo que tiene que repetirse es el de cada equipo.
 nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/identidad_limitador.py
 # la prueba aislada del producto de núcleos (desde la raíz del repositorio)
 nice -n 19 cargo run --release --manifest-path probes/20-costo-sinc-rust/producto_aislado/Cargo.toml
@@ -907,3 +908,51 @@ la convolución, con esa copia de más: una cota por arriba).
 ```bash
 nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_difusion.py
 ```
+
+## 11 · Repetición de §8–§10 en `HP-O16` (MEDIDO, 2026-10-09)
+
+**Por qué.** §8–§10 se midieron en el Mac, en uso, con una carga de 1,4 a 10. El registro de la sesión
+s-7c8794-816f05 dejó pendiente repetirlos en Linux.
+
+**Entorno.**
+- Equipo y sistema: `HP-O16`, Intel Core i5-11400H (12 hilos), CachyOS con kernel 7.2.9.
+- Software: python 3.12.12, numpy 2.5.3, rustc 1.99.0.
+- Extensión: la del entorno `hatch-test`, compilada por `scripts/check.sh` en el commit `182f736`, que
+  había pasado entero en este equipo (1997 tests).
+- Condiciones: el servicio estaba apagado, todo corrió con `nice -n 19`, y la carga de 1 minuto fue de
+  2,7 a 3,4.
+- Corridas: dos de cada sonda, en serie, sin cambiar nada entre ellas.
+- Datos crudos: `datos/20/hp-o16-*.txt`, con el entorno en `hp-o16-entorno.txt`.
+
+**Resultado (ms por bloque de 85,3 ms, 8 parlantes; mediana, corrida 1 / corrida 2):**
+
+| Qué | numpy | Rust | numpy / Rust | En el Mac (§8–§10) |
+|---|---|---|---|---|
+| Decorrelador, `np.convolve` (antes) | 0,684 / 0,686 | — | — | 0,97–1,16 |
+| Decorrelador, `StreamingFIR` | 0,765 / 0,760 | 0,283 / 0,280 | 2,7 / 2,7 | numpy 0,48–0,58; Rust 0,27–0,32 |
+| Limitador true peak, señal fuerte | 2,427 / 2,434 | 1,368 / 1,418 | 1,8 / 1,7 | numpy 1,93–1,99; Rust 0,95–0,97 |
+| Cola difusa, etapa entera | 1,808 / 1,822 | 0,972 / 0,877 | 1,9 / 2,1 | — |
+| Cola difusa, lo que queda fuera del FIR | 0,081 / 0,075 | 0,080 / 0,079 | — | 0,026 |
+
+**Qué dice:**
+
+1. **Rust repite su ventaja en Linux.**
+   - En el decorrelador va 2,7 veces más rápido que el `StreamingFIR` de numpy.
+   - En el limitador con señal fuerte va 1,7–1,8 veces más rápido. En el Mac era 2,0–2,1.
+   - En los dos casos la diferencia se repite en las dos corridas. **MEDIDO.**
+2. **En este equipo, el decorrelador numpy por FFT es algo más lento que el `np.convolve` de antes**
+   (0,76 frente a 0,68 ms con 8 parlantes). En el Mac era al revés: la FFT era dos veces más rápida.
+   - La diferencia es 0,08 ms de 85 ms, así que no cambia nada audible.
+   - Pero la razón para pasar el motor numpy a la FFT (§8) no vale en x86_64: allí solo vale para el Mac.
+   - **MEDIDO;** la causa (la FFT de numpy frente a la convolución directa vectorizada en x86_64) queda
+     **INFERIDA**.
+3. **La cola difusa, sin el FIR, no tiene nada que portar:** 0,08 ms con 8 parlantes. Confirma §10 en
+   Linux. **MEDIDO.**
+4. **Los bits del limitador Rust dependen de la plataforma.**
+   - En `HP-O16`, las dos corridas dan el mismo SHA-256, `2bb7439f…06b601`, y no el `b473c23b…` del Mac.
+   - La distancia a numpy sigue muy por debajo del umbral de 1e-9: salida ≤ 3,5e-15, métricas
+     ≤ 5,33e-15 (en el Mac, ≤ 1,55e-15 y ≤ 1,78e-15).
+   - **MEDIDO.** La causa (las funciones de `libm` o las rutas SIMD de numpy distintas entre arm64 y
+     x86_64) queda **INFERIDA**.
+   - §9.3 se corrigió: el SHA que tiene que repetirse es el de cada equipo.
+

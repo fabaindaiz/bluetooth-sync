@@ -1,0 +1,9 @@
+{
+  "rate": 48000,
+  "volume_db": 0,
+  "speakers": [
+    {"name": "A0", "pan": -1.0, "delay_samples": 0, "gain_db": 0, "muted": false},
+    {"name": "A1", "pan": 1.0, "delay_samples": 0, "gain_db": 0, "muted": false},
+    {"name": "A2", "pan": 0.0, "delay_samples": 480, "gain_db": 0, "muted": false}
+  ]
+}

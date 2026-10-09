@@ -1,0 +1,9 @@
+equipo: HP-O16
+2026-10-09T13:24:49-03:00
+7.2.9-1-cachyos
+CPU(s):                                  12
+Model name:                              11th Gen Intel(R) Core(TM) i5-11400H @ 2.70GHz
+CPU(s) scaling MHz:                      45%
+python 3.12.12 numpy 2.5.3
+rustc 1.99.0 (b940084d7 2026-09-28)
+ 13:24:50 up  3:20,  1 user,  load average: 3,40, 2,28, 1,41

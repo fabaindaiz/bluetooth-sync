@@ -318,6 +318,214 @@ def cambios(count: int = 6) -> None:
     mark("switches_end")
 
 
+# --- Listening of stage 1 of seamless transitions (experiment 23 §5) ---------------------------------
+ESCUCHA_BACKUP = os.path.expanduser("~/.local/share/aurasync/escucha-respaldo.json")
+# Per speaker (by position in the installation): pan, ambience, gain_db.
+ESCUCHA_BASE = [(-0.8, 0.2, 0.0), (0.8, 0.2, 0.0), (-0.5, 0.8, -2.0), (0.5, 0.8, -2.0)]
+ESCUCHA_RAMPAS_B = [(-0.2, 0.6, -4.0), (0.2, 0.6, -4.0), (-0.9, 0.3, 0.0), (0.9, 0.3, 0.0)]
+ESCUCHA_PAIRS = {
+    # Only ramps: rear delay 0, so no effective delay moves.
+    "escucha-rampas": ((ESCUCHA_BASE, 0.0), (ESCUCHA_RAMPAS_B, 0.0)),
+    # Only delays: the rear delay goes 0 -> 25 ms (speakers at ambience 0.8 move 20 ms, at 0.2 move 5 ms).
+    "escucha-retardo": ((ESCUCHA_BASE, 0.0), (ESCUCHA_BASE, 25.0)),
+}
+
+
+def _speakers_and_rear(values: list, rear: float) -> None:
+    names = [sp["name"] for sp in state()["speakers"]]
+    for name, (pan, amb, gain) in zip(names, values, strict=False):
+        call("PATCH", f"/speakers/{urllib.request.quote(name)}", {"pan": pan, "ambience": amb, "gain_db": gain})
+    call("PATCH", "/global", {"rear_delay_ms": rear})
+
+
+def _transition_values() -> dict:
+    st = next(x for x in command("chain")["stages"] if x["id"] == "transition")
+    return {"algorithm": st["value"]["algorithm"], "params": st["value"]["params"]}
+
+
+def escucha_preparar() -> None:
+    s = state()
+    if not os.path.exists(ESCUCHA_BACKUP):
+        backup = {
+            "speakers": {sp["name"]: {k: sp[k] for k in ("pan", "ambience", "gain_db")} for sp in s["speakers"]},
+            "rear_delay_ms": (s.get("global") or {}).get("rear_delay_ms"),
+            "transition": _transition_values(),
+        }
+        json.dump(backup, open(ESCUCHA_BACKUP, "w"), indent=1)
+        print(f"respaldo: {ESCUCHA_BACKUP}")
+    for pair, ((a_vals, a_rear), (b_vals, b_rear)) in ESCUCHA_PAIRS.items():
+        for label, vals, rear in (("a", a_vals, a_rear), ("b", b_vals, b_rear)):
+            _speakers_and_rear(vals, rear)
+            call("PUT", f"/presets/{pair}-{label}")
+            print(f"preset {pair}-{label}")
+    _speakers_and_rear(ESCUCHA_BASE, 0.0)
+    print("listo: base cargada; transición:", _transition_values())
+
+
+def modo(algorithm: str, fade_ms: float | None = None) -> None:
+    params = {"fade_ms": fade_ms} if fade_ms is not None else None
+    command("chain_set", stage="transition", algorithm=algorithm, **({"params": params} if params else {}))
+    mark("transition", algorithm=algorithm, fade_ms=fade_ms)
+    print("transición:", _transition_values())
+
+
+def alternar(pair: str, times: int = 6, seconds: float = 5.0) -> None:
+    """Load a, b, a, b… every `seconds`, announcing each, so the listener hears every change."""
+    for k in range(times):
+        label = "ab"[k % 2]
+        mark("preset_load", preset=f"{pair}-{label}")
+        call("POST", f"/presets/{pair}-{label}/load")
+        time.sleep(seconds)
+
+
+def escucha_restaurar() -> None:
+    backup = json.load(open(ESCUCHA_BACKUP))
+    for name, fields in backup["speakers"].items():
+        call("PATCH", f"/speakers/{urllib.request.quote(name)}", fields)
+    if backup.get("rear_delay_ms") is not None:
+        call("PATCH", "/global", {"rear_delay_ms": backup["rear_delay_ms"]})
+    t = backup["transition"]
+    command("chain_set", stage="transition", algorithm=t["algorithm"], params=t["params"])
+    for pair in ESCUCHA_PAIRS:
+        for label in "ab":
+            try:
+                call("DELETE", f"/presets/{pair}-{label}")
+            except SystemExit:
+                pass
+    os.remove(ESCUCHA_BACKUP)
+    print("restaurado")
+
+
+# --- Short preference tournament (not blind) ----------------------------------------------------------
+def torneo_preparar() -> None:
+    """Save the current settings and three render variants as presets torneo-*."""
+    original = {x["id"]: x["value"]["algorithm"] for x in command("chain")["stages"]}
+    json.dump({"spatial": original["spatial"], "eq": original["eq"]},
+              open(os.path.expanduser("~/.local/share/aurasync/torneo-respaldo.json"), "w"))
+    call("PUT", "/presets/torneo-actual")
+    for render in ("direct", "classic", "spatial"):
+        command("chain_set", stage="spatial", algorithm=render)
+        call("PUT", f"/presets/torneo-{render}")
+    command("chain_set", stage="spatial", algorithm=original["spatial"])
+    print("presets: torneo-actual (render", original["spatial"] + "), torneo-direct, torneo-classic, torneo-spatial")
+
+
+def ronda(a: str, b: str, seconds: float = 10.0, times: int = 2) -> None:
+    """first (a), second (b), first, second… `seconds` each, announced in the log with the time."""
+    for _ in range(times):
+        for label, preset in (("primero", a), ("segundo", b)):
+            mark("preset_load", preset=preset, label=label)
+            call("POST", f"/presets/{preset}/load")
+            time.sleep(seconds)
+
+
+def uno(preset: str, seconds: float = 20.0) -> None:
+    """One preset alone for `seconds`, for the listener to describe and score."""
+    mark("preset_load", preset=preset, label="clasificar")
+    call("POST", f"/presets/{preset}/load")
+    time.sleep(seconds)
+    mark("preset_end", preset=preset)
+
+
+# --- A series of numbered presets, 5 s each, for quick classification -------------------------------
+# Each recipe: (description, [(stage, algorithm or None, params or None), ...]) applied on torneo-actual.
+SERIE = [
+    ("lo de ahora: front", []),
+    ("direct (estéreo puro)", [("spatial", "direct", None)]),
+    ("front sin difusión", [("diffuse", "off", None)]),
+    ("front con difusión fuerte", [("diffuse", None, {"level_db": -6.0, "rt60_s": 1.2})]),
+    ("front con poco ambiente", [("ambience", None, {"mix": 0.3})]),
+    ("front con todo el ambiente", [("ambience", None, {"mix": 1.0})]),
+    ("front sin decorrelación", [("decorrelate", "off", None)]),
+    ("front sin EQ", [("eq", "off", None)]),
+    ("front con graves armónicos altos", [("bass", None, {"harmonics_db": 0.0})]),
+    ("spatial", [("spatial", "spatial", None)]),
+    ("spatial sin difusión", [("spatial", "spatial", None), ("diffuse", "off", None)]),
+    ("front seco: sin difusión, sin decorrelación, poco ambiente",
+     [("diffuse", "off", None), ("decorrelate", "off", None), ("ambience", None, {"mix": 0.4})]),
+    ("direct sin EQ", [("spatial", "direct", None), ("eq", "off", None)]),
+    ("classic cercano: sin difusión, poco ambiente",
+     [("spatial", "classic", None), ("diffuse", "off", None), ("ambience", None, {"mix": 0.4})]),
+]
+
+
+def serie_preparar() -> None:
+    for n, (desc, changes) in enumerate(SERIE, start=1):
+        call("POST", "/presets/torneo-actual/load")
+        for stage, algorithm, params in changes:
+            fields = {}
+            if algorithm:
+                fields["algorithm"] = algorithm
+            if params:
+                fields["params"] = params
+            command("chain_set", stage=stage, **fields)
+        call("PUT", f"/presets/serie-{n:02d}")
+        print(f"serie-{n:02d}: {desc}")
+    call("POST", "/presets/torneo-actual/load")
+
+
+def _mute_all(muted: bool) -> None:
+    for sp in state()["speakers"]:
+        call("PATCH", f"/speakers/{urllib.request.quote(sp['name'])}", {"muted": muted})
+
+
+def serie(seconds: float = 5.0, first: int = 1, last: int | None = None, gap: float = 1.0) -> None:
+    """Each preset after a clear silence: every speaker muted (50 ms fade) for `gap` seconds while it
+    loads, so the listener always knows where a new number starts."""
+    last = last or len(SERIE)
+    for n in range(first, last + 1):
+        _mute_all(True)
+        time.sleep(gap / 2)
+        mark("preset_load", preset=f"serie-{n:02d}", label=SERIE[n - 1][0])
+        call("POST", f"/presets/serie-{n:02d}/load")
+        time.sleep(gap / 2)
+        _mute_all(False)
+        print(f"[{time.strftime('%H:%M:%S')}] {n:2d}", flush=True)
+        time.sleep(seconds)
+    mark("serie_end")
+
+
+# --- Elimination among the best: repeats and mixes, shuffled ----------------------------------------
+MEZCLAS = {
+    # name: (description, base preset, changes)
+    "mezcla-7-difusion": ("7 + difusión fuerte", "serie-07", [("diffuse", None, {"level_db": -6.0, "rt60_s": 1.2})]),
+    "mezcla-7-amb03": ("7 + ambiente 0,3", "serie-07", [("ambience", None, {"mix": 0.3})]),
+    "mezcla-7-amb10": ("7 + ambiente 1,0", "serie-07", [("ambience", None, {"mix": 1.0})]),
+    "mezcla-7-dif-amb10": ("7 + difusión fuerte + ambiente 1,0", "serie-07",
+                           [("diffuse", None, {"level_db": -6.0, "rt60_s": 1.2}), ("ambience", None, {"mix": 1.0})]),
+}
+
+
+def mezclas_preparar() -> None:
+    for name, (desc, base, changes) in MEZCLAS.items():
+        call("POST", f"/presets/{base}/load")
+        for stage, algorithm, params in changes:
+            fields = {}
+            if algorithm:
+                fields["algorithm"] = algorithm
+            if params:
+                fields["params"] = params
+            command("chain_set", stage=stage, **fields)
+        call("PUT", f"/presets/{name}")
+        print(f"{name}: {desc}")
+
+
+def lista(presets: list[str], seconds: float = 10.0, gap: float = 1.0, first_playing: bool = True) -> None:
+    """Numbered presets in the given order; the first one is what already plays (no silence before it)."""
+    for n, preset in enumerate(presets, start=1):
+        if n > 1 or not first_playing:
+            _mute_all(True)
+            time.sleep(gap / 2)
+        mark("preset_load", preset=preset, label=f"{n}")
+        call("POST", f"/presets/{preset}/load")
+        if n > 1 or not first_playing:
+            time.sleep(gap / 2)
+            _mute_all(False)
+        print(f"[{time.strftime('%H:%M:%S')}] {n:2d} {preset}", flush=True)
+        time.sleep(seconds)
+    mark("lista_end")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "estado"
     simple = {"preparar": preparar, "restaurar": restaurar, "estado": estado, "registrar": registrar,
@@ -328,6 +536,28 @@ if __name__ == "__main__":
         motor(sys.argv[2])
     elif cmd == "capturar":
         capturar(sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else CAPTURE_S)
+    elif cmd == "escucha-preparar":
+        escucha_preparar()
+    elif cmd == "escucha-restaurar":
+        escucha_restaurar()
+    elif cmd == "modo":
+        modo(sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else None)
+    elif cmd == "alternar":
+        alternar(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 6, float(sys.argv[4]) if len(sys.argv) > 4 else 5.0)
+    elif cmd == "torneo-preparar":
+        torneo_preparar()
+    elif cmd == "serie-preparar":
+        serie_preparar()
+    elif cmd == "serie":
+        serie(float(sys.argv[2]) if len(sys.argv) > 2 else 5.0)
+    elif cmd == "mezclas-preparar":
+        mezclas_preparar()
+    elif cmd == "lista":
+        lista(sys.argv[2].split(","))
+    elif cmd == "uno":
+        uno(sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 20.0)
+    elif cmd == "ronda":
+        ronda(sys.argv[2], sys.argv[3])
     elif cmd == "cambios":
         cambios(int(sys.argv[2]) if len(sys.argv) > 2 else 6)
     else:

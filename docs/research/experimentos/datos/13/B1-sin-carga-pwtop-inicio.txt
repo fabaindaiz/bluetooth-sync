@@ -1,0 +1,4 @@
+R  117      0      0   0,0us   0,0us  ???   ???     0     F32P 4 48000 aurasync_poc_test
+R  115      0      0   0,0us   0,0us  ???   ???     0     F32P 3 48000 aurasync_poc_output
+R  151      0      0   0,0us   0,0us  ???   ???     0     F32P 2 48000 aurasync_poc
+R  162      0      0   0,0us   0,0us  ???   ???     0    S16LE 2 48000 poc-test-player

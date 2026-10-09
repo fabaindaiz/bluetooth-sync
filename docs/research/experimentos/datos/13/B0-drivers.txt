@@ -1,0 +1,6 @@
+114 spotify driver-id: 120 node.driver: None group: None
+124 aurasync driver-id: 120 node.driver: None group: None
+120 bluez_output.14_06_A7_6B_E3_F0.1 driver-id: None node.driver: True group: None
+117 aurasync_poc_test driver-id: None node.driver: True group: None
+142 aurasync_poc_output driver-id: 117 node.driver: None group: aurasync-poc-513939
+115 aurasync_poc driver-id: 117 node.driver: None group: aurasync-poc-513939

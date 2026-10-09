@@ -1,0 +1,15 @@
+uptime antes: 13:25:11 up  3:21,  1 user,  load average: 2,72, 2,21, 1,41
+load1 antes: 2.72
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, 
+python 3.12.12, numpy 2.5.3, cpus 12
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+respuesta al impulso: 29520 muestras; bloque 4096 muestras = 85.3 ms; 500 bloques
+     motor  parlantes  etapa med  etapa p95   conv med   conv p95  fuera med  fuera p95
+      rust          1     0.0834     0.0922     0.0721     0.0864     0.0102     0.0121
+      rust          3     0.2631     0.3395     0.2240     0.2746     0.0315     0.0416
+      rust          8     0.8771     1.0301     0.7766     0.9424     0.0786     0.0855
+     numpy          1     0.2033     0.2299     0.1835     0.2005     0.0107     0.0122
+     numpy          3     0.6289     0.7938     0.5718     0.8006     0.0298     0.0321
+     numpy          8     1.8217     2.1330     1.6799     1.9406     0.0748     0.0833
+uptime despues: 13:25:16 up  3:21,  1 user,  load average: 2,74, 2,23, 1,42
+load1 despues: 2.74

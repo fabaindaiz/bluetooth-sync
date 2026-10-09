@@ -1,0 +1,4 @@
+{"slice": 0, "mode": "normal", "nice": 0, "how": "setpriority", "reason": null, "blocks": 704, "late": 0, "worst_late_ms": 0.0, "work_ms_median": 36.89, "work_ms_p99": 51.88, "load1": 19.8583984375}
+{"slice": 1, "mode": "raised", "nice": -15, "how": "rtkit", "reason": null, "blocks": 703, "late": 0, "worst_late_ms": 0.0, "work_ms_median": 17.81, "work_ms_p99": 21.13, "load1": 24.14306640625}
+{"slice": 2, "mode": "normal", "nice": 0, "how": "setpriority", "reason": null, "blocks": 703, "late": 0, "worst_late_ms": 0.0, "work_ms_median": 40.7, "work_ms_p99": 57.81, "load1": 27.27490234375}
+{"slice": 3, "mode": "raised", "nice": -15, "how": "rtkit", "reason": null, "blocks": 703, "late": 0, "worst_late_ms": 0.0, "work_ms_median": 18.46, "work_ms_p99": 21.44, "load1": 24.91943359375}

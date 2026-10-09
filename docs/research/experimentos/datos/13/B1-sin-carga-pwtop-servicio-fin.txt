@@ -1,0 +1,6 @@
+C  146      0      0    ---     ---   ---   ---     0                  pw-play
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+R  114      0      0   0,0us   0,0us  ???   ???     0    F32LE 2 44100 spotify
+R  124      0      0   0,0us   0,0us  ???   ???     0    F32LE 2 48000 aurasync
+R  120      0      0   0,0us   0,0us  ???   ???     0    S16LE 2 48000 bluez_output.14_06_A7_6B_E3_F0.1
+R  146      0      0   0,0us   0,0us  ???   ???     0    F32LE 2 48000 pw-play

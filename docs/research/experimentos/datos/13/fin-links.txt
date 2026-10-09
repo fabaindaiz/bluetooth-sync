@@ -1,0 +1,16 @@
+spotify:output_FL
+  |-> aurasync:playback_FL
+spotify:output_FR
+  |-> aurasync:playback_FR
+aurasync:playback_FL
+  |<- spotify:output_FL
+aurasync:playback_FR
+  |<- spotify:output_FR
+bluez_output.14_06_A7_6B_E3_F0.1:playback_FL
+  |<- pw-play:output_FL
+bluez_output.14_06_A7_6B_E3_F0.1:playback_FR
+  |<- pw-play:output_FR
+pw-play:output_FL
+  |-> bluez_output.14_06_A7_6B_E3_F0.1:playback_FL
+pw-play:output_FR
+  |-> bluez_output.14_06_A7_6B_E3_F0.1:playback_FR

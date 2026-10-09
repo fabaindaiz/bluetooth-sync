@@ -94,6 +94,21 @@ Mac (Apple A18 Pro, macOS 27, `cargo` 1.99), con otros agentes corriendo (carga 
 **No se pudo en el Mac:** enlazar con `libpipewire`, ejecutar el modo en vivo, ni comprobar
 nada del comportamiento en el grafo (§9). Todo eso es el primer paso en PC-Ryzen5.
 
+### 2.1 Lo que se verificó en `HP-O16` (2026-10-09), sin parlantes
+
+Contra un sink nulo de prueba (`aurasync_poc_test`, 4 canales `AUX0…AUX3`, `priority.session=0`) en
+vez de `aurasync_salida`, con el servicio sonando al lado sin tocarlo. Resultados, entorno y scripts en
+`docs/research/experimentos/13-e-s-nativa-en-rust.md` §4 y `docs/research/experimentos/datos/13/`:
+- `cargo build --release --locked` enlazó con `libpipewire` 1.6.9 **sin cambiar el código**; tests,
+  clippy y fmt limpios. Lo que el Mac no pudo probar (§9) funciona: `data-loop.0` en `FF` 83, los dos
+  streams bajo el driver del nodo de destino (`same_driver` y `node.driver-id`), `TRIGGER`/`ASYNC` en el
+  mismo ciclo (0 muestras de latencia agregada), callbacks sin aplicación tocando, nada tras `kill -9`.
+- **Método de latencia sin micrófono** (`datos/13/latencia.sh`): un sink nulo de N+1 canales; la salida
+  de la PoC en `AUX0…`, la entrada copiada con `pw-link` al último canal, y un solo `pw-record` del
+  monitor. Sirve también para A (la salida del servicio en otro canal) cuando el servicio no esté en uso.
+- Dos trampas de este equipo: `pw-record --channel-map` pide `AUX0`, no `aux0` (con minúsculas no da
+  error, pero sus puertos no salen como `AUX…` y el canal de referencia quedó sin grabar); y `grep` es ugrep, que con `-v -q` y entrada vacía devuelve 0.
+
 ## 3. Compilar en PC-Ryzen5
 
 **Instalar paquetes es un cambio de sistema:** se anota **antes**, con su reversión, en

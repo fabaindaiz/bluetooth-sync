@@ -1,0 +1,6 @@
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44
+python 3.12.12, numpy 2.5.3, rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+extensión: /home/fadiaz/.local/share/hatch/env/virtual/aurasync/RNX04zMz/hatch-test.py3.12/lib/python3.12/site-packages/aurasync_engine/__init__.py
+identidad: 1698318 valores, sha256 2bb7439f6716299e978a57cf23505abe5a9cb8f513c72e9b1014e0122606b601
+golden (Rust contra numpy, corpus de test_limiter.py armado con numpy): salida 9.99e-16, métricas 3.55e-15
+golden (Rust contra numpy, corpus de test_limiter.py armado con rust): salida 3.5e-15, métricas 5.33e-15

@@ -1,0 +1,13 @@
+ok    el sink 'aurasync_poc' existe una vez (ids [115])
+ok    'aurasync_poc' es Audio/Sink (Audio/Sink)
+ok    default.audio.sink = 'aurasync', no 'aurasync_poc'
+ok    default.configured.audio.sink = 'aurasync', no 'aurasync_poc'
+ok    el sink combinado 'aurasync_poc_test' existe una vez (ids [117])
+ok    el stream 'aurasync_poc_output' existe una vez (ids [142])
+ok    'aurasync_poc_output' tiene target.object = 'aurasync_poc_test'
+ok    'aurasync_poc_output' está enlazado a ['aurasync_poc_test'] (3 enlaces)
+FALLA 0 salidas del sink combinado
+ok    volumen de 'aurasync_poc': [1.0, 1.0], mute False
+ok    volumen de 'aurasync_poc_output': [1.0, 1.0, 1.0], mute False
+ok    volumen de 'aurasync_poc_test': [1.0, 1.0, 1.0, 1.0], mute False
+ok    entran a 'aurasync_poc': nada (sin música todavía)

@@ -1,0 +1,6 @@
+Found "default" metadata 39
+update: id:0 key:'default.configured.audio.sink' value:'{"name":"aurasync"}' type:'Spa:String:JSON'
+update: id:0 key:'default.configured.audio.source' value:'{"name":"bluez_input.14:06:A7:6B:E3:F0"}' type:'Spa:String:JSON'
+update: id:0 key:'default.audio.sink' value:'{"name":"aurasync"}' type:'Spa:String:JSON'
+update: id:0 key:'default.audio.source' value:'{"name":"bluez_input.14:06:A7:6B:E3:F0"}' type:'Spa:String:JSON'
+update: id:0 key:'default.video.source' value:'{"name":"v4l2_input.pci-0000_00_14.0-usb-0_6_1.0"}' type:'Spa:String:JSON'

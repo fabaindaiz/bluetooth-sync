@@ -1,0 +1,12 @@
+uptime antes: 13:25:03 up  3:21,  1 user,  load average: 2,94, 2,24, 1,41
+load1 antes: 2.94
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, 
+python 3.12.12, numpy 2.5.3, cpus 12
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+filtro del banco: 256 coeficientes; bloque 4096 muestras = 85.3 ms; 500 bloques
+ parlantes   conv med   conv p95    fft med    fft p95   rust med   rust p95  conv/rust   fft/rust
+         1      0.087      0.110      0.096      0.103      0.033      0.035        2.7        2.9
+         3      0.301      0.336      0.285      0.313      0.099      0.107        3.1        2.9
+         8      0.686      0.766      0.760      1.060      0.280      0.301        2.5        2.7
+uptime despues: 13:25:05 up  3:21,  1 user,  load average: 2,94, 2,24, 1,41
+load1 despues: 2.94

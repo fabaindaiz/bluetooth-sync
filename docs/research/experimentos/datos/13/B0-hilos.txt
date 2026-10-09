@@ -1,0 +1,12 @@
+    TID CLS RTPRIO  NI COMMAND
+ 513939  TS      -  -4 poc-pw
+ 513940  FF     83   - data-loop.0
+ 513941  TS      -  -4 poc-control
+pid 513939's current scheduling policy: SCHED_OTHER
+pid 513939's current scheduling priority: 0
+pid 513939's current runtime parameter: 1600000
+pid 513940's current scheduling policy: SCHED_FIFO|SCHED_RESET_ON_FORK
+pid 513940's current scheduling priority: 83
+pid 513941's current scheduling policy: SCHED_OTHER
+pid 513941's current scheduling priority: 0
+pid 513941's current runtime parameter: 1600000

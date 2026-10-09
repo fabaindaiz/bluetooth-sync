@@ -1,0 +1,9 @@
+R  147      0      0  13,7us  15,3us  0,00  0,00    0     F32P 2 48000  + aurasync_poc
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+R  120   2048  48000  37,2us 382,8us  0,00  0,01    0    S16LE 2 48000 bluez_output.14_06_A7_6B_E3_F0.1
+R  114      0  44100  24,1us  60,3us  0,00  0,00    0    F32LE 2 44100  = spotify
+R  124      0  48000  20,2us  26,2us  0,00  0,00    0    F32LE 2 48000  = aurasync
+R  146   4800  48000  15,5us  87,4us  0,00  0,00   39    F32LE 2 48000  = pw-play
+R  117   2048  48000  76,5us  12,7us  0,00  0,00    0     F32P 4 48000 aurasync_poc_test
+R  132      0      0   4,1us  37,7us  0,00  0,00    0     F32P 3 48000  + aurasync_poc_output
+R  147      0      0  13,7us  15,3us  0,00  0,00    0     F32P 2 48000  + aurasync_poc

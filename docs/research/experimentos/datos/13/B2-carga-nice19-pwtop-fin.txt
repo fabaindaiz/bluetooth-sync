@@ -1,0 +1,5 @@
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+R  117   2048  48000  80,5us  12,4us  0,00  0,00    0     F32P 4 48000 aurasync_poc_test
+R  132      0      0   4,0us  44,4us  0,00  0,00    0     F32P 3 48000  + aurasync_poc_output
+R  147      0      0  12,7us  14,4us  0,00  0,00    0     F32P 2 48000  + aurasync_poc
+R  162   4800  48000  92,7us  24,1us  0,00  0,00    0    S16LE 2 48000  = poc-test-player

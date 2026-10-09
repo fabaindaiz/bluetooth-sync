@@ -1,0 +1,36 @@
+# Cambios de sistema de experimentos/13 en HP-O16 (2026-10-09), anotados ANTES de hacerlos
+
+Estado de referencia (16:13, antes de crear nada): default sink `aurasync`, default source
+`bluez_input.14:06:A7:6B:E3:F0` (base-default-*.txt, base-metadata.txt); Spotify enlazado a
+`aurasync:playback_FL/FR`, el `pw-play` del monitor del servicio enlazado a
+`bluez_output.14_06_A7_6B_E3_F0.1` (base-links.txt); módulos en base-modules.txt.
+
+Sin paquetes instalados: cargo 1.99, clang 23.1.1 y libpipewire 1.6.9 ya estaban.
+
+1. Un sink nulo de prueba, nunca por defecto, de 4 canales (AUX0..AUX2 de la PoC, AUX3 la
+   referencia de la medición de latencia):
+     pactl load-module module-null-sink sink_name=aurasync_poc_test channels=4 \
+       channel_map=aux0,aux1,aux2,aux3 \
+       sink_properties='node.description=aurasync-poc-test priority.session=0 priority.driver=0'
+   Revertir: pactl unload-module <id que imprime>   (el id se anota abajo al crearlo)
+   Comprobar: pactl list short sinks | grep aurasync_poc_test   (vacío)
+
+2. Los nodos de la PoC (`aurasync_poc`, `aurasync_poc_output`) viven en el proceso `poc-pw`:
+   Revertir: kill -INT <pid> (o kill -9 <pid>; prueba P1). Comprobar: pw-cli ls Node | grep aurasync_poc
+
+3. Enlaces manuales `pw-link` (reproductor de prueba → aurasync_poc_test:playback_AUX3): mueren
+   con cualquiera de los dos nodos. Revertir: pw-link -d <salida> <entrada>, o cerrar el reproductor.
+
+Ningún cambio en /etc, en WirePlumber, en los valores por defecto ni en los audífonos.
+   -> creado 16:15:46, module id 536870916: revertir con  pactl unload-module 536870916
+
+## Reversión, hecha y verificada (16:44–16:45)
+- `poc-pw`: ningún proceso (`pgrep -x poc-pw` vacío); `pw-cli ls Node` sin `aurasync_poc*` ni
+  `poc-test*`. Ningún `pw-play`/`pw-record` de prueba vivo (el `pw-record` y el `pw-play` que quedan
+  son los del servicio).
+- `pactl unload-module 536870916` → rc 0; `pactl list short modules` idéntico a base-modules.txt;
+  `pactl list short sinks` sin `aurasync_poc_test`.
+- `pw-metadata -n default` idéntico a base-metadata.txt (fin-metadata.txt); `pw-link -l` idéntico a
+  base-links.txt (fin-links.txt): Spotify → `aurasync`, monitor del servicio → audífonos.
+- Queda `probes/17-e-s-nativa-rust/target/` (compilación, ignorado por git): `rm -rf` cuando se borre la
+  carpeta (d-7c8794-3208b7).

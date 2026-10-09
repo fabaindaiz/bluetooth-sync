@@ -1,0 +1,30 @@
+--- before kill -9 (16:43:53), poc pid 577353
+aurasync_poc_output:output_AUX0
+  |-> aurasync_poc_test:playback_AUX0
+aurasync_poc_output:output_AUX1
+  |-> aurasync_poc_test:playback_AUX1
+aurasync_poc_output:output_AUX2
+  |-> aurasync_poc_test:playback_AUX2
+--
+poc-test-player:output_FL
+  |-> aurasync_poc:playback_FL
+poc-test-player:output_FR
+  |-> aurasync_poc:playback_FR
+stream node 159 error: defined target not found
+remote error: id=2 seq:39 res:-2 (No such file or directory): defined target not found
+stream node 4294967295 unconnected
+/tmp/claude-1000/-home-fadiaz-Desktop-Project-bluetooth-sync/d2684a5c-0f64-4611-8397-186d8e93e4d4/scratchpad/kill9.sh: line 24: 577353 Killed                     $P --config $D/poc-config.json --target aurasync_poc_test --node-name aurasync_poc --log $D/K-kill9.jsonl < /dev/null 2> $S/poc/K-stderr.txt
+--- 2 s after kill -9
+poc alive? no
+poc nodes: 0
+test sink: 1
+player alive? no
+player links:
+  (player has no links / no node)
+default sink: aurasync
+spotify:output_FL
+  |-> aurasync:playback_FL
+--
+pw-play:output_FL
+  |-> bluez_output.14_06_A7_6B_E3_F0.1:playback_FL
+--- after stopping the player: poc-test nodes 1

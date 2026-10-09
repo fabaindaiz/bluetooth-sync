@@ -1,0 +1,13 @@
+Cargas y corridas de la sonda probes/25-prioridad-motor (HP-O16, 2026-10-09). Lo anota el asistente que las lanzó;
+la sonda solo registra load1.
+
+Prueba corta antes del arreglo de busctl (12 s, slice 4 s), salida tal cual:
+{"slice": 1, "mode": "raised", "nice": -11, "how": "setpriority", "reason": "RealtimeKit refused -15 (busctl: unrecognized option '-1'); RLIMIT_NICE allows -11", ...}
+Después de agregar "--" antes de los argumentos posicionales:
+PriorityResult(wanted=-15, nice=-15, how='rtkit', reason=None)
+
+Corrida 1 (prioridad-motor-corrida-1.jsonl, 13:3x): carga = la suite de tests del host a prioridad normal,
+  `hatch test tests --deselect tests/test_radio_service.py::test_a_signal_restores_it`, lanzada 20 s antes de la sonda;
+  sonda: medir.py --seconds 610 --slice 60 --nice -15 --engine numpy.
+Corrida 2 (prioridad-motor-corrida-2-saturada.jsonl, 13:47–13:51): carga = 14 procesos `yes > /dev/null` a prioridad
+  normal, lanzados 15 s antes de la sonda y matados por PID al terminar; sonda: medir.py --seconds 250 --slice 60 --nice -15.

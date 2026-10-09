@@ -1,0 +1,4 @@
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+R  117   1024  48000  57,8us   9,6us  0,00  0,00    0     F32P 4 48000 aurasync_poc_test
+R  142      0      0   3,9us  18,1us  0,00  0,00    0     F32P 3 48000  + aurasync_poc_output
+R  115      0      0  16,9us  13,4us  0,00  0,00    0     F32P 2 48000  + aurasync_poc
