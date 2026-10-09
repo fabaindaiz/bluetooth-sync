@@ -164,6 +164,7 @@ es lo único que avisa a la siguiente.
 | ¿Conviene un motor de audio en Rust para el camino crítico, y cómo se haría? | `docs/research/12-motor-de-audio-en-rust.md` |
 | ¿Qué corre en una Pi Zero 2 W y en una Pico 2 W, cómo pasar de 3 parlantes, y cómo funciona el panel independiente? | `docs/research/13-dispositivos-pi-pico-y-panel-independiente.md` |
 | ¿Qué es este proyecto frente a lo que ya existe (consolas, motores DSP, multiroom, upmix), qué es propio y hacia dónde reenfocar? | `docs/research/14-el-proyecto-en-su-contexto.md` |
+| ¿Qué dicen las buenas prácticas de Rust y PyO3, y dónde se aparta el motor de ellas? | `docs/research/15-rust-idiomatico-y-buenas-practicas.md` |
 | ¿Qué se midió? | `docs/research/experimentos/` |
 | ¿Qué fuentes cambiaron una decisión? | `docs/references.md` |
 | ¿Qué ya está decidido? | `docs/decisions.md` |

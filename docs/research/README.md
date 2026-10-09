@@ -209,6 +209,7 @@ Pasos, de menor a mayor costo (el detalle está en cada documento):
 - **Procesamiento, calidad, canales y panel (2026-10-02):** qué procesamiento mejoraría el sonido (graves, dinámica, difusión), cómo se mide su calidad, cuánta se pierde en SBC, y que cada `reduce bitpool` de PipeWire es un corte: [11-procesamiento-calidad-canales-y-panel.md](11-procesamiento-calidad-canales-y-panel.md).
 - **Un motor de audio en Rust (2026-10-02):** qué arregla y qué no, la topología (E/S nativa al estilo `module-loopback`, PyO3 primero), y el plan por pasos contra el oráculo numpy: [12-motor-de-audio-en-rust.md](12-motor-de-audio-en-rust.md).
 - **Otros dispositivos y el panel independiente (2026-10-02):** qué corre en una Pi Zero 2 W y en una Pico 2 W, los caminos para pasar de 3 parlantes, y la PWA en GitHub Pages por la red local: [13-dispositivos-pi-pico-y-panel-independiente.md](13-dispositivos-pi-pico-y-panel-independiente.md).
+- **Rust idiomático en el motor (2026-10-09):** las buenas prácticas de Rust, PyO3 0.29 y rust-numpy 0.29 en fuentes primarias, dónde se aparta `engine/` y qué se aplica: [15-rust-idiomatico-y-buenas-practicas.md](15-rust-idiomatico-y-buenas-practicas.md).
 - **La música primero (2026-10-01):** la ecualización solo realza y la salida va al 100 %
   y en f32 (d-7c8794-e8f7e3). El retardo fraccionario lineal le quitaba hasta 3,5 dB a
   12,7 kHz; ahora es de banda limitada (MEDIDO,
