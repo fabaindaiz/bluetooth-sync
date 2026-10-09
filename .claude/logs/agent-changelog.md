@@ -44,7 +44,10 @@ mal y lo que quedó pendiente.
   - las constantes del limitador en `capabilities()`;
   - `fir` en la versión 2, para que un host viejo rechace la extensión nueva.
 - **Decisión nueva:** d-7c8794-ef6117 (API 2 del puente).
-- **El usuario pausó la sesión** para seguir en otro equipo: la tanda terminó, y su re-revisión no se lanzó.
+- **El usuario pausó la sesión** para seguir en otro equipo: la tanda terminó sin que se lanzara nada después. Luego pidió un **cierre completo**:
+  - la re-revisión acotada de la tanda encontró los 13 puntos resueltos, sin roturas importantes;
+  - se puso al día `CLAUDE.md` (estado del motor, y en el Mac `PYO3_PYTHON`, las 4 fallas y nada de `hatch test -p`);
+  - el trabajo quedó en 6 commits por tema.
 **Archivos.**
 - `engine/` completo:
   - `Cargo.toml`;
@@ -71,9 +74,12 @@ seguir con la siguiente fase (eligió seguir portando a Rust y trabajar todo en 
 6. **La tarea 6 escribió el cambio antes que los tests** (sin RED); la revisión juzgó que cada test atrapa las fallas plausibles.
 7. **La tarea 7 dejó afirmaciones medidas sin fuente o con una sola corrida** en experimentos/20 §9, y la tarea 6 dijo «una corrida» de algo que se repetía. Lo detectaron las revisiones; la tanda final guardó los probes y los datos, o marcó cada cifra.
 8. **Las tareas 5 y 6 rompieron el sustituto del test de navegador y dos probes,** que nadie corre en el gate. Lo detectó la revisión final.
+9. **El push del asistente fue rechazado dos veces** por el control de permisos («Out-of-Place Publication»), también
+   después del pedido explícito del usuario. El trabajo quedó en commits locales hasta que el usuario lo suba.
 **Qué quedó pendiente** (en este orden; todo sin commit en `seamless-transitions`):
-1. **La re-revisión acotada de la tanda final** contra sus 13 puntos (lista en el estado del plan
-   `2026-10-09-rust-idioms-and-decorrelation`), y el gate. El gate es `scripts/check.sh` en Linux; en el Mac, por partes con `PYO3_PYTHON`.
+1. **Hacer el push de `seamless-transitions`.** El control de permisos de la sesión rechazó dos veces el push del
+   asistente, así que lo hace el usuario. Después, **el gate en Linux** (`scripts/check.sh`); en el Mac se corrió
+   por partes, en verde.
 2. **El test de navegador `tests_browser/test_panel_engine.py` con la instalación normal de Playwright.**
 3. **Lo que dejó la tanda** (roadmap i-7c8794-a75d67):
    - `OutputMismatch` de espacial y ambiente sigue saliendo como `ValueError`;
@@ -98,11 +104,10 @@ seguir con la siguiente fase (eligió seguir portando a Rust y trabajar todo en 
   - `configure()` con `Result`;
   - `fir` en la versión 2.
 - La tanda final sumó 8 menores a los 5 importantes de la revisión.
-- La re-revisión de la tanda no se hizo, por la pausa.
+- La re-revisión de la tanda se hizo en el cierre.
 **No verificado.**
 - Nada se escuchó.
 - Todo corrió en el Mac, no en Linux.
-- La tanda final no tuvo su re-revisión.
 - El test de navegador solo pasó con un plugin provisorio.
 - Las mediciones de costo son de un Mac en uso, con carga de 1,4 a 10.
 **Medido.**

@@ -21,7 +21,9 @@ las SuperMini sirven como controlador de 4 BIS (`experimentos/21`, E1 = sí), co
 pero su cristal de 32 MHz corre rápido (+64/+79 ppm); falta E2–E4 con los JBL. **Los emisores Bluetooth
 están en pausa desde el 2026-10-08** (el roadmap dice cómo retomarlos). **Lo próximo:** el panel web y el
 motor en Rust, probados en `HP-O16`: el grupo 1 de la auditoría del panel (research/10 §10), el modo
-simple (spec con §7) y el rendimiento del motor. El emisor Auracast entra al servicio solo si E4 sale bien. El plan anterior sigue en
+simple (spec con §7) y el rendimiento del motor. El emisor Auracast entra al servicio solo si E4 sale bien. **El motor en Rust (2026-10-09)** quedó idiomático, con la API 2 del puente (d-7c8794-ef6117).
+Ya tiene portados el decorrelador y el limitador true peak. Al cambiar de rama o de equipo, hay que correr
+`hatch run engine-build`. El plan anterior sigue en
 `docs/roadmap.md`, "Plan desde el 2026-10-02".
 
 Lo distinto de este proyecto es que la pregunta que decide todo (si los JBL reproducen
@@ -94,6 +96,11 @@ cd host && hatch run aurasync --version
 - `bundle.py` necesita Python 3.11 o superior; el `python3` por defecto de este
   equipo es 3.9 (d-7c8794-3b6b73). En Linux, se corre con `PY=python3.12
   scripts/check.sh` o con el intérprete que corresponda.
+- **En el Mac**, `cargo` (y con él `scripts/check.sh`) necesita `PYO3_PYTHON=/opt/homebrew/bin/python3.14`:
+  si no, PyO3 toma un Python 3.11 y no compila.
+- **En el Mac, la suite del host tiene 4 fallas propias de macOS** (i-7c8794-437907), así que `check.sh`
+  no pasa entero allí: se corre por partes.
+- A `hatch test` no se le pasa `-p …`: hatch lo toma como su propia opción de paralelismo y no corre ningún test.
 - El host se maneja con **hatch**, no con uv directo (d-7c8794-c23c20). **No se
   activan los lockfiles de hatch**: con hatch 1.18.1 desinstalan el propio proyecto
   del entorno.

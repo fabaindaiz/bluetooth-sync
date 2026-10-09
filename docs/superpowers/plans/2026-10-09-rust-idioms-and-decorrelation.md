@@ -59,11 +59,13 @@ Session s-7c8794-816f05, on the Mac. Executed subagent-driven: a fresh implement
 
   The controller added eight minors. All 13 went to **one fix wave**, whose brief is reproduced below.
 - **Paused by the user** while that wave ran: let it finish, start nothing after it. Its outcome is recorded in the session's entry in `.claude/logs/agent-changelog.md`.
+- **Closed on 2026-10-09 (user asked for a full close):**
+  - the scoped re-review of the fix wave found all 13 items ADDRESSED, with no new Critical or Important breakage;
+  - its two new minors and the open design calls are in the roadmap (i-7c8794-a75d67);
+  - the plan is complete; what follows is in the roadmap.
 
 **To resume (from any machine):**
-1. Run the **scoped re-review** of the fix wave against the 13 items below, then the gate:
-   - `scripts/check.sh` on Linux;
-   - on the Mac, in parts with `PYO3_PYTHON`.
+1. ~~Run the scoped re-review of the fix wave~~ (done at the close: all 13 ADDRESSED). Run the gate on Linux with `scripts/check.sh`.
 2. **The browser test** `hatch run browser:test tests_browser/test_panel_engine.py` was never run (no Chromium on the Mac). Run it on a machine that has it.
 3. **Task 8 (records):** done by this session except what depends on the re-review (see the changelog entry).
 4. Then the user's **listening on `HP-O16`** (i-7c8794-93f50c), and the port's next stages (Tasks 13 ramps and 14 loudness meters of the 2026-10-05 plan; Task 15, `RustMotor`, gets its own plan).

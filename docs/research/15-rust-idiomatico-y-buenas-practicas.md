@@ -308,7 +308,7 @@ trabajo**: todo lo de §D se hace con std.
 
 **Estado (2026-10-09, sesión s-7c8794-816f05):**
 - **Aplicado:** §B.1–10, 15 y 17–20, en las tareas 1–5 del plan, cada una revisada y sin cambiar ningún número.
-- **Falta:** la re-revisión de la tanda final de arreglos (ver el estado del plan).
+- **La tanda final de arreglos se re-revisó en el cierre:** los 13 puntos quedaron resueltos.
 
 El plan es `docs/superpowers/plans/2026-10-09-rust-idioms-and-decorrelation.md`.
 

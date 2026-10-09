@@ -1885,6 +1885,9 @@ ninguno cambia el audio.
   - **pregunta de diseño:** un pánico plantado en `set_state` del limitador, al pasar a Rust, deja a numpy seguir desde su propio estado y no desde reposo. El test lo fija así; ¿debería empezar desde reposo?;
   - `probes/README.md` dice que un probe se borra al anotar su resultado, pero la tanda guardó probes nuevos como fuente de experimentos/20 §9. Hay que decidir si quedan;
   - el test de navegador pasó con un plugin de Playwright provisorio que apunta al headless shell 1243 en caché, porque el build 1223 no está en el Mac. Falta correrlo con la instalación normal.
+- **De la re-revisión de la tanda final (2026-10-09; los 13 puntos quedaron resueltos):**
+  - `probes/20-costo-sinc-rust/producto_aislado/src/main.rs`: `vorig` escribe en `outs[3]` después de `v3`, así que el «identical … v3 true» final comprueba `vorig` y no `v3`. Ninguna cifra anotada depende de eso. Además, su `Cargo.toml` dice «cinco formas» y son seis;
+  - la docstring de `host/tests/test_limiter_rust.py` sigue diciendo «un bloque en silencio y numpy desde reposo», pero el test fija silencio hasta el corte, y en el caso `set_state`, numpy desde su propio estado.
 - **Del limitador (tarea 7):**
   - el test con bloques de 1 muestra cubre solo las primeras 11 000;
   - `reduction_db` queda viejo en la ventana de silencio tras una falla de Rust.
