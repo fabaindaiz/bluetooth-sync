@@ -25,7 +25,7 @@ def _engine_as_the_program_starts() -> Iterator[None]:
 class Engine:
     name: str
     rust_calls: list[int] = field(default_factory=list)
-    """One entry per call into the extension's `read`: proof that Rust really ran."""
+    """One entry per call into the extension's `Reader.read`: proof that Rust really ran."""
 
 
 @pytest.fixture(params=[backend.NUMPY, backend.RUST])
@@ -36,12 +36,18 @@ def engine(request, monkeypatch) -> Engine:
     backend.reset()
     if request.param == backend.RUST:
         extension = pytest.importorskip("aurasync_engine")
-        original = extension.read
+        original = extension.Reader
 
-        def counting(data, position):
-            chosen.rust_calls.append(len(position))
-            return original(data, position)
+        class Counting:
+            """`Reader` with a count of its reads (a pyclass cannot be patched in place)."""
 
-        monkeypatch.setattr(extension, "read", counting)
+            def __init__(self, *args, **kwargs) -> None:
+                self._reader = original(*args, **kwargs)
+
+            def read(self, data, position):
+                chosen.rust_calls.append(len(position))
+                return self._reader.read(data, position)
+
+        monkeypatch.setattr(extension, "Reader", Counting)
     backend.use(request.param)
     return chosen

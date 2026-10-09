@@ -29,12 +29,10 @@
 //! the kept spectra in place; to another length the tail is resized (once). The FFT plans come
 //! from one planner per thread, so many filters of the same size share their twiddles.
 
-use std::cell::RefCell;
 use std::fmt;
-use std::sync::Arc;
 
-pub use realfft::num_complex::Complex;
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
+use crate::Complex;
+use crate::fft::{Forward, Inverse, inverse_real, plans};
 
 /// Why a call was refused. Nothing changes when it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,9 +45,31 @@ pub enum FirError {
     OutputMismatch,
     /// The kept tail is longer than this block's convolution: numpy's broadcast error, reached
     /// only after `replace_taps` (numpy's `taps = ...`) with fewer taps.
-    TailTooLong { tail: usize, full: usize },
+    TailTooLong {
+        /// The kept tail's length.
+        tail: usize,
+        /// The length of this block's full convolution.
+        full: usize,
+    },
     /// A state whose size does not fit this filter.
-    BadShape(String),
+    BadShape {
+        /// The state's field: `history`; `fdl rows` (the delay line's number of rows) or
+        /// `fdl row` (the length of one of its rows).
+        field: &'static str,
+        /// The length the state has.
+        got: usize,
+        /// The length this filter needs.
+        expected: usize,
+    },
+    /// A state whose index points past what this filter has.
+    OutOfRange {
+        /// The state's field: `head`, the delay line's newest row.
+        field: &'static str,
+        /// The index the state has.
+        got: usize,
+        /// The largest index this filter allows.
+        max: usize,
+    },
 }
 
 impl fmt::Display for FirError {
@@ -62,30 +82,19 @@ impl fmt::Display for FirError {
                 f,
                 "the kept tail ({tail} samples) is longer than this block's convolution ({full})"
             ),
-            Self::BadShape(what) => write!(f, "{what}"),
+            Self::BadShape {
+                field,
+                got,
+                expected,
+            } => write!(f, "{field}: {got} values where {expected} are needed"),
+            Self::OutOfRange { field, got, max } => {
+                write!(f, "{field}: {got} is past {max}, the largest allowed")
+            }
         }
     }
 }
 
 impl std::error::Error for FirError {}
-
-type Forward = Arc<dyn RealToComplex<f64>>;
-type Inverse = Arc<dyn ComplexToReal<f64>>;
-
-thread_local! {
-    /// One planner per thread: plans are shared between filters (the planner caches them by
-    /// length), so building a filter of a size already planned costs no twiddles.
-    static PLANNER: RefCell<RealFftPlanner<f64>> = RefCell::new(RealFftPlanner::new());
-}
-
-fn plans(size: usize) -> (Forward, Inverse) {
-    PLANNER.with_borrow_mut(|planner| {
-        (
-            planner.plan_fft_forward(size),
-            planner.plan_fft_inverse(size),
-        )
-    })
-}
 
 /// numpy's `1 << int(np.ceil(np.log2(k)))`, for `k >= 1`.
 fn fft_size(k: usize) -> usize {
@@ -93,6 +102,10 @@ fn fft_size(k: usize) -> usize {
 }
 
 /// One FFT size: its plans, its buffers and the taps' spectrum at that size.
+#[expect(
+    clippy::struct_field_names,
+    reason = "`size` is the FFT size this entry caches, as in numpy"
+)]
 struct Size {
     size: usize,
     forward: Forward,
@@ -153,23 +166,15 @@ impl Size {
     }
 }
 
-/// numpy's `np.fft.irfft(spectrum, len(time))`: the edge bins' imaginary parts ignored (realfft
-/// wants them zero), the result scaled by `1 / len`.
+/// numpy's `np.fft.irfft(spectrum, len(time))`: [`inverse_real`], then scaled by `1 / len`.
 fn inverse_scaled(
     inverse: &Inverse,
     spectrum: &mut [Complex<f64>],
     time: &mut [f64],
     scratch: &mut [Complex<f64>],
 ) {
-    let size = time.len();
-    spectrum[0].im = 0.0;
-    if size.is_multiple_of(2) {
-        spectrum[spectrum.len() - 1].im = 0.0;
-    }
-    inverse
-        .process_with_scratch(spectrum, time, scratch)
-        .expect("buffers sized by the plan, edge bins real");
-    let scale = 1.0 / size as f64;
+    inverse_real(inverse, spectrum, time, scratch);
+    let scale = 1.0 / time.len() as f64;
     for t in time.iter_mut() {
         *t *= scale;
     }
@@ -182,12 +187,11 @@ struct Sizes(Vec<Size>);
 impl Sizes {
     /// The entry for `size`, with the spectrum of `taps`.
     fn get(&mut self, size: usize, taps: &[f64]) -> &mut Size {
-        let at = match self.0.iter().position(|s| s.size == size) {
-            Some(at) => at,
-            None => {
-                self.0.push(Size::new(size));
-                self.0.len() - 1
-            }
+        let at = if let Some(at) = self.0.iter().position(|s| s.size == size) {
+            at
+        } else {
+            self.0.push(Size::new(size));
+            self.0.len() - 1
         };
         let entry = &mut self.0[at];
         entry.refresh(taps);
@@ -209,6 +213,7 @@ impl Sizes {
 /// The state of a [`StreamingFir`]: what moves between engines at a cut's bottom.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StreamingState {
+    /// The filter's taps.
     pub taps: Vec<f64>,
     /// The convolution's part that falls after the blocks given so far (`len(taps) - 1` samples,
     /// except right after `replace_taps` to another length).
@@ -223,8 +228,22 @@ pub struct StreamingFir {
     sizes: Sizes,
 }
 
+impl fmt::Debug for StreamingFir {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StreamingFir")
+            .field("taps", &self.taps.len())
+            .field("tail", &self.tail.len())
+            .field("cached_sizes", &self.sizes.len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl StreamingFir {
     /// A filter with `taps` (at least one) and a silent tail.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::NoTaps`] if `taps` is empty.
     pub fn new(taps: &[f64]) -> Result<Self, FirError> {
         if taps.is_empty() {
             return Err(FirError::NoTaps);
@@ -236,21 +255,30 @@ impl StreamingFir {
         })
     }
 
+    /// The taps now in use.
+    #[must_use]
     pub fn taps(&self) -> &[f64] {
         &self.taps
     }
 
+    /// The convolution's part that falls after the blocks given so far.
+    #[must_use]
     pub fn tail(&self) -> &[f64] {
         &self.tail
     }
 
     /// How many FFT sizes are cached (one per block length seen, at most).
+    #[must_use]
     pub fn cached_sizes(&self) -> usize {
         self.sizes.len()
     }
 
     /// numpy's `set_taps`: new taps; the tail is reset to silence only when the length changes.
     /// The caller does it at a cut's bottom, so the jump is never heard.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::NoTaps`] if `taps` is empty.
     pub fn set_taps(&mut self, taps: &[f64]) -> Result<(), FirError> {
         if taps.is_empty() {
             return Err(FirError::NoTaps);
@@ -264,6 +292,10 @@ impl StreamingFir {
     }
 
     /// numpy's `taps = ...` (the property's setter): new taps, the tail kept as it is.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::NoTaps`] if `taps` is empty.
     pub fn replace_taps(&mut self, taps: &[f64]) -> Result<(), FirError> {
         if taps.is_empty() {
             return Err(FirError::NoTaps);
@@ -289,6 +321,11 @@ impl StreamingFir {
 
     /// One block in; as many samples out, into `out`. Allocates nothing once its FFT size is
     /// cached (and the tail is the taps' length less one).
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::OutputMismatch`] if `out` is not as long as `x`;
+    /// [`FirError::TailTooLong`] if the kept tail is longer than this block's convolution.
     pub fn process(&mut self, x: &[f64], out: &mut [f64]) -> Result<(), FirError> {
         let n = x.len();
         if out.len() != n {
@@ -319,7 +356,8 @@ impl StreamingFir {
     }
 
     /// The state, copied (to move it to numpy's filter).
-    pub fn state(&self) -> StreamingState {
+    #[must_use]
+    pub fn to_state(&self) -> StreamingState {
         StreamingState {
             taps: self.taps.clone(),
             tail: self.tail.clone(),
@@ -328,6 +366,10 @@ impl StreamingFir {
 
     /// Takes `state` as its own (from numpy's filter). Any tail length is taken, as numpy keeps
     /// it; on an error nothing changes.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::NoTaps`] if the state has no taps.
     pub fn set_state(&mut self, state: &StreamingState) -> Result<(), FirError> {
         if state.taps.is_empty() {
             return Err(FirError::NoTaps);
@@ -383,9 +425,28 @@ pub struct PartitionedFir {
     exact: Sizes,
 }
 
+impl fmt::Debug for PartitionedFir {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PartitionedFir")
+            .field("taps", &self.taps.len())
+            .field("block", &self.block)
+            .field("parts", &self.parts)
+            .field("fdl_valid", &self.fdl_valid)
+            .finish_non_exhaustive()
+    }
+}
+
 impl PartitionedFir {
     /// A filter with `taps` (at least one) cut into partitions of `block` (at least one) samples,
     /// at rest.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::NoTaps`] if `taps` is empty; [`FirError::ZeroBlock`] if `block` is 0.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the plans' own buffers are sized by the plan.
     pub fn new(taps: &[f64], block: usize) -> Result<Self, FirError> {
         if taps.is_empty() {
             return Err(FirError::NoTaps);
@@ -431,19 +492,26 @@ impl PartitionedFir {
         Ok(fir)
     }
 
+    /// The taps now in use.
+    #[must_use]
     pub fn taps(&self) -> &[f64] {
         &self.taps
     }
 
+    /// The partitions' length in samples.
+    #[must_use]
     pub fn block(&self) -> usize {
         self.block
     }
 
+    /// How many partitions the taps are cut into.
+    #[must_use]
     pub fn partitions(&self) -> usize {
         self.parts
     }
 
     /// How many FFT sizes the exact path for short blocks has cached.
+    #[must_use]
     pub fn cached_sizes(&self) -> usize {
         self.exact.len()
     }
@@ -533,6 +601,10 @@ impl PartitionedFir {
 
     /// One block in (any length; longer than `block` is cut); as many samples out, into `out`.
     /// Allocates nothing for full blocks, nor for a short one whose FFT size is cached.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::OutputMismatch`] if `out` is not as long as `x`.
     pub fn process(&mut self, x: &[f64], out: &mut [f64]) -> Result<(), FirError> {
         if out.len() != x.len() {
             return Err(FirError::OutputMismatch);
@@ -544,7 +616,8 @@ impl PartitionedFir {
     }
 
     /// The state, copied (to move it to numpy's filter).
-    pub fn state(&self) -> PartitionedState {
+    #[must_use]
+    pub fn to_state(&self) -> PartitionedState {
         PartitionedState {
             history: self.history.clone(),
             fdl: self.fdl.chunks(self.bins).map(<[_]>::to_vec).collect(),
@@ -555,34 +628,34 @@ impl PartitionedFir {
 
     /// Takes `state` as its own (from numpy's filter). Every size is checked first; on an error
     /// nothing changes.
+    ///
+    /// # Errors
+    ///
+    /// [`FirError::BadShape`] if a size of `state` does not fit this filter;
+    /// [`FirError::OutOfRange`] if its `head` is not a row of the delay line.
     pub fn set_state(&mut self, state: &PartitionedState) -> Result<(), FirError> {
-        let bad = |what: String| Err(FirError::BadShape(format!("state: {what}")));
-        if state.history.len() != self.history.len() {
-            return bad(format!(
-                "history has length {}, expected {}",
-                state.history.len(),
-                self.history.len()
-            ));
-        }
-        if state.fdl.len() != self.parts {
-            return bad(format!(
-                "fdl has {} rows, expected {}",
-                state.fdl.len(),
-                self.parts
-            ));
-        }
-        if let Some(row) = state.fdl.iter().find(|row| row.len() != self.bins) {
-            return bad(format!(
-                "fdl has a row of {} bins, expected {}",
-                row.len(),
-                self.bins
-            ));
+        let check = |field, got, expected| {
+            if got == expected {
+                Ok(())
+            } else {
+                Err(FirError::BadShape {
+                    field,
+                    got,
+                    expected,
+                })
+            }
+        };
+        check("history", state.history.len(), self.history.len())?;
+        check("fdl rows", state.fdl.len(), self.parts)?;
+        for row in &state.fdl {
+            check("fdl row", row.len(), self.bins)?;
         }
         if state.head >= self.parts {
-            return bad(format!(
-                "head {} is not a row of the fdl ({} rows)",
-                state.head, self.parts
-            ));
+            return Err(FirError::OutOfRange {
+                field: "head",
+                got: state.head,
+                max: self.parts - 1,
+            });
         }
         self.history.copy_from_slice(&state.history);
         for (to, from) in self.fdl.chunks_mut(self.bins).zip(&state.fdl) {
@@ -591,5 +664,18 @@ impl PartitionedFir {
         self.head = state.head;
         self.fdl_valid = state.fdl_valid;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fft_size_is_the_next_power_of_two() {
+        assert_eq!(fft_size(1), 1);
+        assert_eq!(fft_size(4096 + 256 - 1), 8192);
+        assert_eq!(fft_size(4096), 4096);
+        assert_eq!(fft_size(4097), 8192);
     }
 }

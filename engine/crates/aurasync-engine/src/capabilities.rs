@@ -1,0 +1,50 @@
+//! `capabilities()`: the constants each stage was built with, for the host to check.
+
+use aurasync_dsp::{ambience, interpolation, spatial};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+
+use crate::error::guard;
+
+/// The constants each stage was built with: `{"interpolation": {"half": 16, "beta": 8.0,
+/// "steps": 2048}, "spatial": {...}, "ambience": {"floor": 1e-8}, "fir": {"version": 1},
+/// "virtual_bass": {"version": 1}, "api": {"version": 2}}`. The FIR filters, the virtual bass and
+/// the binding's own API share no constant with numpy; their `version` says this build has them,
+/// so the host refuses an older build at load instead of failing on the first filter.
+#[pyfunction]
+pub fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    guard(|| {
+        let read = PyDict::new(py);
+        read.set_item("half", interpolation::HALF)?;
+        read.set_item("beta", interpolation::BETA)?;
+        read.set_item("steps", interpolation::STEPS)?;
+        let upmix = PyDict::new(py);
+        upmix.set_item("max_haas_ms", spatial::MAX_HAAS_MS)?;
+        upmix.set_item("fade_in", spatial::FADE_IN)?;
+        upmix.set_item("floor", spatial::FLOOR)?;
+        upmix.set_item("silent", spatial::SILENT)?;
+        upmix.set_item("front_boost_db", spatial::FRONT_BOOST_DB)?;
+        upmix.set_item("min_energy_ratio", spatial::MIN_ENERGY_RATIO)?;
+        upmix.set_item("mu0", spatial::MU0)?;
+        upmix.set_item("mu1", spatial::MU1)?;
+        upmix.set_item("sigma", spatial::SIGMA)?;
+        let extractor = PyDict::new(py);
+        extractor.set_item("floor", ambience::FLOOR)?;
+        let all = PyDict::new(py);
+        all.set_item("interpolation", read)?;
+        all.set_item("spatial", upmix)?;
+        all.set_item("ambience", extractor)?;
+        // No constant shared with numpy: `version` is bumped (here and in backend.py) whenever
+        // the Rust behaviour of the stage changes, so a stale build is refused.
+        let fir = PyDict::new(py);
+        fir.set_item("version", 1)?;
+        let bass = PyDict::new(py);
+        bass.set_item("version", 1)?;
+        let api = PyDict::new(py);
+        api.set_item("version", 2)?;
+        all.set_item("fir", fir)?;
+        all.set_item("virtual_bass", bass)?;
+        all.set_item("api", api)?;
+        Ok(all)
+    })
+}

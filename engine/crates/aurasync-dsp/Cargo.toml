@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[lints]
+workspace = true
+
 # Exact versions, as the other pins of the repository: the FFTs of the spatial upmix, the
 # ambience extractor and the FIR filters. realfft 3.5.0 is built on rustfft 6.x; rustfft is
 # named too so that its version is pinned, not only allowed.

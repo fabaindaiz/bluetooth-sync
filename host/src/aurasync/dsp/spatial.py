@@ -160,7 +160,7 @@ class SpatialUpmix:
         self._curve = ambience.Parametros(umbral=self.params.threshold)
         """The ambience curve, built once per change, not per frame."""
         if self._rust is not None:
-            self._rust_call(lambda rust: rust.set_params(*self._rust_params()))
+            self._rust_call(lambda rust: rust.set_params(**self._rust_params()))
 
     def set_layout(
         self,
@@ -378,7 +378,7 @@ class SpatialUpmix:
 
     def _build_rust(self) -> Any:
         rust = backend.module().SpatialUpmix(len(self.names), self.sr, self.n_fft, self.hop)
-        rust.set_params(*self._rust_params())
+        rust.set_params(**self._rust_params())
         rust.set_layout(*self._rust_layout())
         rust.set_state(self._numpy_state())
         return rust
@@ -390,9 +390,18 @@ class SpatialUpmix:
     def _broke(self) -> None:
         self._rust_broken = True
 
-    def _rust_params(self) -> tuple:
+    def _rust_params(self) -> dict[str, float | bool]:
+        """The knobs by the Rust parameter names (`set_params` is keyword-only)."""
         p = self.params
-        return (p.arc_deg, p.ambience, p.ambient_level_db, p.haas_ms, p.threshold, p.lam, bool(p.front_intact))
+        return {
+            "arc_deg": p.arc_deg,
+            "ambience": p.ambience,
+            "ambient_level_db": p.ambient_level_db,
+            "haas_ms": p.haas_ms,
+            "threshold": p.threshold,
+            "lam": p.lam,
+            "front_intact": bool(p.front_intact),
+        }
 
     def _rust_layout(self) -> tuple:
         angles, ambient, classic = self._layout_args

@@ -7,5 +7,33 @@ edition = "2024"
 rust-version = "1.99"
 publish = false
 
+[workspace.lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+allow_attributes_without_reason = "warn"
+# Sample counts and indices become f64 by design.
+cast_precision_loss = "allow"
+# Float to integer casts are on values already bounded by construction.
+cast_possible_truncation = "allow"
+# Sign is checked before the casts that matter.
+cast_sign_loss = "allow"
+# The oracle comparisons are exact on purpose (sentinels, zero checks).
+float_cmp = "allow"
+# DSP formulas use the names of the maths (a, b, n, k, ...).
+many_single_char_names = "allow"
+# Numpy order: no midpoint/mul_add rewrites, they change the rounding.
+manual_midpoint = "allow"
+# Paired names such as left/right and in/out are clearer than distinct ones.
+similar_names = "allow"
+# Names such as FirState inside fir.rs read better in the public API.
+module_name_repetitions = "allow"
+
 [profile.release]
 codegen-units = 1
+lto = "fat"
+# The binding's guard and PyO3 catch panics with catch_unwind; abort would kill the service.
+panic = "unwind"

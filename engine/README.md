@@ -53,7 +53,7 @@ cd host && hatch run aurasync …        # con "engine": "rust" en service.json,
   sobrescribe en tests y CLI. La orden `engine_set` y el selector del panel lo cambian en vivo,
   **solo en el fondo de un corte** (cuando la salida está en cero).
 - Sin la extensión, `rust` queda en numpy con el motivo en `state.engine`; nunca es un error.
-- **Si Rust falla** (un pánico se atrapa en la frontera y sube como `RuntimeError`), ese bloque es
+- **Si Rust falla** (un pánico se atrapa en la frontera y sube como `EnginePanic`, un `RuntimeError`), ese bloque es
   silencio, Rust queda desactivado y numpy entra desde el siguiente corte: la música no se para.
   Al **construir o configurar** el objeto Rust (constructor, `set_params`, `set_layout`,
   `set_taps`, `replace_taps`, `state`, `set_state`, `reset`) cualquier `Exception` cuenta igual

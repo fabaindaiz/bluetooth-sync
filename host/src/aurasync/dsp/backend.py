@@ -21,8 +21,8 @@ seamless-transitions 2026-10-08 §2), at the bottom of a cut after a failure, wh
 opens, or when no session plays. The sinc read keeps no state, so a switch leaves nothing
 half-done.
 
-**Failing.** The extension raises `RuntimeError` for a Rust panic (it catches every one at its
-boundary). Rust is disabled with the reason, and `on_failure` (the service) is told once; it asks
+**Failing.** The extension raises `EnginePanic` (a `RuntimeError`, as is its base `EngineError`
+for a broken internal invariant) for a Rust panic (it catches every one at its boundary). Rust is disabled with the reason, and `on_failure` (the service) is told once; it asks
 for a cut, whose bottom resolves again and gets numpy. From the failing block until that bottom
 (`use`) every read is silence on every speaker (`silent()`; the cut's fade-out is going to zero
 anyway), so numpy enters with the fade-in and the music goes on. During that window `active()`
@@ -105,6 +105,9 @@ _stages: list[Callable[[], Any]] = []
 """Stages with state that want to hear the switch (`register`): weak references, or a plain
 holder for an object that cannot be weakly referenced."""
 _module: ModuleType | None = None
+_reader: Any = None
+"""The extension's `Reader`, built on the first Rust read; dropped on a failure (a torn reader is
+never used again) and rebuilt after the cut."""
 _module_problem: str | None = None
 _loaded = False
 
@@ -140,6 +143,9 @@ def _expected() -> dict[str, dict[str, Any]]:
         "fir": {"version": 1},
         # Likewise the virtual bass (it owns two of those filters, its calibration comes per call).
         "virtual_bass": {"version": 1},
+        # The binding's own Python-visible shape (the exceptions, the names): bumped, here and in
+        # the Rust `capabilities`, when it changes. Version 2 added `EngineError` and `EnginePanic`.
+        "api": {"version": 2},
     }
 
 
@@ -277,8 +283,8 @@ def clear_failure() -> None:
 def reset() -> None:
     """Back to how the program starts: nothing chosen, no failure, the extension not yet looked
     at, nobody listening. For the tests (the service sets everything when it starts)."""
-    global _selected, _failure, _silent, _module, _module_problem, _loaded, on_failure  # noqa: PLW0603
-    _selected, _failure, _silent = None, None, None
+    global _selected, _failure, _silent, _module, _module_problem, _loaded, _reader, on_failure  # noqa: PLW0603
+    _selected, _failure, _silent, _reader = None, None, None, None
     _module, _module_problem, _loaded = None, None, False
     on_failure = None
     _stages.clear()
@@ -350,8 +356,20 @@ def _fail(reason: str) -> None:
         _selected, _silent = NUMPY, None
 
 
+def _rust_read(data: np.ndarray, position: np.ndarray) -> np.ndarray:
+    """The extension's `Reader.read`; a failure drops the reader, so a torn one is never used again."""
+    global _reader  # noqa: PLW0603
+    if _reader is None:
+        _reader = _module.Reader()
+    try:
+        return _reader.read(data, position)
+    except RuntimeError:
+        _reader = None
+        raise
+
+
 def read(data: np.ndarray, position: np.ndarray) -> np.ndarray:
-    """`interpolation.read` with the active engine: numpy's `read_numpy`, or Rust's `read`."""
+    """`interpolation.read` with the active engine: numpy's `read_numpy`, or Rust's `Reader.read`."""
     if _silent is not None:
         return np.zeros(np.shape(position))
     if rust_active():
@@ -359,7 +377,7 @@ def read(data: np.ndarray, position: np.ndarray) -> np.ndarray:
         # here, so a caller's dtype is never mistaken for a Rust failure. No copy when it already is.
         data = np.ascontiguousarray(data, dtype=np.float64)
         position = np.ascontiguousarray(position, dtype=np.float64)
-        return guarded(lambda: _module.read(data, position), lambda: np.zeros(np.shape(position)))
+        return guarded(lambda: _rust_read(data, position), lambda: np.zeros(np.shape(position)))
     return interpolation.read_numpy(data, position)
 
 
@@ -374,9 +392,9 @@ def main(argv: list[str] | None = None) -> int:
         if _module is None:
             print(f"aurasync_engine: {resolved.reason}", file=sys.stderr)  # noqa: T201
             return 1
-        if hasattr(_module, "_panic"):
+        if hasattr(_module, "_panic_outside_the_read"):
             print(  # noqa: T201
-                "aurasync_engine: this build carries the `test-panic` feature (`_panic`); "
+                "aurasync_engine: this build carries the `test-panic` feature (`_panic_outside_the_read`); "
                 "the service's build must not: rebuild with `hatch run engine-build`",
                 file=sys.stderr,
             )

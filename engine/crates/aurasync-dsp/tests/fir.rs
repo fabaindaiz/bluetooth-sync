@@ -7,90 +7,16 @@
 //! the state moves exactly, a refused call changes nothing, and `process` / `skip` allocate
 //! nothing once the block's FFT size is cached.
 //!
-//! The counting allocator below is the only `unsafe` here: `GlobalAlloc` is an unsafe trait. The
-//! library itself is `#![forbid(unsafe_code)]`.
+//! The counting allocator and the generator are in `common`.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 use std::hint::black_box;
 
 use aurasync_dsp::fir::{FirError, PartitionedFir, PartitionedState, StreamingFir};
 
-// --- An allocation counter, per thread so that tests running in parallel do not interfere.
-
-struct Counting;
-
-thread_local! {
-    static COUNTING: Cell<bool> = const { Cell::new(false) };
-    static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
-}
-
-fn note_allocation() {
-    if COUNTING.try_with(Cell::get).unwrap_or(false) {
-        let _ = ALLOCATIONS.try_with(|n| n.set(n.get() + 1));
-    }
-}
-
-// SAFETY: every call is forwarded unchanged to the system allocator; the counter only touches
-// const-initialised thread-locals, which never allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc_zeroed(layout) }
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // SAFETY: same contract as the caller's.
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-/// How many allocations `f` made on this thread.
-fn allocations_in(f: impl FnOnce()) -> usize {
-    ALLOCATIONS.with(|n| n.set(0));
-    COUNTING.with(|c| c.set(true));
-    f();
-    COUNTING.with(|c| c.set(false));
-    ALLOCATIONS.with(Cell::get)
-}
+mod common;
+use common::{Rng, allocations_in};
 
 // --- Helpers.
-
-/// SplitMix64: a small deterministic generator, so the tests need no dependency.
-struct Rng(u64);
-
-impl Rng {
-    fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    /// Full scale: uniform in [-1, 1).
-    fn signal(&mut self, n: usize) -> Vec<f64> {
-        (0..n)
-            .map(|_| 2.0 * ((self.next_u64() >> 11) as f64 / (1u64 << 53) as f64) - 1.0)
-            .collect()
-    }
-}
 
 /// A decaying random filter of `m` taps.
 fn filter(m: usize, seed: u64) -> Vec<f64> {
@@ -232,8 +158,8 @@ fn the_streaming_state_moves_exactly() {
     let mut a = StreamingFir::new(&h).unwrap();
     streamed(&mut a, &x[..7000], &[4096, 333]);
     let mut b = StreamingFir::new(&[1.0]).unwrap();
-    b.set_state(&a.state()).unwrap();
-    assert_eq!(b.state(), a.state());
+    b.set_state(&a.to_state()).unwrap();
+    assert_eq!(b.to_state(), a.to_state());
     let rest_a = streamed(&mut a, &x[7000..], &[4096]);
     let rest_b = streamed(&mut b, &x[7000..], &[4096]);
     assert_eq!(rest_a, rest_b);
@@ -244,7 +170,7 @@ fn a_refused_streaming_call_changes_nothing() {
     assert!(matches!(StreamingFir::new(&[]), Err(FirError::NoTaps)));
     let mut f = StreamingFir::new(&filter(64, 13)).unwrap();
     streamed(&mut f, &Rng(14).signal(1000), &[1000]);
-    let before = f.state();
+    let before = f.to_state();
     assert_eq!(f.set_taps(&[]), Err(FirError::NoTaps));
     assert_eq!(f.replace_taps(&[]), Err(FirError::NoTaps));
     let mut out = vec![0.0; 3];
@@ -255,7 +181,7 @@ fn a_refused_streaming_call_changes_nothing() {
     let mut empty = before.clone();
     empty.taps.clear();
     assert_eq!(f.set_state(&empty), Err(FirError::NoTaps));
-    assert_eq!(f.state(), before);
+    assert_eq!(f.to_state(), before);
 }
 
 // --- PartitionedFir.
@@ -321,13 +247,16 @@ fn the_partitioned_state_moves_exactly() {
         let mut a = PartitionedFir::new(&h, 1024).unwrap();
         partitioned(&mut a, &x[..6444], sizes);
         let mut b = PartitionedFir::new(&h, 1024).unwrap();
-        b.set_state(&a.state()).unwrap();
-        assert_eq!(b.state(), a.state());
+        b.set_state(&a.to_state()).unwrap();
+        assert_eq!(b.to_state(), a.to_state());
         let rest_a = partitioned(&mut a, &x[6444..], &[1024, 77]);
         let rest_b = partitioned(&mut b, &x[6444..], &[1024, 77]);
         assert_eq!(rest_a, rest_b);
     }
 }
+
+/// A way to break a partitioned filter's state.
+type Break = fn(&mut PartitionedState);
 
 #[test]
 fn a_refused_partitioned_call_changes_nothing() {
@@ -341,29 +270,51 @@ fn a_refused_partitioned_call_changes_nothing() {
     ));
     let mut f = PartitionedFir::new(&filter(300, 21), 128).unwrap();
     partitioned(&mut f, &Rng(22).signal(1000), &[128, 50]);
-    let before = f.state();
+    let before = f.to_state();
     let mut out = vec![0.0; 3];
     assert_eq!(
         f.process(&[1.0, 2.0], &mut out),
         Err(FirError::OutputMismatch)
     );
-    let breaks: [fn(&mut PartitionedState); 4] = [
-        |s| {
-            s.history.pop();
-        },
-        |s| {
-            s.fdl.pop();
-        },
-        |s| {
-            s.fdl[1].pop();
-        },
-        |s| s.head = 3,
+    // 300 taps in partitions of 128: 3 partitions of 129 bins, a history of 4 * 128 samples.
+    let bad_shape = |field, got, expected| FirError::BadShape {
+        field,
+        got,
+        expected,
+    };
+    let breaks: [(Break, FirError); 4] = [
+        (
+            |s| {
+                s.history.pop();
+            },
+            bad_shape("history", 511, 512),
+        ),
+        (
+            |s| {
+                s.fdl.pop();
+            },
+            bad_shape("fdl rows", 2, 3),
+        ),
+        (
+            |s| {
+                s.fdl[1].pop();
+            },
+            bad_shape("fdl row", 128, 129),
+        ),
+        (
+            |s| s.head = 3,
+            FirError::OutOfRange {
+                field: "head",
+                got: 3,
+                max: 2,
+            },
+        ),
     ];
-    for broken in breaks {
+    for (broken, error) in breaks {
         let mut bad = before.clone();
         broken(&mut bad);
-        assert!(matches!(f.set_state(&bad), Err(FirError::BadShape(_))));
-        assert_eq!(f.state(), before);
+        assert_eq!(f.set_state(&bad), Err(error));
+        assert_eq!(f.to_state(), before);
     }
 }
 

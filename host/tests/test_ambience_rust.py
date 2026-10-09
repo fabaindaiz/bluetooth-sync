@@ -397,7 +397,7 @@ class _ProxyRust:
 
 
 def _raiser(error):
-    def raise_it(*_args):
+    def raise_it(*_args, **_kwargs):
         msg = "planted"
         raise error(msg)
 

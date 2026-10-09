@@ -3,93 +3,21 @@
 //! The formula strategy is the reference; the table strategy must stay within 1e-10 of it, and
 //! both must match numpy (`matches_numpy_reference_values`, values embedded below).
 //!
-//! The counting allocator below is the only `unsafe` in the crate's tests: `GlobalAlloc` is an
-//! unsafe trait. The library itself is `#![forbid(unsafe_code)]`.
+//! The counting allocator and the generator are in `common`.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+#![allow(
+    clippy::unreadable_literal,
+    reason = "the golden values are pasted from numpy's repr, digit for digit"
+)]
+
 use std::hint::black_box;
 
 use aurasync_dsp::interpolation::{FEW, HALF, ReadError, Reader, TAPS, kernel};
 
-// --- An allocation counter, per thread so that tests running in parallel do not interfere.
-
-struct Counting;
-
-thread_local! {
-    static COUNTING: Cell<bool> = const { Cell::new(false) };
-    static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
-}
-
-fn note_allocation() {
-    if COUNTING.try_with(Cell::get).unwrap_or(false) {
-        let _ = ALLOCATIONS.try_with(|n| n.set(n.get() + 1));
-    }
-}
-
-// SAFETY: every call is forwarded unchanged to the system allocator; the counter only touches
-// const-initialised thread-locals, which never allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc_zeroed(layout) }
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // SAFETY: same contract as the caller's.
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-/// How many allocations `f` made on this thread.
-fn allocations_in(f: impl FnOnce()) -> usize {
-    ALLOCATIONS.with(|n| n.set(0));
-    COUNTING.with(|c| c.set(true));
-    f();
-    COUNTING.with(|c| c.set(false));
-    ALLOCATIONS.with(Cell::get)
-}
+mod common;
+use common::{Rng, allocations_in};
 
 // --- Helpers.
-
-/// SplitMix64: a small deterministic generator, so the tests need no dependency.
-struct Rng(u64);
-
-impl Rng {
-    fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    /// Uniform in [0, 1).
-    fn unit(&mut self) -> f64 {
-        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
-    }
-
-    /// Full scale: uniform in [-1, 1).
-    fn signal(&mut self, n: usize) -> Vec<f64> {
-        (0..n).map(|_| 2.0 * self.unit() - 1.0).collect()
-    }
-}
 
 /// Each position read on its own: one distinct fraction, so always the formula strategy.
 fn one_at_a_time(data: &[f64], position: &[f64]) -> Vec<f64> {
@@ -164,7 +92,7 @@ fn weights_sum_to_one() {
     let mut weights = [0.0; TAPS];
     for _ in 0..1000 {
         let frac = rng.unit();
-        reader.weights_from_formula(frac, &mut weights);
+        Reader::weights_from_formula(frac, &mut weights);
         assert!(
             (weights.iter().sum::<f64>() - 1.0).abs() < 1e-14,
             "formula, {frac}"
@@ -192,8 +120,8 @@ fn table_matches_formula_within_1e_10() {
     let mut from_table = [0.0; TAPS];
     let mut worst: f64 = 0.0;
     for i in 0..10_000 {
-        let frac = i as f64 / 10_000.0;
-        reader.weights_from_formula(frac, &mut from_formula);
+        let frac = f64::from(i) / 10_000.0;
+        Reader::weights_from_formula(frac, &mut from_formula);
         reader.weights_from_table(frac, &mut from_table);
         worst = worst.max(max_abs_diff(&from_formula, &from_table));
     }
@@ -220,7 +148,7 @@ fn strategy_boundary_64_65() {
         // Multiples of 2^-20 survive `p - floor(p)` exactly, so the count is what it says, and
         // most fall between the table's points (every 2^-11), where the table differs.
         let fractions: Vec<f64> = (0..distinct)
-            .map(|d| ((d * 40_503 + 12_345) % (1 << 20)) as f64 / (1 << 20) as f64)
+            .map(|d| ((d * 40_503 + 12_345) % (1 << 20)) as f64 / f64::from(1 << 20))
             .collect();
         // 1000 positions that cycle over exactly `distinct` fractions.
         let position: Vec<f64> = (0..1000)
@@ -393,12 +321,12 @@ fn matches_numpy_reference_values() {
         .collect();
     let mut reader = Reader::new(70);
 
-    let still: Vec<f64> = (0..8).map(|k| (k as f64 + 40.0) + 0.37).collect();
+    let still: Vec<f64> = (0..8).map(|k| (f64::from(k) + 40.0) + 0.37).collect();
     let mut out = vec![0.0; still.len()];
     reader.read(&data, &still, &mut out).unwrap();
     assert!(max_abs_diff(&out, &NUMPY_STILL) < 1e-12);
 
-    let ramp: Vec<f64> = (0..70).map(|k| 100.0 + k as f64 * 1.37).collect();
+    let ramp: Vec<f64> = (0..70).map(|k| 100.0 + f64::from(k) * 1.37).collect();
     assert_eq!(distinct_fractions(&ramp), 70);
     let mut out = vec![0.0; ramp.len()];
     reader.read(&data, &ramp, &mut out).unwrap();

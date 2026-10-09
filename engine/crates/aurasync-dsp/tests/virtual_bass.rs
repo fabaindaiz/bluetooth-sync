@@ -6,91 +6,17 @@
 //! ramps as numpy's does, `reset` is a fresh generator, the state moves exactly, a refused call
 //! changes nothing, and `process` allocates nothing.
 //!
-//! The counting allocator below is the only `unsafe` here: `GlobalAlloc` is an unsafe trait. The
-//! library itself is `#![forbid(unsafe_code)]`.
+//! The counting allocator and the generator are in `common`.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 use std::hint::black_box;
 
 use aurasync_dsp::fir::{FirError, PartitionedFir};
-use aurasync_dsp::virtual_bass::VirtualBass;
+use aurasync_dsp::virtual_bass::{VirtualBass, VirtualBassError};
 
-// --- An allocation counter, per thread so that tests running in parallel do not interfere.
-
-struct Counting;
-
-thread_local! {
-    static COUNTING: Cell<bool> = const { Cell::new(false) };
-    static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
-}
-
-fn note_allocation() {
-    if COUNTING.try_with(Cell::get).unwrap_or(false) {
-        let _ = ALLOCATIONS.try_with(|n| n.set(n.get() + 1));
-    }
-}
-
-// SAFETY: every call is forwarded unchanged to the system allocator; the counter only touches
-// const-initialised thread-locals, which never allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc_zeroed(layout) }
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // SAFETY: same contract as the caller's.
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-/// How many allocations `f` made on this thread.
-fn allocations_in(f: impl FnOnce()) -> usize {
-    ALLOCATIONS.with(|n| n.set(0));
-    COUNTING.with(|c| c.set(true));
-    f();
-    COUNTING.with(|c| c.set(false));
-    ALLOCATIONS.with(Cell::get)
-}
+mod common;
+use common::{Rng, allocations_in};
 
 // --- Helpers.
-
-/// SplitMix64: a small deterministic generator, so the tests need no dependency.
-struct Rng(u64);
-
-impl Rng {
-    fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    /// Full scale: uniform in [-1, 1).
-    fn signal(&mut self, n: usize) -> Vec<f64> {
-        (0..n)
-            .map(|_| 2.0 * ((self.next_u64() >> 11) as f64 / (1u64 << 53) as f64) - 1.0)
-            .collect()
-    }
-}
 
 /// A decaying random filter of `m` taps.
 fn filter(m: usize, seed: u64) -> Vec<f64> {
@@ -222,8 +148,8 @@ fn the_state_moves_exactly() {
     let mut a = generator();
     let _ = run(&mut a, head, 0.0, 1.0);
     let mut b = generator();
-    b.set_state(&a.state()).unwrap();
-    assert_eq!(b.state(), a.state());
+    b.set_state(&a.to_state()).unwrap();
+    assert_eq!(b.to_state(), a.to_state());
     assert_eq!(run(&mut a, tail, 1.0, 0.5).0, run(&mut b, tail, 1.0, 0.5).0);
 }
 
@@ -232,22 +158,57 @@ fn a_refused_call_changes_nothing() {
     let mut g = generator();
     let x = Rng(8).signal(2000);
     let _ = run(&mut g, &x, 0.0, 1.0);
-    let before = g.state();
+    let before = g.to_state();
     let mut short = vec![0.0; 10];
     assert_eq!(
         g.process(&x, 1.0, 1.0, &mut short),
-        Err(FirError::OutputMismatch)
+        Err(VirtualBassError::Filter(FirError::OutputMismatch))
     );
-    assert_eq!(g.state(), before);
+    assert_eq!(g.to_state(), before);
     // A state whose second half does not fit: the first half is not kept either.
     let other = VirtualBass::new(&filter(900, 1), &filter(2000, 2), CAL, BLOCK).unwrap();
-    let mut bad = g.state();
-    bad.out = other.state().out;
-    assert!(matches!(g.set_state(&bad), Err(FirError::BadShape(_))));
-    assert_eq!(g.state(), before);
-    assert!(VirtualBass::new(&[], &[1.0], CAL, BLOCK).is_err());
-    assert!(VirtualBass::new(&[1.0], &[], CAL, BLOCK).is_err());
-    assert!(VirtualBass::new(&[1.0], &[1.0], CAL, 0).is_err());
+    let mut bad = g.to_state();
+    bad.out = other.to_state().out;
+    // 700 taps in partitions of 512 keep a history of 3 * 512; 2000 taps, of 5 * 512.
+    let error = g.set_state(&bad).unwrap_err();
+    assert_eq!(
+        error,
+        VirtualBassError::Filter(FirError::BadShape {
+            field: "history",
+            got: 5 * BLOCK,
+            expected: 3 * BLOCK
+        })
+    );
+    assert_eq!(g.to_state(), before);
+    // The filter's error is the source, not repeated in the message.
+    let source = std::error::Error::source(&error).expect("a filter error");
+    assert_eq!(
+        source.to_string(),
+        "history: 2560 values where 1536 are needed"
+    );
+    assert!(!error.to_string().contains("history"), "{error}");
+    let no_taps = VirtualBassError::Filter(FirError::NoTaps);
+    assert_eq!(
+        VirtualBass::new(&[], &[1.0], CAL, BLOCK).unwrap_err(),
+        no_taps
+    );
+    assert_eq!(
+        VirtualBass::new(&[1.0], &[], CAL, BLOCK).unwrap_err(),
+        no_taps
+    );
+    assert_eq!(
+        VirtualBass::new(&[1.0], &[1.0], CAL, 0).unwrap_err(),
+        VirtualBassError::Filter(FirError::ZeroBlock)
+    );
+    assert_eq!(
+        VirtualBassError::from(FirError::ZeroBlock),
+        VirtualBassError::Filter(FirError::ZeroBlock)
+    );
+}
+
+#[test]
+fn the_generator_says_its_block() {
+    assert_eq!(generator().block(), BLOCK);
 }
 
 #[test]

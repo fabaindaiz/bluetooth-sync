@@ -81,6 +81,7 @@ fn sinc(t: f64) -> f64 {
 }
 
 /// The windowed sinc at offset `t`, not normalised: numpy's `_kernel`.
+#[must_use]
 pub fn kernel(t: f64) -> f64 {
     let r = t / HALF as f64;
     let window = bessel_i0(BETA * (1.0 - r * r).clamp(0.0, 1.0).sqrt()) / I0_BETA;
@@ -139,7 +140,10 @@ fn window(data: &[f64], floor: f64) -> &[f64; TAPS] {
 pub enum ReadError {
     /// `position[index]` does not have `HALF - 1` samples before it and `HALF` after it in
     /// `data`, or is not finite.
-    OutOfRange { index: usize },
+    OutOfRange {
+        /// The index of the first position that is out of range.
+        index: usize,
+    },
     /// `out` and `position` differ in length.
     LengthMismatch,
     /// More positions than the `max_block` the reader was built for.
@@ -178,8 +182,18 @@ pub struct Reader {
     weights: Box<[[f64; TAPS]; FEW]>,
 }
 
+impl fmt::Debug for Reader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Reader")
+            .field("max_block", &self.max_block)
+            .field("table_len", &self.table.len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl Reader {
     /// A reader for blocks of up to `max_block` positions.
+    #[must_use]
     pub fn new(max_block: usize) -> Self {
         let table = (0..TABLE_LEN)
             .map(|j| kernel(GRID_START + j as f64 / STEPS as f64))
@@ -194,13 +208,14 @@ impl Reader {
     }
 
     /// The largest block [`Reader::read`] accepts.
+    #[must_use]
     pub fn max_block(&self) -> usize {
         self.max_block
     }
 
     /// The normalised weights for fraction `frac` from the formula (numpy's strategy for few
     /// distinct fractions). Tap `j` is offset `j - HALF + 1`.
-    pub fn weights_from_formula(&self, frac: f64, weights: &mut [f64; TAPS]) {
+    pub fn weights_from_formula(frac: f64, weights: &mut [f64; TAPS]) {
         for (j, w) in weights.iter_mut().enumerate() {
             *w = kernel(frac - (FIRST_OFFSET + j as f64));
         }
@@ -241,6 +256,16 @@ impl Reader {
     /// Every position must have `HALF - 1` samples before and `HALF` after it in `data`;
     /// otherwise the read is refused with the index of the first that does not, and `out` is
     /// left as it was.
+    ///
+    /// # Errors
+    ///
+    /// [`ReadError::LengthMismatch`] if `out` and `position` differ in length;
+    /// [`ReadError::BlockTooLarge`] if there are more positions than the reader's `max_block`;
+    /// [`ReadError::OutOfRange`] if a position has too few samples around it, or is not finite.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the range check leaves every position with the samples it reads.
     pub fn read(
         &mut self,
         data: &[f64],
@@ -267,7 +292,7 @@ impl Reader {
         if distinct <= FEW {
             for d in 0..distinct {
                 let mut weights = [0.0; TAPS];
-                self.weights_from_formula(self.distinct[d], &mut weights);
+                Self::weights_from_formula(self.distinct[d], &mut weights);
                 self.weights[d] = weights;
             }
             let fractions = &self.distinct[..distinct];
@@ -313,5 +338,99 @@ impl Reader {
             }
         }
         count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A tiny deterministic generator (`SplitMix64`) with a wide dynamic range, so that the order
+    /// of the additions changes the rounding and an equality check means something.
+    fn wide(seed: u64, n: usize) -> Vec<f64> {
+        let mut state = seed;
+        (0..n)
+            .map(|_| {
+                state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+                let mut z = state;
+                z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+                z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+                z ^= z >> 31;
+                let unit = (z >> 11) as f64 / (1u64 << 53) as f64;
+                (2.0 * unit - 1.0) * 10f64.powi((z & 7) as i32 - 3)
+            })
+            .collect()
+    }
+
+    /// numpy's `pairwise_sum` (`loops_utils.h.src`), restated independently: under 8 elements a
+    /// plain loop, up to 128 eight running lanes combined as a tree plus a plain remainder, above
+    /// that a split at half the length rounded down to a multiple of 8.
+    fn numpy_pairwise(a: &[f64]) -> f64 {
+        let n = a.len();
+        if n < 8 {
+            let mut res = 0.0;
+            for &x in a {
+                res += x;
+            }
+            res
+        } else if n <= 128 {
+            let mut r: [f64; 8] = a[..8].try_into().unwrap();
+            let mut i = 8;
+            while i < n - n % 8 {
+                for j in 0..8 {
+                    r[j] += a[i + j];
+                }
+                i += 8;
+            }
+            let mut res = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]));
+            while i < n {
+                res += a[i];
+                i += 1;
+            }
+            res
+        } else {
+            let mut n2 = n / 2;
+            n2 -= n2 % 8;
+            numpy_pairwise(&a[..n2]) + numpy_pairwise(&a[n2..])
+        }
+    }
+
+    #[test]
+    fn the_reference_has_numpys_shape_on_every_length() {
+        // The lengths the kernel does not use are here so the restatement itself is checked
+        // against an exactly summable input: small integers add exactly in any order.
+        for n in [0, 1, 7, 8, 9, 31, 33, 1000] {
+            let ints: Vec<f64> = (0..n).map(|k| f64::from(k as u32 % 13) - 6.0).collect();
+            let exact: f64 = ints.iter().sum();
+            assert_eq!(numpy_pairwise(&ints), exact, "length {n}");
+        }
+    }
+
+    #[test]
+    fn sum32_equals_numpys_pairwise_order_exactly() {
+        for seed in 0..50 {
+            let v = wide(seed, TAPS);
+            let a: [f64; TAPS] = v.as_slice().try_into().unwrap();
+            assert_eq!(sum32(&a), numpy_pairwise(&v), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn dot32_equals_numpys_sum_of_products_exactly() {
+        for seed in 0..50 {
+            let (d, w) = (wide(2 * seed, TAPS), wide(2 * seed + 1, TAPS));
+            let products: Vec<f64> = d.iter().zip(&w).map(|(x, y)| x * y).collect();
+            let (d, w): ([f64; TAPS], [f64; TAPS]) = (
+                d.as_slice().try_into().unwrap(),
+                w.as_slice().try_into().unwrap(),
+            );
+            assert_eq!(dot32(&d, &w), numpy_pairwise(&products), "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn bessel_i0_known_values() {
+        assert_eq!(bessel_i0(0.0), 1.0);
+        assert!((bessel_i0(1.0) - 1.266_065_877_752_008_2).abs() < 1e-15);
     }
 }

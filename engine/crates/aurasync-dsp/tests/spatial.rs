@@ -5,93 +5,19 @@
 //! silence, the block size does not change the stream, the state moves exactly, errors change
 //! nothing, and `process` allocates nothing within the reserved block.
 //!
-//! The counting allocator below is the only `unsafe` here: `GlobalAlloc` is an unsafe trait. The
-//! library itself is `#![forbid(unsafe_code)]`.
+//! The counting allocator and the generator are in `common`.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 use std::hint::black_box;
 
 use aurasync_dsp::spatial::{N_FFT, Params, SpatialError, SpatialUpmix};
 
-// --- An allocation counter, per thread so that tests running in parallel do not interfere.
-
-struct Counting;
-
-thread_local! {
-    static COUNTING: Cell<bool> = const { Cell::new(false) };
-    static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
-}
-
-fn note_allocation() {
-    if COUNTING.try_with(Cell::get).unwrap_or(false) {
-        let _ = ALLOCATIONS.try_with(|n| n.set(n.get() + 1));
-    }
-}
-
-// SAFETY: every call is forwarded unchanged to the system allocator; the counter only touches
-// const-initialised thread-locals, which never allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.alloc_zeroed(layout) }
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        note_allocation();
-        // SAFETY: same contract as the caller's.
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // SAFETY: same contract as the caller's.
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-/// How many allocations `f` made on this thread.
-fn allocations_in(f: impl FnOnce()) -> usize {
-    ALLOCATIONS.with(|n| n.set(0));
-    COUNTING.with(|c| c.set(true));
-    f();
-    COUNTING.with(|c| c.set(false));
-    ALLOCATIONS.with(Cell::get)
-}
+mod common;
+use common::{Rng, allocations_in};
 
 // --- Helpers.
 
 const SR: u32 = 48_000;
 const BLOCK: usize = 4096;
-
-/// SplitMix64: a small deterministic generator, so the tests need no dependency.
-struct Rng(u64);
-
-impl Rng {
-    fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
-    /// Full scale: uniform in [-1, 1).
-    fn signal(&mut self, n: usize) -> Vec<f64> {
-        (0..n)
-            .map(|_| 2.0 * ((self.next_u64() >> 11) as f64 / (1u64 << 53) as f64) - 1.0)
-            .collect()
-    }
-}
 
 /// Partly correlated stereo: a centre plus independent room on each side.
 fn music(n: usize, seed: u64) -> (Vec<f64>, Vec<f64>) {
@@ -113,7 +39,7 @@ fn music(n: usize, seed: u64) -> (Vec<f64>, Vec<f64>) {
 
 /// Three principals at -60, 60 and 180 degrees and one ambient speaker.
 fn ring(params: Params) -> SpatialUpmix {
-    let mut up = SpatialUpmix::new(4, SR, N_FFT, N_FFT / 4, BLOCK);
+    let mut up = SpatialUpmix::new(4, SR, N_FFT, N_FFT / 4, BLOCK).unwrap();
     up.set_params(params);
     up.set_layout(
         &[Some(-60.0), Some(60.0), Some(180.0), None],
@@ -228,8 +154,8 @@ fn the_state_moves_exactly() {
     let mut a = ring(Params::default());
     let _ = stream(&mut a, &left[..10_001], &right[..10_001], &[BLOCK]);
     let mut b = ring(Params::default());
-    b.set_state(&a.state()).unwrap();
-    assert_eq!(a.state(), b.state());
+    b.set_state(&a.to_state()).unwrap();
+    assert_eq!(a.to_state(), b.to_state());
     let rest_a = stream(&mut a, &left[10_001..], &right[10_001..], &[3000]);
     let rest_b = stream(&mut b, &left[10_001..], &right[10_001..], &[3000]);
     assert_eq!(rest_a, rest_b);
@@ -240,7 +166,7 @@ fn a_refused_call_changes_nothing() {
     let (left, right) = music(10_000, 5);
     let mut up = ring(Params::default());
     let _ = stream(&mut up, &left, &right, &[BLOCK]);
-    let before = up.state();
+    let before = up.to_state();
 
     let mut out = vec![0.0; 4 * 10];
     assert_eq!(
@@ -255,22 +181,95 @@ fn a_refused_call_changes_nothing() {
         up.process(&left[..10], &right[..10], &mut short, &mut out),
         Err(SpatialError::OutputMismatch)
     );
-    assert!(matches!(
-        up.set_layout(&[Some(0.0)], &[false], None),
-        Err(SpatialError::BadShape(_))
-    ));
-    let mut bad = up.state();
-    bad.norm.pop();
-    assert!(matches!(up.set_state(&bad), Err(SpatialError::BadShape(m)) if m.contains("norm")));
-    let mut bad = up.state();
-    bad.haas_read[0] = up.haas_len() + 1;
-    assert!(
-        matches!(up.set_state(&bad), Err(SpatialError::BadShape(m)) if m.contains("haas_read"))
+    assert_eq!(
+        up.set_layout(&[Some(0.0)], &[false; 4], None),
+        Err(SpatialError::BadShape {
+            field: "angles",
+            got: 1,
+            expected: 4
+        })
     );
-    let mut bad = up.state();
+    assert_eq!(
+        up.set_layout(&[None; 4], &[false], None),
+        Err(SpatialError::BadShape {
+            field: "ambient",
+            got: 1,
+            expected: 4
+        })
+    );
+    let mut bad = up.to_state();
+    bad.norm.pop();
+    assert_eq!(
+        up.set_state(&bad),
+        Err(SpatialError::BadShape {
+            field: "norm",
+            got: N_FFT - 1,
+            expected: N_FFT
+        })
+    );
+    let mut bad = up.to_state();
+    bad.haas_read[0] = up.haas_len() + 1;
+    assert_eq!(
+        up.set_state(&bad),
+        Err(SpatialError::OutOfRange {
+            field: "haas_read",
+            got: up.haas_len() + 1,
+            max: up.haas_len()
+        })
+    );
+    let mut bad = up.to_state();
+    let ready = bad.ready_direct[0].len();
     bad.ready_ambience[1].push(0.0);
-    assert!(matches!(up.set_state(&bad), Err(SpatialError::BadShape(_))));
-    assert_eq!(up.state(), before);
+    assert_eq!(
+        up.set_state(&bad),
+        Err(SpatialError::BadShape {
+            field: "ready_ambience row",
+            got: ready + 1,
+            expected: ready
+        })
+    );
+    let mut bad = up.to_state();
+    bad.ola_direct.pop();
+    assert_eq!(
+        up.set_state(&bad),
+        Err(SpatialError::BadShape {
+            field: "ola_direct rows",
+            got: 3,
+            expected: 4
+        })
+    );
+    assert_eq!(up.to_state(), before);
+}
+
+#[test]
+fn a_bad_configuration_is_refused() {
+    let error = SpatialUpmix::new(2, 48_000, 1024, 0, 8192).unwrap_err();
+    assert_eq!(
+        error,
+        SpatialError::InvalidConfig {
+            n_fft: 1024,
+            hop: 0,
+            sr: 48_000
+        }
+    );
+    let message = error.to_string();
+    assert!(
+        message.contains("n_fft 1024") && message.contains("hop 0") && message.contains("sr 48000"),
+        "{message}"
+    );
+    for (n_fft, hop, sr) in [(1, 1, SR), (0, 1, SR), (8, 9, SR), (1024, 256, 0)] {
+        assert_eq!(
+            SpatialUpmix::new(2, sr, n_fft, hop, 8).unwrap_err(),
+            SpatialError::InvalidConfig { n_fft, hop, sr }
+        );
+    }
+    // The edges that are allowed: the shortest STFT, and a hop of the whole frame or of 1.
+    for (n_fft, hop) in [(2, 1), (2, 2), (8, 8), (8, 1)] {
+        assert!(
+            SpatialUpmix::new(2, SR, n_fft, hop, 8).is_ok(),
+            "n_fft {n_fft}, hop {hop}"
+        );
+    }
 }
 
 #[test]

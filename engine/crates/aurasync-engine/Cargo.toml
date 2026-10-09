@@ -6,13 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 name = "aurasync_engine"
 crate-type = ["cdylib"]
 
 [features]
-# `_panic()`, a function that panics inside the read's guard: only for the tests that check a
-# panic reaches Python as `RuntimeError` (host/tests/test_engine_rust.py).
+# `_panic_outside_the_read()` and each class's `_panic_next()`: panics planted on purpose, only for the tests that check a
+# panic reaches Python as `EnginePanic` (host/tests/test_engine_rust.py).
 test-panic = []
 
 # Exact versions: PyO3 and rust-numpy change their API between minor versions, and the two must

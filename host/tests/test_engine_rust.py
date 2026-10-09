@@ -26,8 +26,11 @@ def data() -> np.ndarray:
     return np.random.default_rng(7).uniform(-1.0, 1.0, 12_000)
 
 
+READER = aurasync_engine.Reader()
+
+
 def assert_golden(data: np.ndarray, position: np.ndarray) -> np.ndarray:
-    got = aurasync_engine.read(data, position)
+    got = READER.read(data, position)
     expected = interpolation.read(data, position)
     assert got.dtype == np.float64
     assert got.shape == position.shape
@@ -112,31 +115,31 @@ def test_rust_read_accepts_strided_and_rejects_float32(data):
     strided_position = still(2000)[::-1]
     assert not strided_data.flags.c_contiguous
     assert not strided_position.flags.c_contiguous
-    got = aurasync_engine.read(strided_data, strided_position)
+    got = READER.read(strided_data, strided_position)
     expected = interpolation.read(np.ascontiguousarray(strided_data), np.ascontiguousarray(strided_position))
     assert np.max(np.abs(got - expected)) <= TOLERANCE
     assert got.flags.c_contiguous
     # A moving read over a strided view, too (the table path).
     position = moving(2000)[::3]
-    got = aurasync_engine.read(strided_data, position)
+    got = READER.read(strided_data, position)
     assert np.max(np.abs(got - interpolation.read(strided_data, position))) <= TOLERANCE
     # float32, in either argument, is refused rather than converted silently.
     with pytest.raises(TypeError, match=r"data must be a 1-D float64.*float32"):
-        aurasync_engine.read(data.astype(np.float32), still(64))
+        READER.read(data.astype(np.float32), still(64))
     with pytest.raises(TypeError, match=r"position must be a 1-D float64.*float32"):
-        aurasync_engine.read(data, still(64).astype(np.float32))
+        READER.read(data, still(64).astype(np.float32))
     # A float32 view of float64 memory (same bytes, other dtype) as well.
     with pytest.raises(TypeError, match="float32"):
-        aurasync_engine.read(data.view(np.float32), still(64))
+        READER.read(data.view(np.float32), still(64))
     # Nor float64 in the other byte order, integer positions, a list or a 2-D array.
     with pytest.raises(TypeError, match=">f8"):
-        aurasync_engine.read(data.astype(">f8"), still(64))
+        READER.read(data.astype(">f8"), still(64))
     with pytest.raises(TypeError, match="int64"):
-        aurasync_engine.read(data, np.arange(40, 104))
+        READER.read(data, np.arange(40, 104))
     with pytest.raises(TypeError, match="not list"):
-        aurasync_engine.read(list(data), still(64))
+        READER.read(list(data), still(64))
     with pytest.raises(TypeError, match="2 dimension"):
-        aurasync_engine.read(data.reshape(2, -1), still(64))
+        READER.read(data.reshape(2, -1), still(64))
 
 
 def test_rust_read_boundaries_and_out_of_range(data):
@@ -159,12 +162,12 @@ def test_rust_read_boundaries_and_out_of_range(data):
         position = still(16)
         position[7] = bad
         with pytest.raises(ValueError, match=r"position 7\b"):
-            aurasync_engine.read(data, position)
+            READER.read(data, position)
     # Data too short for any read.
     with pytest.raises(ValueError, match=r"position 0\b"):
-        aurasync_engine.read(data[: 2 * HALF - 1], np.array([HALF - 1.0]))
+        READER.read(data[: 2 * HALF - 1], np.array([HALF - 1.0]))
     # No positions: an empty result.
-    got = aurasync_engine.read(data, np.array([], dtype=float))
+    got = READER.read(data, np.array([], dtype=float))
     assert got.dtype == np.float64
     assert got.shape == (0,)
 
@@ -172,7 +175,7 @@ def test_rust_read_boundaries_and_out_of_range(data):
 def test_reading_does_not_modify_the_inputs(data):
     position = moving(4096)
     data_before, position_before = data.copy(), position.copy()
-    aurasync_engine.read(data, position)
+    READER.read(data, position)
     assert np.array_equal(data, data_before)
     assert np.array_equal(position, position_before)
 
@@ -185,23 +188,84 @@ def test_capabilities_match_python_constants():
         "beta": interpolation.BETA,
         "steps": STEPS,
     }
-    assert set(aurasync_engine.capabilities()) == {"interpolation", "spatial", "ambience", "fir", "virtual_bass"}
+    assert set(aurasync_engine.capabilities()) == {"interpolation", "spatial", "ambience", "fir", "virtual_bass", "api"}
 
 
-def test_a_rust_panic_is_a_runtime_error_and_reading_goes_on(data):
-    """The test build carries the `test-panic` feature (host/pyproject.toml): `_panic` panics
-    inside the read's guard, with the reader locked."""
-    with pytest.raises(RuntimeError, match="planted panic") as caught:
-        aurasync_engine._panic()  # noqa: SLF001
+def test_the_api_version_is_in_the_capabilities():
+    """The binding's Python-visible shape (exceptions, names) has a version of its own."""
+    assert aurasync_engine.capabilities()["api"] == {"version": 2}
+
+
+def test_the_exceptions_form_a_hierarchy_under_runtime_error():
+    assert issubclass(aurasync_engine.EngineError, RuntimeError)
+    assert issubclass(aurasync_engine.EnginePanic, aurasync_engine.EngineError)
+    # An `Exception` (the service's loop catches it), not PyO3's `BaseException` PanicException.
+    assert issubclass(aurasync_engine.EnginePanic, Exception)
+    assert aurasync_engine.EnginePanic.__name__ == "EnginePanic"
+
+
+def test_a_planted_panic_in_a_filter_is_an_engine_panic():
+    """The test build's `_panic_next` arms the next call of the object."""
+    fir = aurasync_engine.StreamingFIR(np.ones(3), 8)
+    fir._panic_next()  # noqa: SLF001
+    with pytest.raises(aurasync_engine.EnginePanic, match=r"planted panic in StreamingFIR\.process"):
+        fir.process(np.zeros(8))
+    # The arming is consumed: the next call works.
+    assert fir.process(np.zeros(8)).shape == (8,)
+
+
+def test_a_wrong_argument_stays_a_type_error_and_a_bad_config_a_value_error():
+    with pytest.raises(TypeError, match="1-D float64"):
+        aurasync_engine.StreamingFIR([1.0, 2.0], 8)
+    with pytest.raises(ValueError, match="tap"):
+        aurasync_engine.StreamingFIR(np.zeros(0), 8)
+
+
+def test_a_rust_panic_is_a_runtime_error_and_a_new_reader_reads(data):
+    """The test build carries the `test-panic` feature (host/pyproject.toml): `_panic_next` plants
+    a panic in the reader's next `read`, inside its guard."""
+    reader = aurasync_engine.Reader()
+    reader._panic_next()  # noqa: SLF001
+    with pytest.raises(aurasync_engine.EnginePanic, match=r"planted panic in Reader\.read") as caught:
+        reader.read(data, moving(4096))
     # An `Exception`, so `service._step` catches it; PyO3's PanicException is a BaseException.
     assert isinstance(caught.value, Exception)
     assert type(caught.value).__name__ != "PanicException"
-    # The panic left the reader's lock poisoned; the next read recovers.
+    # The torn reader is dropped by the host; a new one reads.
     assert_golden(data, moving(4096))
+
+
+def test_a_block_larger_than_max_block_rebuilds_the_table_and_matches_numpy(data):
+    reader = aurasync_engine.Reader(1024)
+    position = moving(4096)
+    assert np.max(np.abs(reader.read(data, position) - interpolation.read(data, position))) <= TOLERANCE
+    # A 20 000-position block needs the next power of two (32 768) and still matches.
+    long_data = np.random.default_rng(9).uniform(-1.0, 1.0, 24_000)
+    position = moving(20_000)
+    assert np.max(np.abs(reader.read(long_data, position) - interpolation.read(long_data, position))) <= TOLERANCE
+
+
+def test_the_module_has_no_function_read_and_no_panic_function():
+    assert not hasattr(aurasync_engine, "read")
+    assert not hasattr(aurasync_engine, "_panic")
+    assert hasattr(aurasync_engine, "Reader")
+
+
+def test_set_params_is_keyword_only():
+    up = aurasync_engine.SpatialUpmix(4, 48_000, 1024, 256)
+    with pytest.raises(TypeError):
+        up.set_params(0.0, 0.5, 0.0, 5.0, 0.1, 0.9, False)
+    ex = aurasync_engine.AmbienceExtractor(1024, 256)
+    with pytest.raises(TypeError):
+        ex.set_params(0.9, 0.1, 0.0, 1.0, 0.5, 1e-6)
+    ex.set_params(lam=0.9, threshold=0.1, mu0=0.0, mu1=1.0, sigma=0.5, min_energy=1e-6)
+    up.set_params(
+        arc_deg=0.0, ambience=0.5, ambient_level_db=0.0, haas_ms=5.0, threshold=0.1, lam=0.9, front_intact=False
+    )
 
 
 def test_a_panic_outside_the_read_is_a_runtime_error_too():
     """The guard covers each exported function's whole body (argument checks and building the
     result too), not only the read: `_panic_outside_the_read` panics before touching anything."""
-    with pytest.raises(RuntimeError, match="planted panic before the arguments"):
+    with pytest.raises(aurasync_engine.EnginePanic, match="planted panic before the arguments"):
         aurasync_engine._panic_outside_the_read(np.zeros(3))  # noqa: SLF001

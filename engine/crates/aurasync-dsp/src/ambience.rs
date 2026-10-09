@@ -20,15 +20,14 @@
 //!
 //! The extractor runs once per input stream, not per speaker. All the state lives in
 //! [`Extractor`]; [`Extractor::process`] allocates nothing for blocks up to the size reserved
-//! ([`Extractor::reserve`]). [`Extractor::state`] and [`Extractor::set_state`] move the whole
+//! ([`Extractor::reserve`]). [`Extractor::to_state`] and [`Extractor::set_state`] move the whole
 //! state to and from the numpy extractor at a cut's bottom (the live switch of engine), exactly.
 
-use std::f64::consts::PI;
 use std::fmt;
-use std::sync::Arc;
 
-pub use realfft::num_complex::Complex;
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
+use crate::Complex;
+use crate::complex::{magnitude, scaled, times_conj};
+use crate::stft::{Pending, Stft, TINY, ambience_curve, produced};
 
 /// The STFT's length (`ambience.N_FFT`): ~43 ms at 48 kHz, and the extractor's latency.
 pub const N_FFT: usize = 2048;
@@ -36,8 +35,6 @@ pub const N_FFT: usize = 2048;
 pub const HOP: usize = N_FFT / 4;
 /// Below this sum of squared windows the overlap-add is not divided (`ambience._PISO_NORMA`).
 pub const FLOOR: f64 = 1e-8;
-/// The regulariser of the coherence's and the energy ratio's denominators (numpy's `1e-20`).
-const TINY: f64 = 1e-20;
 
 /// The knobs (`ambience.Parametros`): equation (12)'s curve and the smoothing.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -73,22 +70,49 @@ impl Default for Params {
 /// Why a call was refused. Nothing changes when it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AmbienceError {
+    /// An STFT that cannot run: `n_fft` below 2, or a hop of 0 or longer than `n_fft`.
+    InvalidConfig {
+        /// The STFT's length asked for.
+        n_fft: usize,
+        /// The hop asked for.
+        hop: usize,
+    },
     /// `left` and `right` differ in length.
-    LengthMismatch { left: usize, right: usize },
+    LengthMismatch {
+        /// The length of `left`.
+        left: usize,
+        /// The length of `right`.
+        right: usize,
+    },
     /// The output slice is not as long as the block.
     OutputMismatch,
     /// A state whose size does not fit this extractor.
-    BadShape(String),
+    BadShape {
+        /// The state's field (`acc12`, `acc11`, `acc22`, `pending_right`, `ola`, `norm`).
+        field: &'static str,
+        /// The length the state has.
+        got: usize,
+        /// The length this extractor needs (for `pending_right`, the length of `pending_left`).
+        expected: usize,
+    },
 }
 
 impl fmt::Display for AmbienceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidConfig { n_fft, hop } => write!(
+                f,
+                "the ambience extractor needs n_fft >= 2 and 0 < hop <= n_fft (n_fft {n_fft}, hop {hop})"
+            ),
             Self::LengthMismatch { left, right } => {
                 write!(f, "the channels have different lengths: {left} and {right}")
             }
             Self::OutputMismatch => write!(f, "the output must be as long as the block"),
-            Self::BadShape(what) => write!(f, "{what}"),
+            Self::BadShape {
+                field,
+                got,
+                expected,
+            } => write!(f, "{field}: {got} values where {expected} are needed"),
         }
     }
 }
@@ -100,14 +124,17 @@ impl std::error::Error for AmbienceError {}
 pub struct State {
     /// The smoothed cross spectrum, `n_fft / 2 + 1` bins.
     pub acc12: Vec<Complex<f64>>,
-    /// The smoothed auto spectra.
+    /// The smoothed auto spectrum of the left channel.
     pub acc11: Vec<f64>,
+    /// The smoothed auto spectrum of the right channel.
     pub acc22: Vec<f64>,
-    /// Input not yet consumed by a frame (the same length on both sides).
+    /// Left input not yet consumed by a frame (the same length as the right's).
     pub pending_left: Vec<f64>,
+    /// Right input not yet consumed by a frame.
     pub pending_right: Vec<f64>,
-    /// The overlap-add and its sum of squared windows, `n_fft` samples each.
+    /// The overlap-add, `n_fft` samples.
     pub ola: Vec<f64>,
+    /// The overlap-add's sum of squared windows, `n_fft` samples.
     pub norm: Vec<f64>,
     /// Output computed but not yet given.
     pub ready: Vec<f64>,
@@ -120,124 +147,82 @@ pub struct Extractor {
     hop: usize,
     bins: usize,
     params: Params,
-    window: Vec<f64>,
-    window2: Vec<f64>,
-    forward: Arc<dyn RealToComplex<f64>>,
-    inverse: Arc<dyn ComplexToReal<f64>>,
-    forward_scratch: Vec<Complex<f64>>,
-    inverse_scratch: Vec<Complex<f64>>,
+    stft: Stft,
 
     // State.
     acc12: Vec<Complex<f64>>,
     acc11: Vec<f64>,
     acc22: Vec<f64>,
-    pending_left: Vec<f64>,
-    pending_right: Vec<f64>,
-    pending_len: usize,
+    pending: Pending,
     ola: Vec<f64>,
     norm: Vec<f64>,
     ready: Vec<f64>,
     ready_len: usize,
 
     // Scratch, sized once.
-    frame_left: Vec<f64>,
-    frame_right: Vec<f64>,
-    spectrum_left: Vec<Complex<f64>>,
-    spectrum_right: Vec<Complex<f64>>,
     mid: Vec<Complex<f64>>,
-    time: Vec<f64>,
     /// The block the buffers were sized for.
     max_block: usize,
 }
 
-/// numpy's `np.sqrt(np.hanning(n + 1)[:n])`.
-fn root_hann(n: usize) -> Vec<f64> {
-    let m = n + 1;
-    (0..n)
-        .map(|k| {
-            let x = (1.0 - m as f64) + 2.0 * k as f64;
-            (0.5 + 0.5 * (PI * x / (m as f64 - 1.0)).cos()).sqrt()
-        })
-        .collect()
-}
-
 /// `ambience.mapeo`: equation (12)'s `Gamma`, smooth on purpose.
 fn curve(index: f64, p: &Params) -> f64 {
-    ((p.mu1 - p.mu0) / 2.0) * (p.sigma * PI * (index - p.threshold)).tanh()
-        + ((p.mu1 + p.mu0) / 2.0)
+    ambience_curve(index, p.threshold, p.mu0, p.mu1, p.sigma)
 }
 
-fn scaled(z: Complex<f64>, s: f64) -> Complex<f64> {
-    Complex::new(z.re * s, z.im * s)
-}
-
-/// `z * conj(w)` as numpy multiplies complex numbers.
-fn times_conj(z: Complex<f64>, w: Complex<f64>) -> Complex<f64> {
-    let (br, bi) = (w.re, -w.im);
-    Complex::new(z.re * br - z.im * bi, z.re * bi + z.im * br)
-}
-
-/// numpy's `abs` of a complex number.
-fn magnitude(z: Complex<f64>) -> f64 {
-    z.re.hypot(z.im)
+impl fmt::Debug for Extractor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Extractor")
+            .field("n_fft", &self.n_fft)
+            .field("hop", &self.hop)
+            .field("max_block", &self.max_block)
+            .field("params", &self.params)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Extractor {
     /// An extractor with an STFT of `n_fft` points and hop `hop` (numpy's defaults: [`N_FFT`],
     /// [`HOP`]), its buffers sized for blocks of `max_block`. Default params.
-    pub fn new(n_fft: usize, hop: usize, max_block: usize) -> Self {
-        assert!(
-            n_fft >= 2 && hop >= 1 && hop <= n_fft,
-            "n_fft {n_fft}, hop {hop}"
-        );
-        let mut planner = RealFftPlanner::<f64>::new();
-        let forward = planner.plan_fft_forward(n_fft);
-        let inverse = planner.plan_fft_inverse(n_fft);
-        let forward_scratch = forward.make_scratch_vec();
-        let inverse_scratch = inverse.make_scratch_vec();
+    ///
+    /// # Errors
+    ///
+    /// [`AmbienceError::InvalidConfig`] if `n_fft < 2`, `hop == 0` or `hop > n_fft`.
+    pub fn new(n_fft: usize, hop: usize, max_block: usize) -> Result<Self, AmbienceError> {
+        if n_fft < 2 || hop == 0 || hop > n_fft {
+            return Err(AmbienceError::InvalidConfig { n_fft, hop });
+        }
         let bins = n_fft / 2 + 1;
-        let window = root_hann(n_fft);
-        let window2 = window.iter().map(|w| w * w).collect();
         let mut extractor = Self {
             n_fft,
             hop,
             bins,
             params: Params::default(),
-            window,
-            window2,
-            forward,
-            inverse,
-            forward_scratch,
-            inverse_scratch,
+            stft: Stft::new(n_fft),
             acc12: vec![Complex::new(0.0, 0.0); bins],
             acc11: vec![0.0; bins],
             acc22: vec![0.0; bins],
-            pending_left: Vec::new(),
-            pending_right: Vec::new(),
-            pending_len: 0,
+            pending: Pending::default(),
             ola: vec![0.0; n_fft],
             norm: vec![0.0; n_fft],
             ready: Vec::new(),
             ready_len: 0,
-            frame_left: vec![0.0; n_fft],
-            frame_right: vec![0.0; n_fft],
-            spectrum_left: vec![Complex::new(0.0, 0.0); bins],
-            spectrum_right: vec![Complex::new(0.0, 0.0); bins],
             mid: vec![Complex::new(0.0, 0.0); bins],
-            time: vec![0.0; n_fft],
             max_block: 0,
         };
         extractor.reset();
         extractor.reserve(max_block);
-        extractor
+        Ok(extractor)
     }
 
     /// The STFT's length (and the extractor's latency).
+    #[must_use]
     pub fn n_fft(&self) -> usize {
         self.n_fft
     }
 
     /// The params in use.
+    #[must_use]
     pub fn params(&self) -> Params {
         self.params
     }
@@ -253,7 +238,7 @@ impl Extractor {
         self.acc12.fill(Complex::new(0.0, 0.0));
         self.acc11.fill(0.0);
         self.acc22.fill(0.0);
-        self.pending_len = 0;
+        self.pending.clear();
         self.ola.fill(0.0);
         self.norm.fill(0.0);
         self.grow(0, self.n_fft);
@@ -272,10 +257,7 @@ impl Extractor {
     }
 
     fn grow(&mut self, pending: usize, ready: usize) {
-        if self.pending_left.len() < pending {
-            self.pending_left.resize(pending, 0.0);
-            self.pending_right.resize(pending, 0.0);
-        }
+        self.pending.reserve(pending);
         if self.ready.len() < ready {
             self.ready.resize(ready, 0.0);
         }
@@ -286,16 +268,16 @@ impl Extractor {
         if n > self.max_block {
             self.reserve(n);
         }
-        let held = self.pending_len + n;
-        let produced = if held >= self.n_fft {
-            ((held - self.n_fft) / self.hop + 1) * self.hop
-        } else {
-            0
-        };
-        self.grow(held, self.ready_len + produced);
+        let held = self.pending.len() + n;
+        self.grow(held, self.ready_len + produced(held, self.n_fft, self.hop));
     }
 
     /// One stereo block in; its mono ambience, as many samples, into `out`.
+    ///
+    /// # Errors
+    ///
+    /// [`AmbienceError::LengthMismatch`] if `left` and `right` differ in length;
+    /// [`AmbienceError::OutputMismatch`] if `out` is not as long as the block.
     pub fn process(
         &mut self,
         left: &[f64],
@@ -314,18 +296,13 @@ impl Extractor {
         }
         self.make_room(n);
 
-        let start = self.pending_len;
-        self.pending_left[start..start + n].copy_from_slice(left);
-        self.pending_right[start..start + n].copy_from_slice(right);
-        self.pending_len += n;
+        self.pending.push(left, right);
         let mut at = 0;
-        while self.pending_len - at >= self.n_fft {
+        while self.pending.len() - at >= self.n_fft {
             self.frame(at);
             at += self.hop;
         }
-        self.pending_left.copy_within(at..self.pending_len, 0);
-        self.pending_right.copy_within(at..self.pending_len, 0);
-        self.pending_len -= at;
+        self.pending.consume(at);
 
         // numpy pads the ready samples with zeros when there are fewer than the block.
         let available = self.ready_len.min(n);
@@ -340,33 +317,17 @@ impl Extractor {
     /// and one hop of output appended to the ready buffer.
     fn frame(&mut self, at: usize) {
         let n_fft = self.n_fft;
-        for i in 0..n_fft {
-            self.frame_left[i] = self.pending_left[at + i] * self.window[i];
-            self.frame_right[i] = self.pending_right[at + i] * self.window[i];
-        }
-        self.forward
-            .process_with_scratch(
-                &mut self.frame_left,
-                &mut self.spectrum_left,
-                &mut self.forward_scratch,
-            )
-            .expect("buffers sized by the plan");
-        self.forward
-            .process_with_scratch(
-                &mut self.frame_right,
-                &mut self.spectrum_right,
-                &mut self.forward_scratch,
-            )
-            .expect("buffers sized by the plan");
+        self.stft.analyse(&self.pending, at);
 
         let p = self.params;
         let lam = p.lam;
         let rest = 1.0 - lam;
         for b in 0..self.bins {
-            let (fl, fr) = (self.spectrum_left[b], self.spectrum_right[b]);
+            let (fl, fr) = (self.stft.spectrum_left[b], self.stft.spectrum_right[b]);
             let cross = times_conj(scaled(fl, rest), fr);
             let acc = scaled(self.acc12[b], lam);
             self.acc12[b] = Complex::new(acc.re + cross.re, acc.im + cross.im);
+            // numpy's `np.abs(x) ** 2`: the hypot squared, not the upmix's `re * re + im * im`.
             let (ml, mr) = (magnitude(fl), magnitude(fr));
             self.acc11[b] = lam * self.acc11[b] + rest * (ml * ml);
             self.acc22[b] = lam * self.acc22[b] + rest * (mr * mr);
@@ -383,22 +344,11 @@ impl Extractor {
             self.mid[b] = scaled(scaled(mid, 0.5), gain);
         }
 
-        // numpy's irfft ignores these imaginary parts; realfft wants them zero.
-        self.mid[0].im = 0.0;
-        if n_fft.is_multiple_of(2) {
-            self.mid[self.bins - 1].im = 0.0;
-        }
-        self.inverse
-            .process_with_scratch(&mut self.mid, &mut self.time, &mut self.inverse_scratch)
-            .expect("buffers sized by the plan, edge bins real");
-        let scale = 1.0 / n_fft as f64;
-        for ((o, &t), &w) in self.ola.iter_mut().zip(&self.time).zip(&self.window) {
-            *o += t * scale * w;
-        }
-        for (n, w2) in self.norm.iter_mut().zip(&self.window2) {
-            *n += w2;
-        }
+        self.stft.overlap_add(&mut self.mid, &mut self.ola);
+        self.stft.add_window2(&mut self.norm);
 
+        // numpy divides where the window sum is above the floor and leaves the rest undivided
+        // (the upmix multiplies by a reciprocal and zeroes the rest: not shared).
         let hop = self.hop;
         let ready_at = self.ready_len;
         for ((r, &o), &n) in self.ready[ready_at..ready_at + hop]
@@ -416,13 +366,14 @@ impl Extractor {
     }
 
     /// The whole state, copied (to move it to numpy's extractor).
-    pub fn state(&self) -> State {
+    #[must_use]
+    pub fn to_state(&self) -> State {
         State {
             acc12: self.acc12.clone(),
             acc11: self.acc11.clone(),
             acc22: self.acc22.clone(),
-            pending_left: self.pending_left[..self.pending_len].to_vec(),
-            pending_right: self.pending_right[..self.pending_len].to_vec(),
+            pending_left: self.pending.left().to_vec(),
+            pending_right: self.pending.right().to_vec(),
             ola: self.ola.clone(),
             norm: self.norm.clone(),
             ready: self.ready[..self.ready_len].to_vec(),
@@ -431,14 +382,20 @@ impl Extractor {
 
     /// Takes `state` as its own (from numpy's extractor). Every size is checked first; on an
     /// error nothing changes.
+    ///
+    /// # Errors
+    ///
+    /// [`AmbienceError::BadShape`] if a size of `state` does not fit this extractor.
     pub fn set_state(&mut self, state: &State) -> Result<(), AmbienceError> {
-        let check = |name: &str, got: usize, want: usize| {
-            if got == want {
+        let check = |field, got, expected| {
+            if got == expected {
                 Ok(())
             } else {
-                Err(AmbienceError::BadShape(format!(
-                    "state: {name} has length {got}, expected {want}"
-                )))
+                Err(AmbienceError::BadShape {
+                    field,
+                    got,
+                    expected,
+                })
             }
         };
         check("acc12", state.acc12.len(), self.bins)?;
@@ -461,9 +418,7 @@ impl Extractor {
         self.acc12.copy_from_slice(&state.acc12);
         self.acc11.copy_from_slice(&state.acc11);
         self.acc22.copy_from_slice(&state.acc22);
-        self.pending_left[..pending].copy_from_slice(&state.pending_left);
-        self.pending_right[..pending].copy_from_slice(&state.pending_right);
-        self.pending_len = pending;
+        self.pending.load(&state.pending_left, &state.pending_right);
         self.ola.copy_from_slice(&state.ola);
         self.norm.copy_from_slice(&state.norm);
         self.ready[..ready].copy_from_slice(&state.ready);

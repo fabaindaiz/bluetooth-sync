@@ -45,7 +45,7 @@ class NumpyAmbienceExtractor:
         ex._reiniciar_numpy()  # noqa: SLF001
         self._ex = ex
 
-    def set_params(self, lam, threshold, mu0, mu1, sigma, min_energy) -> None:
+    def set_params(self, *, lam, threshold, mu0, mu1, sigma, min_energy) -> None:
         self._ex._p = ambience.Parametros(lam, threshold, mu0, mu1, sigma, min_energy)  # noqa: SLF001
 
     def reset(self) -> None:
@@ -113,7 +113,20 @@ def fake_engine(read=None, **capabilities) -> types.ModuleType:
         module.calls.append((data, position))
         return interpolation.read_numpy(data, position)
 
-    module.read = read or default_read
+    module.read = read or default_read  # the hook the fake `Reader` delegates to, looked up per call
+
+    class Reader:
+        """`aurasync_engine.Reader`'s interface, reading through `module.read`."""
+
+        def __init__(self, max_block: int = 8192) -> None:
+            del max_block
+            module.readers.append(self)
+
+        def read(self, data, position):
+            return module.read(data, position)
+
+    module.readers = []
+    module.Reader = Reader
     module.AmbienceExtractor = NumpyAmbienceExtractor
     module.StreamingFIR = NumpyStreamingFIR
     module.PartitionedFIR = NumpyPartitionedFIR
@@ -245,6 +258,28 @@ def test_a_build_with_a_stale_stage_version_is_not_used(monkeypatch, stage):
     assert stage in resolved.reason
 
 
+def test_the_expected_api_version_is_2():
+    assert backend._expected()["api"] == {"version": 2}  # noqa: SLF001
+
+
+@pytest.mark.parametrize("api", [None, {"version": 1}, {"version": 3}])
+def test_a_build_without_the_current_api_is_not_used(monkeypatch, api):
+    """A stale extension (no `api` key, or another version) is refused with the build hint; the
+    reverse (a new extension under an old host) cannot be tested from here."""
+    module = fake_engine()
+    capabilities = {key: value for key, value in backend._expected().items() if key != "api"}  # noqa: SLF001
+    if api is not None:
+        capabilities["api"] = api
+    module.capabilities = lambda: capabilities
+    monkeypatch.setitem(sys.modules, "aurasync_engine", module)
+    backend.reset()
+    resolved = backend.resolve("rust")
+    assert resolved.active == "numpy"
+    assert resolved.available is False
+    assert "api" in resolved.reason
+    assert backend.BUILD_HINT in resolved.reason
+
+
 @pytest.mark.usefixtures("no_extension")
 def test_use_refuses_rust_when_it_cannot_read():
     with pytest.raises(ValueError, match="not installed"):
@@ -316,6 +351,20 @@ def test_a_rust_value_error_is_not_a_failure(monkeypatch):
         backend.read(np.ones(100), np.array([40.5]))
     assert failures == []
     assert backend.failure() is None
+
+
+def test_a_failed_reader_is_dropped_and_a_new_one_is_built_after_the_cut(failing, data):
+    backend.use("rust")
+    backend.on_failure = lambda _reason: None
+    backend.read(data, still())
+    assert len(failing.readers) == 1
+    # The torn reader was dropped; the first read after the cut builds a new one.
+    _working_read(failing)
+    backend.clear_failure()
+    backend.use("rust")
+    position = still()
+    assert np.array_equal(backend.read(data, position), interpolation.read_numpy(data, position))
+    assert len(failing.readers) == 2
 
 
 def test_rust_failure_is_silent_until_the_cut_then_numpy(failing, data):
@@ -430,7 +479,7 @@ def test_the_production_check_refuses_a_test_build(monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "aurasync_engine", module)
     backend.reset()
     assert backend.main(["--check-production"]) == 0
-    module._panic = lambda: None  # noqa: SLF001
+    module._panic_outside_the_read = lambda _value: None  # noqa: SLF001
     assert backend.main(["--check-production"]) == 1
     assert "test-panic" in capsys.readouterr().err
     monkeypatch.setitem(sys.modules, "aurasync_engine", None)

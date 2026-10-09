@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "aurasync-engine"
 version = "0.1.0"
-description = "The aurasync DSP in Rust: the band-limited delay read."
+description = "The aurasync DSP in Rust (PyO3): the delay read, spatial upmix, ambience extractor, FIR filters and virtual bass."
 requires-python = ">=3.12"
 dependencies = ["numpy>=2.0"]
 

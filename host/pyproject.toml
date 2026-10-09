@@ -71,7 +71,7 @@ engine-build = [
 # `run` y `run-cov` (lo que corre `hatch test`) compilan antes de pytest: con cargo es
 # incremental (un par de segundos sin cambios), y así un cambio en el Rust nunca se prueba contra
 # un `.so` viejo. Sin cargo, falla con un mensaje que dice qué instalar.
-# La compilación de tests lleva la feature `test-panic` (`_panic`, `_panic_outside_the_read`).
+# La compilación de tests lleva la feature `test-panic` (`_panic_outside_the_read`, `Reader._panic_next` y los `_panic_next` de cada clase).
 [tool.hatch.envs.hatch-test]
 installer = "uv"
 post-install-commands = ["engine-build"]

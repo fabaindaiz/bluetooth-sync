@@ -16,16 +16,16 @@
 //! The layout (which speaker is principal, the ring, the front pair, the back gap, the classic
 //! loudness target) is derived here from each speaker's angle and role, as numpy's `set_layout`
 //! does. All the state lives in [`SpatialUpmix`]; [`SpatialUpmix::process`] allocates nothing
-//! for blocks up to the size reserved ([`SpatialUpmix::reserve`]). [`SpatialUpmix::state`] and
+//! for blocks up to the size reserved ([`SpatialUpmix::reserve`]). [`SpatialUpmix::to_state`] and
 //! [`SpatialUpmix::set_state`] move the whole state to and from the numpy stage at a cut's
 //! bottom (the live switch of engine), exactly.
 
 use std::f64::consts::PI;
 use std::fmt;
-use std::sync::Arc;
 
-pub use realfft::num_complex::Complex;
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
+use crate::Complex;
+use crate::complex::{magnitude, norm2, scaled, times_conj};
+use crate::stft::{Pending, Stft, TINY, ambience_curve, produced};
 
 /// The STFT's length (`spatial.N_FFT`), the same as the ambience extractor's.
 pub const N_FFT: usize = 2048;
@@ -44,23 +44,45 @@ pub const FRONT_BOOST_DB: f64 = 6.0;
 /// `ambience.Parametros().energia_minima`: the weaker channel must have at least this share of
 /// the stronger one's energy for a bin to count as ambience.
 pub const MIN_ENERGY_RATIO: f64 = 0.25;
-/// `ambience.Parametros()`'s curve (`ambience.mapeo`): floor, ceiling and slope.
+/// `ambience.Parametros()`'s curve (`ambience.mapeo`): the floor.
 pub const MU0: f64 = 0.0;
+/// `ambience.Parametros()`'s curve (`ambience.mapeo`): the ceiling.
 pub const MU1: f64 = 1.0;
+/// `ambience.Parametros()`'s curve (`ambience.mapeo`): the slope.
 pub const SIGMA: f64 = 2.0;
 
 const HALF_TURN: f64 = 180.0;
+/// numpy's `et > 0.01 * energy`: below this share of the bin's energy, `L + R` nearly cancels and
+/// the direct part takes the louder channel's phase instead.
+const MIN_ENERGY_SHARE: f64 = 0.01;
+/// numpy's `np.maximum(ep, 1e-40)`: the floor of the phase source's energy under the direct
+/// part's square root.
+const MIN_PHASE_ENERGY: f64 = 1e-40;
+/// numpy's `np.maximum(out_energy, 1e-30)`: the floor of the render's energy under the loudness
+/// scale's square root.
+const MIN_OUT_ENERGY: f64 = 1e-30;
+/// numpy's `np.maximum(hi - lo, 1e-9)`: the narrowest arc, in degrees, between two principals
+/// that the direct part's pan divides by.
+const MIN_ARC_DEG: f64 = 1e-9;
+/// numpy's `hi - lo >= 180.0 - 1e-9`: the slack, in degrees, of the back gap's "180° or more".
+const BACK_GAP_SLACK_DEG: f64 = 1e-9;
 
 /// The knobs (`spatial.SpatialParams`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Params {
+    /// The arc the principal speakers spread over, in degrees.
     pub arc_deg: f64,
+    /// How much ambience goes to the ambient speakers.
     pub ambience: f64,
+    /// The ambience's level, in dB.
     pub ambient_level_db: f64,
     /// Clamped to `[0, MAX_HAAS_MS]` by [`SpatialUpmix::set_params`].
     pub haas_ms: f64,
+    /// The ambience curve's threshold.
     pub threshold: f64,
+    /// The smoothing of the spectra between frames.
     pub lam: f64,
+    /// "Frente intacto": the front pair is left as it is.
     pub front_intact: bool,
 }
 
@@ -81,22 +103,66 @@ impl Default for Params {
 /// Why a call was refused. Nothing changes when it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpatialError {
+    /// A stage that cannot run: `n_fft` below 2, a hop of 0 or longer than `n_fft`, or a sample
+    /// rate of 0.
+    InvalidConfig {
+        /// The STFT's length asked for.
+        n_fft: usize,
+        /// The hop asked for.
+        hop: usize,
+        /// The sample rate asked for, in Hz.
+        sr: u32,
+    },
     /// `left` and `right` differ in length.
-    LengthMismatch { left: usize, right: usize },
+    LengthMismatch {
+        /// The length of `left`.
+        left: usize,
+        /// The length of `right`.
+        right: usize,
+    },
     /// The output slices are not `speakers * block` long.
     OutputMismatch,
     /// A layout or state whose size does not fit this stage.
-    BadShape(String),
+    BadShape {
+        /// The layout's or state's field: a 1-D one by its name (`angles`, `ambient`, `acc12`,
+        /// `norm`, ...); of a per-speaker one, `<name> rows` is its number of rows and
+        /// `<name> row` the length of one of them (`ola_direct row`, ...).
+        field: &'static str,
+        /// The length (or number of rows) the argument has.
+        got: usize,
+        /// The length (or number of rows) this stage needs.
+        expected: usize,
+    },
+    /// A state whose read point is past what this stage has.
+    OutOfRange {
+        /// The state's field: `haas_read`, a read point of the Haas line.
+        field: &'static str,
+        /// The value the state has.
+        got: usize,
+        /// The largest value this stage allows (the line's length).
+        max: usize,
+    },
 }
 
 impl fmt::Display for SpatialError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidConfig { n_fft, hop, sr } => write!(
+                f,
+                "the spatial upmix needs n_fft >= 2, 0 < hop <= n_fft and sr > 0 (n_fft {n_fft}, hop {hop}, sr {sr})"
+            ),
             Self::LengthMismatch { left, right } => {
                 write!(f, "the channels have different lengths: {left} and {right}")
             }
             Self::OutputMismatch => write!(f, "the outputs must be speakers x block long"),
-            Self::BadShape(what) => write!(f, "{what}"),
+            Self::BadShape {
+                field,
+                got,
+                expected,
+            } => write!(f, "{field}: {got} values where {expected} are needed"),
+            Self::OutOfRange { field, got, max } => {
+                write!(f, "{field}: {got} is past {max}, the largest allowed")
+            }
         }
     }
 }
@@ -123,17 +189,25 @@ struct Layout {
 /// The whole state of the stage: what moves between engines at a cut's bottom.
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
+    /// The smoothed cross spectrum.
     pub acc12: Vec<Complex<f64>>,
+    /// The smoothed auto spectrum of the left channel.
     pub acc11: Vec<f64>,
+    /// The smoothed auto spectrum of the right channel.
     pub acc22: Vec<f64>,
+    /// Left input not yet consumed by a frame.
     pub pending_left: Vec<f64>,
+    /// Right input not yet consumed by a frame.
     pub pending_right: Vec<f64>,
-    /// Per speaker, `n_fft` samples each.
+    /// The direct overlap-add: per speaker, `n_fft` samples each.
     pub ola_direct: Vec<Vec<f64>>,
+    /// The ambience overlap-add: per speaker, `n_fft` samples each.
     pub ola_ambience: Vec<Vec<f64>>,
+    /// The overlap-add's sum of squared windows.
     pub norm: Vec<f64>,
-    /// Per speaker, the same length for all (output computed but not yet given).
+    /// The direct output computed but not yet given: per speaker, the same length for all.
     pub ready_direct: Vec<Vec<f64>>,
+    /// The ambience output computed but not yet given: per speaker, the same length for all.
     pub ready_ambience: Vec<Vec<f64>>,
     /// Per speaker, the Haas line (`round(MAX_HAAS_MS * sr / 1000)` samples).
     pub haas: Vec<Vec<f64>>,
@@ -153,21 +227,14 @@ pub struct SpatialUpmix {
     bins: usize,
     params: Params,
     layout: Layout,
-    window: Vec<f64>,
-    window2: Vec<f64>,
-    forward: Arc<dyn RealToComplex<f64>>,
-    inverse: Arc<dyn ComplexToReal<f64>>,
-    forward_scratch: Vec<Complex<f64>>,
-    inverse_scratch: Vec<Complex<f64>>,
+    stft: Stft,
     haas_len: usize,
 
     // State.
     acc12: Vec<Complex<f64>>,
     acc11: Vec<f64>,
     acc22: Vec<f64>,
-    pending_left: Vec<f64>,
-    pending_right: Vec<f64>,
-    pending_len: usize,
+    pending: Pending,
     ola_direct: Vec<Vec<f64>>,
     ola_ambience: Vec<Vec<f64>>,
     norm: Vec<f64>,
@@ -179,10 +246,6 @@ pub struct SpatialUpmix {
     emitted: u64,
 
     // Scratch, sized once.
-    frame_left: Vec<f64>,
-    frame_right: Vec<f64>,
-    spectrum_left: Vec<Complex<f64>>,
-    spectrum_right: Vec<Complex<f64>>,
     mask: Vec<f64>,
     psi: Vec<f64>,
     direct: Vec<Complex<f64>>,
@@ -192,23 +255,11 @@ pub struct SpatialUpmix {
     spectra_ambience: Vec<Vec<Complex<f64>>>,
     has_direct: Vec<bool>,
     has_ambience: Vec<bool>,
-    time: Vec<f64>,
     inverse_norm: Vec<f64>,
     fade: Vec<f64>,
     ambience_block: Vec<f64>,
     /// The block the buffers were sized for.
     max_block: usize,
-}
-
-/// numpy's `np.sqrt(np.hanning(n + 1)[:n])`.
-fn root_hann(n: usize) -> Vec<f64> {
-    let m = n + 1;
-    (0..n)
-        .map(|k| {
-            let x = (1.0 - m as f64) + 2.0 * k as f64;
-            (0.5 + 0.5 * (PI * x / (m as f64 - 1.0)).cos()).sqrt()
-        })
-        .collect()
 }
 
 /// Python's `round`: halves to even.
@@ -218,40 +269,40 @@ fn round_samples(x: f64) -> usize {
 
 /// `ambience.mapeo` with `ambience.Parametros(umbral=threshold)`.
 fn curve(index: f64, threshold: f64) -> f64 {
-    ((MU1 - MU0) / 2.0) * (SIGMA * PI * (index - threshold)).tanh() + ((MU1 + MU0) / 2.0)
+    ambience_curve(index, threshold, MU0, MU1, SIGMA)
 }
 
-fn norm2(z: Complex<f64>) -> f64 {
-    z.re * z.re + z.im * z.im
-}
-
-fn scaled(z: Complex<f64>, s: f64) -> Complex<f64> {
-    Complex::new(z.re * s, z.im * s)
-}
-
-/// `z * conj(w)` as numpy multiplies complex numbers.
-fn times_conj(z: Complex<f64>, w: Complex<f64>) -> Complex<f64> {
-    let (br, bi) = (w.re, -w.im);
-    Complex::new(z.re * br - z.im * bi, z.re * bi + z.im * br)
+impl fmt::Debug for SpatialUpmix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpatialUpmix")
+            .field("speakers", &self.speakers)
+            .field("sr", &self.sr)
+            .field("n_fft", &self.n_fft)
+            .field("hop", &self.hop)
+            .field("params", &self.params)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SpatialUpmix {
     /// A stage for `speakers` outputs at `sr` Hz, with an STFT of `n_fft` points and hop `hop`
     /// (numpy's defaults: [`N_FFT`], [`HOP`]), its buffers sized for blocks of `max_block`.
     /// Default params; no principal and no ambient until [`SpatialUpmix::set_layout`].
-    pub fn new(speakers: usize, sr: u32, n_fft: usize, hop: usize, max_block: usize) -> Self {
-        assert!(
-            n_fft >= 2 && hop >= 1 && hop <= n_fft,
-            "n_fft {n_fft}, hop {hop}"
-        );
-        let mut planner = RealFftPlanner::<f64>::new();
-        let forward = planner.plan_fft_forward(n_fft);
-        let inverse = planner.plan_fft_inverse(n_fft);
-        let forward_scratch = forward.make_scratch_vec();
-        let inverse_scratch = inverse.make_scratch_vec();
+    ///
+    /// # Errors
+    ///
+    /// [`SpatialError::InvalidConfig`] if `n_fft < 2`, `hop == 0`, `hop > n_fft` or `sr == 0`.
+    pub fn new(
+        speakers: usize,
+        sr: u32,
+        n_fft: usize,
+        hop: usize,
+        max_block: usize,
+    ) -> Result<Self, SpatialError> {
+        if n_fft < 2 || hop == 0 || hop > n_fft || sr == 0 {
+            return Err(SpatialError::InvalidConfig { n_fft, hop, sr });
+        }
         let bins = n_fft / 2 + 1;
-        let window = root_hann(n_fft);
-        let window2 = window.iter().map(|w| w * w).collect();
         let sr = f64::from(sr);
         let haas_len = round_samples(MAX_HAAS_MS * sr / 1000.0);
         let zeros = |n: usize| vec![0.0; n];
@@ -264,19 +315,12 @@ impl SpatialUpmix {
             bins,
             params: Params::default(),
             layout: Layout::default(),
-            window,
-            window2,
-            forward,
-            inverse,
-            forward_scratch,
-            inverse_scratch,
+            stft: Stft::new(n_fft),
             haas_len,
             acc12: czeros(bins),
             acc11: zeros(bins),
             acc22: zeros(bins),
-            pending_left: Vec::new(),
-            pending_right: Vec::new(),
-            pending_len: 0,
+            pending: Pending::default(),
             ola_direct: vec![zeros(n_fft); speakers],
             ola_ambience: vec![zeros(n_fft); speakers],
             norm: zeros(n_fft),
@@ -286,10 +330,6 @@ impl SpatialUpmix {
             haas: vec![zeros(haas_len); speakers],
             haas_read: Vec::new(),
             emitted: 0,
-            frame_left: zeros(n_fft),
-            frame_right: zeros(n_fft),
-            spectrum_left: czeros(bins),
-            spectrum_right: czeros(bins),
             mask: zeros(bins),
             psi: zeros(bins),
             direct: czeros(bins),
@@ -299,7 +339,6 @@ impl SpatialUpmix {
             spectra_ambience: vec![czeros(bins); speakers],
             has_direct: vec![false; speakers],
             has_ambience: vec![false; speakers],
-            time: zeros(n_fft),
             inverse_norm: zeros(hop),
             fade: Vec::new(),
             ambience_block: Vec::new(),
@@ -308,25 +347,29 @@ impl SpatialUpmix {
         let read = stage.haas_samples();
         stage.haas_read = vec![read; speakers];
         stage.reserve(max_block);
-        stage
+        Ok(stage)
     }
 
     /// How many outputs.
+    #[must_use]
     pub fn speakers(&self) -> usize {
         self.speakers
     }
 
     /// The STFT's length (and the stage's latency).
+    #[must_use]
     pub fn n_fft(&self) -> usize {
         self.n_fft
     }
 
     /// The Haas line's length in samples.
+    #[must_use]
     pub fn haas_len(&self) -> usize {
         self.haas_len
     }
 
     /// The params in use (the Haas delay clamped).
+    #[must_use]
     pub fn params(&self) -> Params {
         self.params
     }
@@ -346,10 +389,7 @@ impl SpatialUpmix {
     }
 
     fn grow(&mut self, pending: usize, ready: usize) {
-        if self.pending_left.len() < pending {
-            self.pending_left.resize(pending, 0.0);
-            self.pending_right.resize(pending, 0.0);
-        }
+        self.pending.reserve(pending);
         for buffer in self.ready_direct.iter_mut().chain(&mut self.ready_ambience) {
             if buffer.len() < ready {
                 buffer.resize(ready, 0.0);
@@ -371,19 +411,25 @@ impl SpatialUpmix {
     /// `angles[s]` is speaker `s`'s angle, `None` when it has none; `ambient[s]` its role.
     /// `classic`, when given and not empty, is each speaker's `(pan, ambience)` of the classic
     /// mix, whose loudness the output then keeps bin by bin.
+    ///
+    /// # Errors
+    ///
+    /// [`SpatialError::BadShape`] if `angles` or `ambient` is not `speakers` long (its field is
+    /// `angles` or `ambient`).
     pub fn set_layout(
         &mut self,
         angles: &[Option<f64>],
         ambient: &[bool],
         classic: Option<&[(f64, f64)]>,
     ) -> Result<(), SpatialError> {
-        if angles.len() != self.speakers || ambient.len() != self.speakers {
-            return Err(SpatialError::BadShape(format!(
-                "layout: {} angles and {} roles for {} speakers",
-                angles.len(),
-                ambient.len(),
-                self.speakers
-            )));
+        for (field, got) in [("angles", angles.len()), ("ambient", ambient.len())] {
+            if got != self.speakers {
+                return Err(SpatialError::BadShape {
+                    field,
+                    got,
+                    expected: self.speakers,
+                });
+            }
         }
         let ambient_list: Vec<usize> = (0..self.speakers).filter(|&s| ambient[s]).collect();
         let mut principal: Vec<usize> = (0..self.speakers)
@@ -418,7 +464,7 @@ impl SpatialUpmix {
         if ring.len() >= 2 {
             for i in 0..ring.len() {
                 let (lo, hi) = (ext[i], ext[i + 1]);
-                if lo <= HALF_TURN && HALF_TURN < hi && hi - lo >= HALF_TURN - 1e-9 {
+                if lo <= HALF_TURN && HALF_TURN < hi && hi - lo >= HALF_TURN - BACK_GAP_SLACK_DEG {
                     back = Some((lo, hi));
                     break;
                 }
@@ -455,6 +501,11 @@ impl SpatialUpmix {
 
     /// One stereo block in; per speaker `s`, its direct block into `direct[s * n .. (s + 1) * n]`
     /// and its ambience block into `ambience[..]` likewise (`n` = the block's length).
+    ///
+    /// # Errors
+    ///
+    /// [`SpatialError::LengthMismatch`] if `left` and `right` differ in length;
+    /// [`SpatialError::OutputMismatch`] if an output is not `speakers * n` long.
     pub fn process(
         &mut self,
         left: &[f64],
@@ -474,18 +525,13 @@ impl SpatialUpmix {
         }
         self.make_room(n);
 
-        let start = self.pending_len;
-        self.pending_left[start..start + n].copy_from_slice(left);
-        self.pending_right[start..start + n].copy_from_slice(right);
-        self.pending_len += n;
+        self.pending.push(left, right);
         let mut at = 0;
-        while self.pending_len - at >= self.n_fft {
+        while self.pending.len() - at >= self.n_fft {
             self.frame(at);
             at += self.hop;
         }
-        self.pending_left.copy_within(at..self.pending_len, 0);
-        self.pending_right.copy_within(at..self.pending_len, 0);
-        self.pending_len -= at;
+        self.pending.consume(at);
 
         self.fade_in(n);
         let available = self.ready_len.min(n);
@@ -527,18 +573,13 @@ impl SpatialUpmix {
         if n > self.max_block {
             self.reserve(n);
         }
-        let held = self.pending_len + n;
-        let produced = if held >= self.n_fft {
-            ((held - self.n_fft) / self.hop + 1) * self.hop
-        } else {
-            0
-        };
-        self.grow(held, self.ready_len + produced);
+        let held = self.pending.len() + n;
+        self.grow(held, self.ready_len + produced(held, self.n_fft, self.hop));
     }
 
     /// The entry fade into `self.fade[..n]` (numpy's `_fade_in`).
     fn fade_in(&mut self, n: usize) {
-        let start = self.emitted as i128 - self.n_fft as i128;
+        let start = i128::from(self.emitted) - self.n_fft as i128;
         if start >= FADE_IN as i128 {
             self.fade[..n].fill(1.0);
             return;
@@ -599,24 +640,7 @@ impl SpatialUpmix {
     /// overlap-add, and one hop of output per speaker appended to the ready buffers.
     fn frame(&mut self, at: usize) {
         let n_fft = self.n_fft;
-        for i in 0..n_fft {
-            self.frame_left[i] = self.pending_left[at + i] * self.window[i];
-            self.frame_right[i] = self.pending_right[at + i] * self.window[i];
-        }
-        self.forward
-            .process_with_scratch(
-                &mut self.frame_left,
-                &mut self.spectrum_left,
-                &mut self.forward_scratch,
-            )
-            .expect("buffers sized by the plan");
-        self.forward
-            .process_with_scratch(
-                &mut self.frame_right,
-                &mut self.spectrum_right,
-                &mut self.forward_scratch,
-            )
-            .expect("buffers sized by the plan");
+        self.stft.analyse(&self.pending, at);
 
         self.has_direct.fill(false);
         self.has_ambience.fill(false);
@@ -627,16 +651,13 @@ impl SpatialUpmix {
             self.spatial_frame();
         }
 
-        for (n, w2) in self.norm.iter_mut().zip(&self.window2) {
-            *n += w2;
-        }
+        self.stft.add_window2(&mut self.norm);
+        // A reciprocal where the window sum is above the floor, zero elsewhere (the extractor
+        // divides and leaves the rest undivided: not shared).
         for (inv, &n) in self.inverse_norm.iter_mut().zip(&self.norm) {
             *inv = if n > FLOOR { 1.0 / n.max(FLOOR) } else { 0.0 };
         }
         let hop = self.hop;
-        let scale = 1.0 / n_fft as f64;
-        let even = n_fft.is_multiple_of(2);
-        let last = self.bins - 1;
         let ready_at = self.ready_len;
         for s in 0..self.speakers {
             for which in [false, true] {
@@ -656,17 +677,7 @@ impl SpatialUpmix {
                     )
                 };
                 if has {
-                    // numpy's irfft ignores these imaginary parts; realfft wants them zero.
-                    spectrum[0].im = 0.0;
-                    if even {
-                        spectrum[last].im = 0.0;
-                    }
-                    self.inverse
-                        .process_with_scratch(spectrum, &mut self.time, &mut self.inverse_scratch)
-                        .expect("buffers sized by the plan, edge bins real");
-                    for ((o, &t), &w) in ola.iter_mut().zip(&self.time).zip(&self.window) {
-                        *o += t * scale * w;
-                    }
+                    self.stft.overlap_add(spectrum, ola);
                 }
                 for ((r, &o), &inv) in ready[ready_at..ready_at + hop]
                     .iter_mut()
@@ -690,7 +701,8 @@ impl SpatialUpmix {
         let lam = self.params.lam;
         let rest = 1.0 - lam;
         for b in 0..self.bins {
-            let (fl, fr) = (self.spectrum_left[b], self.spectrum_right[b]);
+            let (fl, fr) = (self.stft.spectrum_left[b], self.stft.spectrum_right[b]);
+            // numpy's `re * re + im * im`, not the extractor's `np.abs(x) ** 2`.
             let el = norm2(fl);
             let er = norm2(fr);
             let cross = times_conj(scaled(fl, rest), fr);
@@ -700,14 +712,14 @@ impl SpatialUpmix {
             self.acc22[b] = lam * self.acc22[b] + rest * er;
             let (p11, p22) = (self.acc11[b], self.acc22[b]);
 
-            let coherence = self.acc12[b].re.hypot(self.acc12[b].im) / (p11 * p22 + 1e-20).sqrt();
+            let coherence = magnitude(self.acc12[b]) / (p11 * p22 + TINY).sqrt();
             let mut index = (1.0 - coherence).clamp(0.0, 1.0);
-            let (weak, strong) = (p11.min(p22), p11.max(p22) + 1e-20);
+            let (weak, strong) = (p11.min(p22), p11.max(p22) + TINY);
             if weak / strong < MIN_ENERGY_RATIO {
                 index = 0.0;
             }
             self.mask[b] = self.params.ambience * curve(index, self.params.threshold);
-            self.psi[b] = (p22 - p11) / (p11 + p22 + 1e-20);
+            self.psi[b] = (p22 - p11) / (p11 + p22 + TINY);
         }
     }
 
@@ -716,7 +728,7 @@ impl SpatialUpmix {
         let level = 10f64.powf(self.params.ambient_level_db / 20.0);
         let classic = self.layout.classic;
         for b in 0..self.bins {
-            let (fl, fr) = (self.spectrum_left[b], self.spectrum_right[b]);
+            let (fl, fr) = (self.stft.spectrum_left[b], self.stft.spectrum_right[b]);
             let mask = self.mask[b];
             let el = norm2(fl);
             let er = norm2(fr);
@@ -724,7 +736,7 @@ impl SpatialUpmix {
             let total = Complex::new(fl.re + fr.re, fl.im + fr.im);
             let et = norm2(total);
             // The phase of L + R, or of the louder channel where L + R nearly cancels.
-            let phase = if et > 0.01 * energy {
+            let phase = if et > MIN_ENERGY_SHARE * energy {
                 total
             } else if el >= er {
                 fl
@@ -732,7 +744,10 @@ impl SpatialUpmix {
                 fr
             };
             let ep = norm2(phase);
-            let direct = scaled(phase, (1.0 - mask) * (energy / ep.max(1e-40)).sqrt());
+            let direct = scaled(
+                phase,
+                (1.0 - mask) * (energy / ep.max(MIN_PHASE_ENERGY)).sqrt(),
+            );
             let lm = level * mask;
             let amb_l = scaled(fl, lm);
             let amb_r = scaled(fr, lm);
@@ -746,7 +761,7 @@ impl SpatialUpmix {
                     t.max(0.0)
                 }
             };
-            let mut scale = (target / out_energy.max(1e-30)).sqrt();
+            let mut scale = (target / out_energy.max(MIN_OUT_ENERGY)).sqrt();
             if energy < SILENT {
                 scale = 0.0;
             }
@@ -821,7 +836,7 @@ impl SpatialUpmix {
             let above = ext.partition_point(|&e| e <= t);
             let i = above.saturating_sub(1).min(k - 1);
             let (lo, hi) = (ext[i], ext[i + 1]);
-            let frac = ((t - lo) / (hi - lo).max(1e-9)).clamp(0.0, 1.0);
+            let frac = ((t - lo) / (hi - lo).max(MIN_ARC_DEG)).clamp(0.0, 1.0);
             let d = self.direct[b];
             let near = layout.principal[i % k];
             let far = layout.principal[(i + 1) % k];
@@ -837,11 +852,11 @@ impl SpatialUpmix {
         let level = 10f64.powf((self.params.ambient_level_db + FRONT_BOOST_DB) / 20.0);
         for b in 0..self.bins {
             let lm = level * self.mask[b];
-            self.ambience_left[b] = scaled(self.spectrum_left[b], lm);
-            self.ambience_right[b] = scaled(self.spectrum_right[b], lm);
+            self.ambience_left[b] = scaled(self.stft.spectrum_left[b], lm);
+            self.ambience_right[b] = scaled(self.stft.spectrum_right[b], lm);
         }
-        self.spectra_direct[front_left].copy_from_slice(&self.spectrum_left);
-        self.spectra_direct[front_right].copy_from_slice(&self.spectrum_right);
+        self.spectra_direct[front_left].copy_from_slice(&self.stft.spectrum_left);
+        self.spectra_direct[front_right].copy_from_slice(&self.stft.spectrum_right);
         self.has_direct[front_left] = true;
         self.has_direct[front_right] = true;
         let receivers = (0..self.speakers).filter(|&s| s != front_left && s != front_right);
@@ -857,7 +872,8 @@ impl SpatialUpmix {
     }
 
     /// The whole state, copied (to move it to numpy's stage).
-    pub fn state(&self) -> State {
+    #[must_use]
+    pub fn to_state(&self) -> State {
         let ready = |buffers: &[Vec<f64>]| {
             buffers
                 .iter()
@@ -868,8 +884,8 @@ impl SpatialUpmix {
             acc12: self.acc12.clone(),
             acc11: self.acc11.clone(),
             acc22: self.acc22.clone(),
-            pending_left: self.pending_left[..self.pending_len].to_vec(),
-            pending_right: self.pending_right[..self.pending_len].to_vec(),
+            pending_left: self.pending.left().to_vec(),
+            pending_right: self.pending.right().to_vec(),
             ola_direct: self.ola_direct.clone(),
             ola_ambience: self.ola_ambience.clone(),
             norm: self.norm.clone(),
@@ -883,25 +899,35 @@ impl SpatialUpmix {
 
     /// Takes `state` as its own (from numpy's stage). Every size is checked first; on an error
     /// nothing changes.
+    ///
+    /// # Errors
+    ///
+    /// [`SpatialError::BadShape`] if a size of `state` does not fit this stage;
+    /// [`SpatialError::OutOfRange`] if a `haas_read` is past the Haas line.
     pub fn set_state(&mut self, state: &State) -> Result<(), SpatialError> {
         let k = self.speakers;
-        let check = |name: &str, got: usize, want: usize| {
-            if got == want {
+        let check = |field, got, expected| {
+            if got == expected {
                 Ok(())
             } else {
-                Err(SpatialError::BadShape(format!(
-                    "state: {name} has length {got}, expected {want}"
-                )))
+                Err(SpatialError::BadShape {
+                    field,
+                    got,
+                    expected,
+                })
             }
         };
-        let rows = |name: &str, buffers: &[Vec<f64>], want: Option<usize>| {
-            check(name, buffers.len(), k)?;
-            let first = buffers.first().map_or(0, Vec::len);
-            for row in buffers {
-                check(name, row.len(), want.unwrap_or(first))?;
-            }
-            Ok::<usize, SpatialError>(want.unwrap_or(first))
-        };
+        // A per-speaker buffer: `k` rows (`<name> rows`), each `want` long, or as long as the
+        // first when `want` is `None` (`<name> row`). Its row length.
+        let rows =
+            |names: (&'static str, &'static str), buffers: &[Vec<f64>], want: Option<usize>| {
+                check(names.0, buffers.len(), k)?;
+                let length = want.unwrap_or_else(|| buffers.first().map_or(0, Vec::len));
+                for row in buffers {
+                    check(names.1, row.len(), length)?;
+                }
+                Ok::<usize, SpatialError>(length)
+            };
         check("acc12", state.acc12.len(), self.bins)?;
         check("acc11", state.acc11.len(), self.bins)?;
         check("acc22", state.acc22.len(), self.bins)?;
@@ -910,18 +936,35 @@ impl SpatialUpmix {
             state.pending_right.len(),
             state.pending_left.len(),
         )?;
-        rows("ola_direct", &state.ola_direct, Some(self.n_fft))?;
-        rows("ola_ambience", &state.ola_ambience, Some(self.n_fft))?;
+        rows(
+            ("ola_direct rows", "ola_direct row"),
+            &state.ola_direct,
+            Some(self.n_fft),
+        )?;
+        rows(
+            ("ola_ambience rows", "ola_ambience row"),
+            &state.ola_ambience,
+            Some(self.n_fft),
+        )?;
         check("norm", state.norm.len(), self.n_fft)?;
-        let ready = rows("ready_direct", &state.ready_direct, None)?;
-        rows("ready_ambience", &state.ready_ambience, Some(ready))?;
-        rows("haas", &state.haas, Some(self.haas_len))?;
+        let ready = rows(
+            ("ready_direct rows", "ready_direct row"),
+            &state.ready_direct,
+            None,
+        )?;
+        rows(
+            ("ready_ambience rows", "ready_ambience row"),
+            &state.ready_ambience,
+            Some(ready),
+        )?;
+        rows(("haas rows", "haas row"), &state.haas, Some(self.haas_len))?;
         check("haas_read", state.haas_read.len(), k)?;
-        if let Some(bad) = state.haas_read.iter().find(|&&r| r > self.haas_len) {
-            return Err(SpatialError::BadShape(format!(
-                "state: haas_read {bad} is past the line's {} samples",
-                self.haas_len
-            )));
+        if let Some(&bad) = state.haas_read.iter().find(|&&r| r > self.haas_len) {
+            return Err(SpatialError::OutOfRange {
+                field: "haas_read",
+                got: bad,
+                max: self.haas_len,
+            });
         }
 
         let pending = state.pending_left.len();
@@ -932,9 +975,7 @@ impl SpatialUpmix {
         self.acc12.copy_from_slice(&state.acc12);
         self.acc11.copy_from_slice(&state.acc11);
         self.acc22.copy_from_slice(&state.acc22);
-        self.pending_left[..pending].copy_from_slice(&state.pending_left);
-        self.pending_right[..pending].copy_from_slice(&state.pending_right);
-        self.pending_len = pending;
+        self.pending.load(&state.pending_left, &state.pending_right);
         for s in 0..k {
             self.ola_direct[s].copy_from_slice(&state.ola_direct[s]);
             self.ola_ambience[s].copy_from_slice(&state.ola_ambience[s]);

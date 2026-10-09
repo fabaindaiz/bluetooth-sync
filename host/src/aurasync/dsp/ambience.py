@@ -214,7 +214,7 @@ class Extractor:
     def p(self, p: Parametros) -> None:
         self._p = p
         if self._rust is not None:
-            self._rust_call(lambda rust: rust.set_params(*self._rust_params()))
+            self._rust_call(lambda rust: rust.set_params(**self._rust_params()))
 
     def reiniciar(self) -> None:
         self._reiniciar_numpy()
@@ -264,7 +264,7 @@ class Extractor:
 
     def _build_rust(self) -> Any:
         rust = backend.module().AmbienceExtractor(self.n_fft, self.salto)
-        rust.set_params(*self._rust_params())
+        rust.set_params(**self._rust_params())
         rust.set_state(self._numpy_state())
         return rust
 
@@ -275,9 +275,17 @@ class Extractor:
     def _broke(self) -> None:
         self._rust_broken = True
 
-    def _rust_params(self) -> tuple[float, ...]:
+    def _rust_params(self) -> dict[str, float]:
+        """The knobs by the Rust parameter names (`set_params` is keyword-only)."""
         p = self._p
-        return (p.lam, p.umbral, p.mu0, p.mu1, p.sigma, p.energia_minima)
+        return {
+            "lam": p.lam,
+            "threshold": p.umbral,
+            "mu0": p.mu0,
+            "mu1": p.mu1,
+            "sigma": p.sigma,
+            "min_energy": p.energia_minima,
+        }
 
     def _numpy_state(self) -> dict[str, np.ndarray]:
         """The numpy extractor's state in the Rust extractor's terms."""
