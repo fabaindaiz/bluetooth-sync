@@ -19,9 +19,10 @@ servicio de control, panel, la cadena con todas sus perillas (d-7c8794-114c9c), 
 virtuales y monitor de audífonos (fases 1 y 2), y un motor en Rust por etapas. **Auracast avanzó:**
 las SuperMini sirven como controlador de 4 BIS (`experimentos/21`, E1 = sí), con cristal de 32 kHz,
 pero su cristal de 32 MHz corre rápido (+64/+79 ppm); falta E2–E4 con los JBL. **Los emisores Bluetooth
-están en pausa desde el 2026-10-08** (el roadmap dice cómo retomarlos). **Lo próximo:** el panel web y el
-motor en Rust, probados en `HP-O16`: el grupo 1 de la auditoría del panel (research/10 §10), el modo
-simple (spec con §7) y el rendimiento del motor. El emisor Auracast entra al servicio solo si E4 sale bien. **El motor en Rust (2026-10-09)** quedó idiomático, con la API 2 del puente (d-7c8794-ef6117).
+están en pausa desde el 2026-10-08** (el roadmap dice cómo retomarlos). **Transiciones sin corte
+(2026-10-09):** las etapas 1, 2 y 4 están construidas; la 3 (el render) tiene plan y falta. **Lo próximo**
+(la lista está arriba en `docs/roadmap.md`): integrar Rust 13–14 desde la rama `rust-ramps-loudness`, la
+etapa 3, la revisión final de la rama y el A/B final, en `HP-O16`. El emisor Auracast entra al servicio solo si E4 sale bien. **El motor en Rust (2026-10-09)** quedó idiomático, con la API 2 del puente (d-7c8794-ef6117).
 Ya tiene portados el decorrelador y el limitador true peak. Al cambiar de rama o de equipo, hay que correr
 `hatch run engine-build`. El plan anterior sigue en
 `docs/roadmap.md`, "Plan desde el 2026-10-02".

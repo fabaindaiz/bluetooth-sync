@@ -23,6 +23,14 @@ audio —la cadena, el sonido envolvente, efectos y mejoras de software, cada un
 experimento—. Los otros dispositivos se suman después, por iteraciones. Cada etapa se mide en
 `PC-Ryzen5` con los 3 Go 4; nada se da por bueno sin su número repetido (`CLAUDE.md`).
 
+**El monitor es un enlace Bluetooth más** (d-7c8794-7f1790, usuario 2026-10-09). En todos los objetivos de la
+plataforma, el monitor de audífonos se trata como una conexión Bluetooth que también hay que observar y medir,
+igual que los parlantes. Se miden su protocolo (códec, tasa de bits, latencia A2DP, retransmisiones y
+descartes de radio, señal), sus xruns, su colchón y sus reconexiones. Tiene sus diferencias: es estéreo, no
+se sincroniza con los parlantes y tiene su propia configuración (modos `mix`, `stereo`, `binaural`; su propio
+colchón y su propio emparejamiento de volumen). Cada experimento que mida radio o salida lo incluye
+(i-7c8794-7505b5).
+
 **Etapa 1 · Medir lo construido** (lo primero en `PC-Ryzen5`):
 1. **Microcortes** ([experimentos/12](research/experimentos/12-microcortes-con-3-go-4.md),
    i-7c8794-7d4aec): el paso 0 (el journal, el reloj de la captura y la salida con `pw-top`),
@@ -52,7 +60,8 @@ sonoridad igualada, y se enciende por defecto solo si gana; d-7c8794-d1118c):
    upmix tipo DirAC (i-7c8794-59cb30).
 
 **Etapa 3 · Tiempo real** (i-7c8794-fd9732): la prueba de concepto de E/S nativa en Rust
-([experimentos/13](research/experimentos/13-e-s-nativa-en-rust.md)); si cumple, el motor en
+([experimentos/13](research/experimentos/13-e-s-nativa-en-rust.md); la parte sin parlantes, medida y
+cumplida en `HP-O16` el 2026-10-09; falta la de los Go 4); si cumple, el motor en
 Rust etapa por etapa contra el oráculo numpy ([research/12](research/12-motor-de-audio-en-rust.md) §4).
 
 **Etapa 4 · Más de 3 parlantes:** la Pico 2 W como emisor A2DP con BTstack (control directo
@@ -66,6 +75,14 @@ con el servicio simulado; la app nativa queda para el final.
 
 **Etapa 5 · Otros dispositivos:** la Raspberry Pi Zero 2 W como equipo independiente y la
 Pico como puente (research/13). La app nativa de Android, al final de todo.
+
+**Para la próxima sesión (escrito al cerrar el 2026-10-09, s-7c8794-474a38):**
+1. Integrar Rust 13–14 y el GIL desde la rama `rust-ramps-loudness`.
+   - Antes, medir o mitigar el efecto convoy del GIL; la condición de la revisión está en el registro de la
+     sesión.
+2. Etapa 3 de transiciones, el render (i-7c8794-da4172), con su plan escrito.
+3. La revisión final de toda la rama `seamless-transitions` y `check.sh` entero.
+4. El A/B final con el protocolo de experimentos/23 §6.5, más la escucha de la etapa 4 (§8.2).
 
 ## Dónde estamos
 
@@ -1505,7 +1522,12 @@ cambiaría el sonido numpy y pide su propio A/B. **`PC-Ryzen5` necesita rustup a
 (`engine/README.md`). Un miembro de workspace de hatch con maturin no sirve (hatch 1.16.2); se usa
 un script de compilación. Antes de esto (2026-10-02): la prueba de concepto de E/S nativa estaba
 en preparación
-(`probes/17-e-s-nativa-rust/`, d-7c8794-36dde5). Lo pidió el usuario: explorar Rust para la parte
+(`probes/17-e-s-nativa-rust/`, d-7c8794-36dde5). **Su parte sin parlantes se midió el 2026-10-09 en
+`HP-O16`** (la opción A de research/12 §6, contra un sink nulo de prueba, sin tocar el servicio en uso):
+compila sin cambios con `pipewire-rs` 0.10.1, callback en `FF` 83, un solo driver, 0 xruns en 2 × 10 min con
+y sin carga, p99,9 del callback ≤ 0,81 % del cuántum, 0 muestras de latencia agregada y nada queda tras
+`kill -9` (experimentos/13 §4, research/12 §6.5). **Sigue pendiente** la parte con los 3 Go 4 en
+`PC-Ryzen5` (A/B, radio, latencia acústica de A y B); después se borra `probes/17` (d-7c8794-3208b7). Lo pidió el usuario: explorar Rust para la parte
 crítica del audio y dejar el resto en Python; eligió empezar por la prueba de concepto. Investigación y plan:
 [research/12](research/12-motor-de-audio-en-rust.md). Reabre d-7c8794-c23c20 si se adopta.
 
@@ -1813,7 +1835,13 @@ mejorar, y después de aplicarla se mide si mejoró); la sonoridad igualada al c
 (`loudness_match.py`, d-7c8794-be46cb).
 
 ### Prioridad del hilo del motor · i-7c8794-246f79
-**Estado: Planificado. Es LO SIGUIENTE después de la etapa 1 de transiciones sin corte.**
+**Estado: Hecho (2026-10-09, `HP-O16`), con una medición pendiente en el servicio.**
+- Lo construido: `host/src/aurasync/priority.py` y la opción `"engine_nice"` de `service.json`, en -15 por
+  defecto (d-7c8794-923eed). El hilo obtiene -15 por RealtimeKit. **VERIFICADO.**
+- Lo medido, en experimentos/23 §4.1: con la CPU saturada, el trabajo por bloque baja de un p99 de 52–58 ms
+  a uno de 21 ms. **MEDIDO**, con la sonda `probes/25-prioridad-motor`.
+- **Pendiente:** contar las entregas tardías con el servicio real bajo carga. Exige arrancarlo, porque crea
+  su sink en PipeWire, así que se hace con permiso del usuario.
 
 **Qué es:** subir la prioridad del hilo del motor: `nice` −15 pedido a RealtimeKit, o −11 por
 `RLIMIT_NICE` si no está, y opcional (`service.json`). El servicio corre hoy con `nice` +1 y clase `TS`
@@ -1824,21 +1852,141 @@ mejorar, y después de aplicarla se mide si mejoró); la sonoridad igualada al c
 
 **Cómo se mide:** con la suite de tests como carga, los bloques tardíos en 10 min con la prioridad y sin ella.
 
+### El A/B empareja el volumen con la ganancia neta · i-7c8794-50caa5
+**Estado: Hecho (2026-10-09).** `Service._ab_measure` usa `meter.net_lu`. Test: con la música 12 dB más fuerte mientras suena B y dos presets iguales, la compensación queda en 0; antes era -12,06 dB (`test_the_music_getting_louder_between_a_and_b_is_not_a_difference`).
+- **El problema:** experimentos/23 §6.4. `match_loudness` compara la sonoridad de la salida mientras suena A
+  con la de la salida mientras suena B, en momentos distintos de la música. Por eso la compensación saltó
+  de -1,86 dB en A a -5,17 dB en B en un minuto. **MEDIDO.**
+- **El arreglo:** medir la ganancia neta (sonoridad de la salida menos la de la entrada en la misma ventana),
+  como ya hace `render_match`, y compensar con esa diferencia, con un test que use música de volumen
+  variable.
+- **Choca con:** nada. El contrato de `state.ab` no cambia.
+
+### Presets en el panel: renombrar, confirmar el borrado y ficha expandible · i-7c8794-dcbd24
+**Estado: Hecho (2026-10-09), revisado.** Lo construido:
+- la operación `preset_rename` (`PATCH /v1/presets/{name}`), y la respuesta de `presets` lleva `chain`;
+- un diálogo para renombrar;
+- confirmar antes de borrar (el foco empieza en «Cancelar»), sin quitar el «Deshacer»;
+- la ficha «Ver/Ocultar» con la configuración.
+
+Pruebas: 139 tests de servicio y 12 de navegador. Quedan dos menores:
+- Escape todavía cierra el diálogo mientras el renombre está en curso;
+- si `api.raw` lanza un error, los botones quedan deshabilitados.
+
+**Antes era:** Planificado. Lo pidió el usuario el 2026-10-09, después de la escucha de presets
+(experimentos/23 §6). Son tres cosas:
+1. **Renombrar** un preset. Hace falta una operación nueva (`preset_rename`), que también renombre su parte
+   de cadena en `presets-chain.json`.
+2. **Confirmar antes de borrar.** Hoy, al borrar aparece «Deshacer» durante 10 s, sin confirmación, y es
+   fácil borrar sin querer.
+3. **Una ficha rápida expandible** por preset con su configuración: render, difusión, ambiente,
+   decorrelación, EQ, graves, limitador y los valores por parlante.
+
+Choca con: el grupo 1 de la auditoría del panel (research/10 §10), que toca la misma pantalla. Hay que
+hacerlas juntas o en orden.
+
+### El monitor en la observación de radio y las mediciones de protocolo · i-7c8794-7505b5
+**Estado: Planificado.** Lo pidió el usuario el 2026-10-09 (d-7c8794-7f1790).
+- **Hoy** `state.radio` (`radio.py`, el registro de radio) solo sigue a los parlantes (`speakers`), así que
+  del monitor no se sabe su códec, su señal ni sus descartes. **VERIFICADO** en `Service.radio_view`.
+- **Lo que hay que hacer:**
+  - que el registro de radio y las mediciones de protocolo de los parlantes (descartes, retransmisiones,
+    códec y tasa de bits, latencia A2DP, señal) cubran también al dispositivo del monitor, con su propia
+    entrada (`monitor`) y marcado como estéreo y no sincronizado;
+  - que el registro de cortes distinga los del monitor de los de los parlantes;
+  - que el panel lo muestre junto a los parlantes.
+- **Por qué importa:**
+  - hoy las pruebas A/B se hacen por el monitor (experimentos/23), así que sus cortes se confunden con los del
+    motor;
+  - el `pw-play` del monitor ya traía 39 errores acumulados (experimentos/13 §4) y nadie los veía como
+    enlace.
+- **Choca con:** el registro de radio necesita su permiso (`btmon`/HCI) y hoy mira la dirección de los
+  parlantes. El monitor es otro dispositivo, en otro perfil, y a veces otro adaptador.
+
+### Parlantes estéreo, grupos estéreo y ajustes por salida · i-7c8794-35655d
+**Estado: Planificado.** Lo pidió el usuario el 2026-10-09, en la misma línea que d-7c8794-7f1790 (el monitor
+como un enlace más).
+- **Hoy** cada parlante de la instalación recibe **un canal** (mono, con pan, ambiente y retardo propios). El
+  monitor es la única salida estéreo, y lo es por sus modos (`stereo`, `mix`, `binaural`). **VERIFICADO** en
+  la forma de `Parlante` y en el monitor.
+- **Lo que se pidió:**
+  1. **Configurar un parlante como estéreo**: que reciba dos canales (L/R) en vez de uno. Sirve para un
+     Charge 6, unos audífonos o un parlante con dos vías. Lleva su propio reparto (qué recibe cada lado), su
+     downmix cuando hace falta y sus ajustes (balance y ancho).
+  2. **Un grupo estéreo dentro de la herramienta**: dos parlantes que actúan como un par L/R. El grupo comparte
+     alineación y ganancia, se ubica como una unidad en el plano y en los layouts, y en el panel se mueve como
+     una sola salida.
+  3. **Usar un grupo estéreo del propio dispositivo**, como el modo estéreo de JBL entre dos parlantes, si se
+     puede manejar desde Linux. **Pregunta abierta**: no se sabe si ese modo se puede activar o detectar sin
+     la app de JBL (**INFERIDO**: probablemente no). Se investiga antes de diseñar (research/01).
+  4. **Otros ajustes por salida que sirven a lo mismo**: el mapa de canales, el códec y la tasa de bits si el
+     dispositivo deja elegirlos, y el tipo de salida (mono, estéreo, grupo) en el panel. Cada salida estéreo
+     queda medida como un enlace más (i-7c8794-7505b5).
+- **Choca con:**
+  - el motor de hoy genera un canal por parlante, y el layout, el reparto espacial y la calibración por
+    parlante asumen mono. Una salida estéreo cambia el contrato (`speakers[]`) y la calibración (dos canales
+    que medir en un mismo enlace);
+  - es diseño de producto, así que va con su spec y sus preguntas antes de construir.
+
+### Monitor binaural de audífonos · i-7c8794-541555
+**Estado: Planificado (idea).** experimentos/23 §6.3: con los audífonos, el procesado no gana claramente
+a `direct`. El monitor `mix` suma los 4 parlantes virtuales en 2 canales, y esa suma de copias retardadas y
+filtradas colorea el sonido con un filtro peine (**INFERIDO**). Un monitor binaural, que ubique cada
+parlante virtual alrededor de la cabeza con HRTF en vez de sumarlos, juzgaría el envolvimiento con
+audífonos de una forma más justa. **Choca con:** el costo del HRTF por parlante en el motor, y elegir un
+conjunto de HRTF con licencia libre (preguntar antes de traer datos de terceros).
+
+### El monitor vuelve solo tras un cambio de perfil Bluetooth, comprobado en HP-O16 · i-7c8794-6c2a37
+**Estado: Hecho (2026-10-09, `HP-O16`).** experimentos/23 §7.1: al desconectar y reconectar los audífonos, el monitor volvió solo, sin cambiar de modo. Quedan dos cosas:
+- medir cuánto tarda (la línea `lost` no tiene hora);
+- rechazar `monitor_set` hacia un dispositivo cuyo micrófono ya está abierto.
+micrófono de los propios WH-CH520 los pasó a manos libres, PipeWire rehízo su sink y el monitor quedó mudo
+diciendo que llegaba. Lo construido el 2026-10-09: el monitor vuelve a abrirse solo cuando pierde su destino
+(`MonitorController.watch`), y el micrófono Bluetooth de una salida en uso nunca se abre (`microphones.py`).
+**Falta, en `HP-O16` y con permiso del usuario** (toca los audífonos y reinicia el servicio): reiniciar el
+servicio, entrar a Calibrar con el micrófono de los audífonos elegido (debe negarse y el monitor seguir
+sonando), y provocar un cambio de perfil de otra forma (desconectar y reconectar los audífonos) midiendo
+cuántos segundos tarda en volver a sonar. **Choca con:** nada; queda fuera negar `monitor_set` hacia un equipo
+cuyo micrófono ya está abierto (el lazo o una calibración con él), que se decide aparte.
+
 ### Escucha de la etapa 1 de transiciones sin corte · i-7c8794-93f50c
-**Estado: A medias** (construida y con tests; falta oír). Protocolo en experimentos/23 §3 y spec §7:
-cambios de motor ocultos, A/B `crossfade` contra `cut`, la pregunta del peine (10–30 ms a 80 y 200 ms)
-y el posible +3 dB en graves bajos. Se hace con el usuario en `HP-O16` (preguntar antes de tocar los audífonos).
+**Estado: Hecho (2026-10-09, `HP-O16`).** experimentos/23 §5.1: el fundido no se oye en las rampas ni en los retardos (80 y 200 ms), y el corte sí; el peine y los +3 dB en graves no se oyen. El usuario pidió la perilla de 0 a 500 ms con 80 por defecto.
+El protocolo (antes de escuchar) era: cambios de motor ocultos, A/B `crossfade` contra `cut`, la pregunta del
+peine (10–30 ms a 80 y 200 ms) y el posible +3 dB en graves bajos, con el usuario en `HP-O16`.
 
 ### Transiciones sin corte, etapa 2: etapas con estado por `Crossfaded` · i-7c8794-a0a68b
-**Estado: Planificado.** Cada etapa con estado (EQ, upmix espacial, ambiente...) cambia de parámetros con
-dos copias y un fundido. Spec §5. Con qué choca: el costo de CPU de correr dos copias durante el traspaso.
+**Estado: Hecho (2026-10-09; falta escucharla en el A/B final, experimentos/23 §6.5).** Las etapas con estado
+(difusión, graves, limitador de la misma latencia, EQ, decorrelador y extractor) cambian por fundido de
+objetos enteros (`Crossfaded`): la etapa nueva se calienta a la sombra y se mezcla con la vieja, y
+`chain_set` responde `apply: "crossfade"`. Siguen cortando un limitador que cambia de latencia y el render
+(etapa 3). Reglas del controlador: el limitador funde siempre `equal_gain`; el decorrelador y los retardos,
+siempre `equal_power`; las rampas se sostienen durante WARM; las perillas vivas se re-aplican a una etapa
+pendiente. `preset_load` y `ab_play` van por el fundido si `pide_corte` es falso; el A/B decide una vez para
+su par. Spec §5. Costo: correr dos copias durante el traspaso.
+
+**Menores diferidos de la revisión de las tareas 3 a 5 (2026-10-09):**
+- con `assignment=mix`, la asignación del decorrelador se calcula dentro del bloque de audio: 13,5 ms con 8
+  parlantes, contra 0,1–0,5 ms con 3–4. Hay que calcularla en `aplicar_cadena`;
+- una reasignación que deja pendiente un cambio de pan espera un corte que ya casi no llega. Que un fundido la
+  lleve;
+- falta un test de cambio de banco más encendido o apagado en la misma transición (el revisor lo corrió: 4
+  pasan);
+- renombrar `test_choosing_mix_goes_through_the_cut`;
+- el comentario de `service.py` ~916 sobre el EQ en el fondo del corte quedó viejo.
 
 ### Transiciones sin corte, etapa 3: el render · i-7c8794-da4172
-**Estado: Planificado.** Cambiar de render (clásico, espacial, direct) con fundido en vez de corte. Spec §5.
+**Estado: Planificado; el plan está escrito (`docs/superpowers/plans/2026-10-09-seamless-transitions-stage-3.md`) y
+el usuario dejó su ejecución para la próxima sesión.** Cambiar de render (clásico, espacial, direct) con fundido
+en vez de corte. Spec §5.
 
 ### Transiciones sin corte, etapa 4: el colchón por estiramiento · i-7c8794-1b74ad
-**Estado: Planificado.** Rellenar el colchón del monitor estirando el audio (adaptativo, 0,1 → 0,5 %, diseño) en vez
-de con silencio. Spec §5; se oye contra el relleno con silencio en la escucha de experimentos/23.
+**Estado: A medias (construida el 2026-10-09; falta escucharla).** El colchón de los parlantes y el del monitor
+se rellenan estirando el audio (`dsp/stretch.py`, adaptativo de 0,1 a 0,5 %, perillas
+`transition.start_stretch_ppm` y `max_stretch_ppm`) en vez de con silencio; el silencio (y el corte de los
+parlantes) quedan como último recurso bajo un cuantum. Fuera de línea: THD+N de −90,7 a −112,6 dB y la
+frecuencia exacta (experimentos/23 §8.1). **Falta:** la escucha de experimentos/23 §8.2 en `HP-O16`, con
+permiso del usuario. **Choca con:** nada; seguir el reloj de forma continua (un lazo como `ClockLoop`) es el
+paso siguiente, en su propio spec.
 
 ### `test_a_signal_restores_it` se cuelga con la suite desacoplada de la terminal · i-7c8794-d5c5d6
 **Estado: Planificado.** `tests/test_radio_service.py::test_a_signal_restores_it` se queda esperando cuando

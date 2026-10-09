@@ -7,6 +7,123 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-09 · s-7c8794-474a38 — HP-O16: escucha de la etapa 1, prioridad del motor, presets, monitor, transiciones etapas 2 y 4
+**Qué.** Se retomó en `HP-O16` el trabajo del Mac (s-7c8794-816f05) y se hizo esto:
+- **Chequeo en Linux** de lo que llegó del Mac: `check.sh` pasa entero (1997 tests). El test de navegador del
+  motor pasa con Playwright normal. Las mediciones de Rust se repitieron en `HP-O16` (experimentos/20 §11:
+  Rust repite su ventaja; en x86_64 el decorrelador numpy por FFT es algo más lento que `np.convolve`; los
+  bits del limitador Rust dependen de la plataforma).
+- **Prioridad del hilo del motor** (`priority.py`, `engine_nice` −15 por defecto, d-7c8794-923eed).
+  RealtimeKit da −15 de verdad. Con la CPU saturada, el p99 del trabajo por bloque baja de 52–58 ms a 21 ms
+  (experimentos/23 §4.1).
+- **Escucha de la etapa 1** (experimentos/23 §5): el fundido no se oye en rampas ni retardos (80 y 200 ms), y
+  el corte sí. La perilla del fundido quedó de 0 a 500 ms con 80 por defecto, a pedido del usuario.
+- **Preferencia de presets con audífonos** (experimentos/23 §6, REPORTADO):
+  - se jugaron un torneo, tres vueltas y un desempate;
+  - con audífonos gana `direct`, la mezcla original;
+  - el procesado busca el envolvimiento con parlantes y, sumado en 2 canales, colorea.
+
+  Quedaron `principal` (el 10) y `alternativo` (`direct`); el usuario prefiere `alternativo`.
+- **El A/B empareja el volumen con la ganancia neta** (i-7c8794-50caa5): antes seguía la música, y la
+  compensación saltó de −1,86 a −5,17 dB en un minuto.
+- **Presets en el panel** (i-7c8794-dcbd24): renombrar (`preset_rename`), confirmar el borrado y una ficha
+  expandible.
+- **El monitor se reengancha solo, y el micrófono del monitor nunca se abre** (experimentos/23 §7):
+  - la causa: el micrófono configurado era el de los WH-CH520 (perfil manos libres), y el `pw-play` del
+    monitor llevaba `dont-reconnect`;
+  - **comprobado en `HP-O16`** desconectando los audífonos (§7.1).
+- **Transiciones sin corte, etapa 2** (i-7c8794-a0a68b), plan `2026-10-09-seamless-transitions-stage-2`:
+  - WARM y `Crossfaded`;
+  - difusión, graves, limitador de igual latencia, EQ, decorrelador y extractor sin corte;
+  - presets y A/B con fundido.
+- **Transiciones sin corte, etapa 4** (i-7c8794-1b74ad), plan `2026-10-09-seamless-transitions-stage-4`:
+  - el colchón de los parlantes y el del monitor se rellenan estirando el audio (`dsp/stretch.py`, ε entre
+    0,1 % y 0,5 %, adaptativo) en vez de meter silencio;
+  - ceden al último recurso y tienen su propio freno;
+  - revisado, con los dos defectos importantes de la revisión corregidos;
+  - falta escucharlo (experimentos/23 §8.2).
+- **Revisión de la E/S nativa** (research/12 §6) y la prueba de concepto contra un sink de prueba
+  (experimentos/13): 0 xruns, 0 muestras de latencia agregada, un solo reloj y callback FIFO 83.
+- **En un worktree aparte** (`../bluetooth-sync-rust`, rama `rust-ramps-loudness`):
+  - la tarea 14 de Rust (medidores de sonoridad, 2,1–2,4× numpy);
+  - el GIL suelto en el puente;
+  - la tarea 13 (rampas) medida y no portada, por decisión del usuario.
+- **Roadmap**:
+  - el monitor como enlace Bluetooth más (d-7c8794-7f1790, i-7c8794-7505b5);
+  - parlantes estéreo y grupos estéreo (i-7c8794-35655d);
+  - monitor binaural (i-7c8794-541555).
+**Archivos.**
+- `host/src/aurasync/`:
+  - nuevos: `priority.py`, `microphones.py`, `dsp/stretch.py`;
+  - modificados: `motor.py`, `chain.py`, `chain_stages.py`, `service.py`, `session.py`, `cushion.py`,
+    `outputs.py`, `monitor.py`, `monitor_control.py`, `system.py`, `snapshot.py`, `presets.py`, `rest.py`,
+    `control.py`, `cli.py`, `quality.py`, `dsp/{transition,limiter,virtual_bass}.py`, `panel/{app.js,index.html}`.
+- Tests en `host/tests/` y `host/tests_browser/`, y `host/docs/control-api.md`.
+- `docs/research/experimentos/{20,23,13}-…md` y sus `datos/`, `docs/research/12-…md` §6, `docs/roadmap.md`,
+  `docs/decisions.md`, specs y planes de transiciones (etapas 2, 3 y 4), `probes/24`, `probes/25` y
+  `probes/17`.
+**Por qué.** El usuario pidió continuar en `HP-O16` lo del Mac, escuchar la etapa 1, encontrar un preset, y
+completar hoy las etapas 2 y 4 de transiciones. Dejó la 3, la integración de Rust, la revisión final y el A/B
+final para la próxima sesión.
+**Arquitectura.** ✅ Cumple: el modo corte queda byte a byte igual (golden), el servicio sigue con un solo
+escritor y el motor sigue separado del emisor.
+**Qué salió mal en el camino.**
+1. **Agentes en paralelo en la misma carpeta:** las suites de un agente fallaban por el trabajo a medias de
+   otro (fallas de la etapa 4 por la semántica de la etapa 2, y al revés). Se resolvió con worktree para Rust
+   y archivos disjuntos para el resto. Ya pasó 5 veces en el registro.
+2. **El test `test_a_signal_restores_it` se cuelga cuando corre desprendido.** Hoy se esquivó otra vez con
+   `--deselect` (5 menciones en el registro): conviene arreglarlo (i-7c8794-d5c5d6).
+3. **`busctl` leía el «−15» como una opción** y RealtimeKit nunca recibía el pedido. Lo mostró la primera
+   corrida real, no los tests con dobles.
+4. **Revisiones que encontraron defectos que los tests no veían:**
+   - el A/B dejaba de ser ciego;
+   - la carrera del monitor que podía tumbar el servicio;
+   - el estirador que no cedía al último recurso;
+   - el limitador que pasaba el techo 3 dB con `equal_power`;
+   - el monitor que cerraba su salida desde el hilo del motor.
+5. **La primera vuelta de presets se corrió:** el usuario contaba por el hueco. Se rehízo con 1 s de silencio
+   y 10 s por número, y esa forma queda como protocolo (experimentos/23 §6.5).
+6. **Varios agentes no pudieron escribir su informe** («Subagents should return findings as text»), y el
+   controlador los guardó.
+7. **El reinicio del servicio falló una vez** porque el viejo no soltaba el puerto. Se reintentó.
+**Qué quedó pendiente** (para la próxima sesión, en este orden):
+1. **Integrar Rust 13–14 y el GIL** desde `../bluetooth-sync-rust`.
+   - Condición de la revisión: medir el **efecto convoy del GIL** en el servicio con el panel activo, o
+     mitigarlo (soltar el GIL solo en llamadas largas, o bajar `sys.setswitchinterval`).
+   - Conflicto textual en experimentos/20: va §11 y después §12–§14.
+   - Después: `engine-build` y la suite.
+2. **Etapa 3, el render sin corte**: el plan `2026-10-09-seamless-transitions-stage-3` está escrito y sin
+   empezar.
+3. **Revisión final de toda la rama** con el modelo más capaz.
+4. **El A/B final**, con el protocolo de experimentos/23 §6.5 y la escucha de la etapa 4 (§8.2).
+5. Los menores diferidos, en el roadmap:
+   - etapa 2 (i-7c8794-a0a68b);
+   - monitor (i-7c8794-6c2a37: la hora de la línea `lost`, rechazar `monitor_set`);
+   - presets (i-7c8794-dcbd24).
+6. **Commits**: todo está sin commit en `seamless-transitions` y en `rust-ramps-loudness`.
+**Desvío del plan.**
+- Las tareas 3 a 5 de la etapa 2 y las 4 tareas de la etapa 4 se hicieron en lote, con una sola revisión
+  cada una, para ganar tiempo.
+- Decisiones del controlador, anotadas en los ledgers y en la spec:
+  - los fundidos de limitador son siempre `equal_gain`;
+  - los de decorrelador y retardo son siempre `equal_power`;
+  - las rampas esperan durante WARM.
+**No verificado.**
+- No se escucharon las etapas 2 y 4.
+- `check.sh` entero pasó sobre el estado final (2162 tests, 12 min con `nice -n 19`), con
+  `test_a_signal_restores_it` deseleccionado. Ese test pasó aparte, corrido en primer plano.
+- Nada se midió con los JBL.
+**Medido.**
+- Prioridad: p99 de 52–58 → 21 ms con la CPU saturada.
+- E/S nativa: 0 xruns y 0 de latencia agregada.
+- Estirador: THD+N entre −90 y −112 dB, frecuencia a 1,2e-10.
+- Medidores en Rust: 2,1–2,4×.
+- Convoy del GIL: mediana de 312 ms por bloque contra un hilo Python ocupado.
+- Fricciones contadas en el registro: «nice -n 19» 4, suite desprendida 5, `check.sh` por partes 3, agentes
+  en paralelo 5.
+
+---
+
 ## 2026-10-09 · s-7c8794-816f05 — Verificación de la etapa 1, Rust idiomático y port del decorrelador y del limitador (Mac), pausada para seguir en otro equipo
 **Qué.**
 - **Verificación de la tanda final de la etapa 1 de transiciones sin corte** (pendiente de s-7c8794-402f44).
