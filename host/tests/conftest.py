@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from aurasync import priority
 from aurasync.dsp import backend
 
 if TYPE_CHECKING:
@@ -26,6 +27,20 @@ class Engine:
     name: str
     rust_calls: list[int] = field(default_factory=list)
     """One entry per call into the extension's `Reader.read`: proof that Rust really ran."""
+
+
+@pytest.fixture(autouse=True)
+def _no_real_priority(request, monkeypatch) -> None:
+    """No test changes a thread's priority on the machine: `service.json` asks for -15 by default
+    (`priority.py`), and a service started by a test would otherwise call RealtimeKit for real.
+    `test_priority.py` tests the real function with its own fakes."""
+    if request.module.__name__.endswith("test_priority"):
+        return
+    monkeypatch.setattr(
+        priority,
+        "raise_engine_priority",
+        lambda wanted, **_: priority.PriorityResult(wanted, None, None, "tests do not change priorities"),
+    )
 
 
 @pytest.fixture(params=[backend.NUMPY, backend.RUST])

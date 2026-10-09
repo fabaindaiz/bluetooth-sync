@@ -479,6 +479,7 @@ def cmd_service(args) -> int:
         config_path=None if args.simular else config_dir() / "service.json",
         monitor=None if args.simular else config.monitor,
         engine=config.engine,
+        engine_nice=None if args.simular else config.engine_nice,
         **extra,
     )
     print(f"instalación: {instalacion}{'' if instalacion.exists() else ' (no existe)'}")

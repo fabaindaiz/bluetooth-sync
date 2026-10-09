@@ -11,8 +11,7 @@ Collapse rule: while a transition runs, further changes are not applied one by o
 queued, and when the fade ends all of them start together as ONE next transition (the single
 pending batch). So fifty changes during a fade cost one more fade, never fifty.
 
-How the motor drives it (stage 1 has only the FADE phase; a WARM phase can be added later
-next to IDLE and FADE):
+How the motor drives it (IDLE, an optional WARM, and FADE):
 
 1. `request(action)`; when it returns True the transition was IDLE and the motor must call
    `begin(length)` at once (the action is already queued as a starting action).
@@ -25,6 +24,12 @@ next to IDLE and FADE):
    batch (an empty list when nothing waits) and the clock goes IDLE; the motor then begins a
    new transition with `begin(length, batch)` if the batch is not empty. While fading or idle
    it returns None.
+4. Stage 2 (stateful stages): a starting action may call `need_warm(samples)`. The new instance
+   of the stage must then run in the shadow, fed the same input, before the mixing starts. After
+   running the starting actions the motor checks `state == Transition.WARM`. In WARM,
+   `block_weights` gives `(1, 0)` (only the old output is heard) and `advance` counts warm samples;
+   when they are done it returns the marker `Transition.FADE_STARTS` ONCE (the motor starts the
+   glides now) and the FADE runs as above. Without `need_warm` the clock is exactly stage 1's.
 """
 
 from __future__ import annotations
@@ -56,18 +61,79 @@ def fade_weights(shape: str, position: int, n: int, length: int) -> tuple[np.nda
     return old, new
 
 
+def _mix(old: object, new: object, w_old: object, w_new: object) -> object:
+    """`old*w_old + new*w_new` for arrays; None stays None; anything else comes from `new`.
+
+    Weights are scalars or arrays that broadcast (numpy rules, so per-sample weights match the
+    LAST axis). A scalar weight of exactly 0 drops that side, so a warming instance's output
+    (whatever it holds) never leaks into the mix."""
+    if old is None or new is None:
+        return None
+    if not (isinstance(old, np.ndarray) and isinstance(new, np.ndarray)):
+        return new
+    if old.shape != new.shape:
+        msg = f"cannot crossfade outputs of different shapes {old.shape} and {new.shape}"
+        raise ValueError(msg)
+    if np.ndim(w_new) == 0 and w_new == 0:
+        return old * w_old
+    if np.ndim(w_old) == 0 and w_old == 0:
+        return new * w_new
+    return old * w_old + new * w_new
+
+
+class Crossfaded:
+    """Two instances of a stateful stage, mixed while a transition runs.
+
+    A method called on it runs on BOTH `old` and `new` (so each keeps its state) and the array
+    results are mixed with the current block's weights, `weights() -> (w_old, w_new) | None`
+    (None: only `new` runs and answers). Other attributes are read from `new`. `resolve()` gives
+    the instance to keep once the transition ends. It never nests: when a stage changes again
+    during a transition, the motor resolves first or queues the change (collapse rule)."""
+
+    def __init__(self, old: object, new: object, weights: Callable[[], tuple | None]) -> None:
+        if isinstance(old, Crossfaded) or isinstance(new, Crossfaded):
+            msg = "Crossfaded does not nest; resolve() one before crossfading again"
+            raise ValueError(msg)  # noqa: TRY004  (the contract says ValueError)
+        self.old, self.new, self._weights = old, new, weights
+
+    def resolve(self) -> object:
+        return self.new
+
+    def __getattr__(self, name: str) -> object:
+        # Only called for attributes not found normally (so not old/new/resolve/_weights).
+        if name.startswith("__") or name == "_weights":
+            raise AttributeError(name)
+        target = getattr(self.new, name)
+        if not callable(target):
+            return target
+
+        def call(*args: object, **kwargs: object) -> object:
+            weights = self._weights()
+            if weights is None:
+                return target(*args, **kwargs)
+            old_result = getattr(self.old, name)(*args, **kwargs)
+            return _mix(old_result, target(*args, **kwargs), *weights)
+
+        return call
+
+
 def _nothing() -> None:
     """What a bare request queues in the pending batch."""
 
 
 class Transition:
-    """IDLE or FADE, the samples left in the fade, and the actions waiting for it.
+    """IDLE, WARM or FADE, the samples left in it, and the actions waiting for it.
 
     Not thread-safe: it has a single writer, the motor's (the service's engine thread)."""
 
-    IDLE, FADE = "idle", "fade"
+    IDLE, WARM, FADE = "idle", "warm", "fade"
+    MAX_WARM = 48000  # samples; the warm length is capped at one second at 48 kHz
+    FADE_STARTS = object()  # returned once by `advance` when WARM ends
 
-    def __init__(self) -> None:
+    def __init__(self, sr: int = 48000) -> None:
+        self._max_warm = self.MAX_WARM * sr // 48000
+        self._warm = 0
+        self._warm_pos = 0
         self.state = self.IDLE
         self.started = False
         self.length = 0
@@ -90,12 +156,31 @@ class Transition:
             (self._pending if self.started and not idle else self._starting).append(action)
         return idle
 
+    def need_warm(self, samples: int) -> None:
+        """Ask, from a starting action, for `samples` of shadow run before the fade (capped at
+        `MAX_WARM`; the largest ask wins). Enters WARM; ignored when not in the starting phase."""
+        if self.state == self.IDLE or self.started:
+            return
+        self._warm = max(self._warm, min(int(samples), self._max_warm))
+        if self._warm > 0:
+            self.state = self.WARM
+
+    def block_weights(self, n: int, shape: str) -> tuple[float | np.ndarray, float | np.ndarray] | None:
+        """The (old, new) weights for the block of `n` samples about to be processed, or None when
+        IDLE. Pure: `advance` moves the position."""
+        if self.state == self.IDLE:
+            return None
+        if self.state == self.WARM:
+            return 1.0, 0.0
+        return fade_weights(shape, self._pos, n, self.length)
+
     def begin(self, length: int, actions: list[Callable[[], None]] | None = None) -> None:
         """Start a fade of `length` samples; `actions` (a pending batch) join the starting ones."""
         self.state = self.FADE
         self.started = False
         self.length = max(1, length)
         self._pos = 0
+        self._warm = self._warm_pos = 0
         if actions:
             self._starting = [*actions, *self._starting]
 
@@ -106,7 +191,8 @@ class Transition:
 
     def advance(self, n: int) -> list[Callable[[], None]] | None:
         """Count `n` processed samples (and mark the transition started). At the end of the fade
-        return the pending batch, possibly empty, and go IDLE; otherwise None."""
+        return the pending batch, possibly empty, and go IDLE; otherwise None. When a WARM ends,
+        return `FADE_STARTS` (once) and go FADE."""
         if self.state == self.IDLE:
             return None
         if not self.started:
@@ -115,11 +201,18 @@ class Transition:
             # start: it waits in the pending batch instead of being left behind.
             self._pending, self._starting = [*self._starting, *self._pending], []
         self.started = True
+        if self.state == self.WARM:
+            self._warm_pos += n
+            if self._warm_pos < self._warm:
+                return None
+            self.state = self.FADE
+            return self.FADE_STARTS  # type: ignore[return-value]
         self._pos += n
         if self._pos < self.length:
             return None
         pending, self._pending = self._pending, []
         self.state, self.started, self._pos = self.IDLE, False, 0
+        self._warm = self._warm_pos = 0
         return pending
 
     def cancel(self) -> list[Callable[[], None]]:
@@ -127,4 +220,5 @@ class Transition:
         actions = [*self._starting, *self._pending]
         self._starting, self._pending = [], []
         self.state, self.started, self._pos = self.IDLE, False, 0
+        self._warm = self._warm_pos = 0
         return actions

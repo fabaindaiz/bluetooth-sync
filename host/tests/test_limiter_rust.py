@@ -5,8 +5,10 @@ interpolation kernels) and owns one Rust object when the engine is Rust. This fi
 1e-9 absolute, that the two engines play the same samples and report the same metrics
 (`gain`, `max_reduction_db`, `active_fraction`, after every block) on the inputs of
 `test_limiter.py`, random blocks of odd sizes, a sweep of the design values, a live `configure`,
-silence after a peak and an engine switch mid-stream; and that a Rust failure is one silent block
-and then numpy from a limiter at rest. Every comparison asserts the signal is not all zeros.
+silence after a peak and an engine switch mid-stream; and that a Rust failure is silence until the
+cut's bottom and then numpy: from a limiter at rest when the failure tore the Rust object's state,
+from numpy's own state when it came while loading that state (`set_state`; user, 2026-10-09). Every
+comparison asserts the signal is not all zeros.
 """
 
 from __future__ import annotations

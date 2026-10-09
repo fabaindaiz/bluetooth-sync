@@ -7,11 +7,20 @@ The target is the same calculation for both: one engine block plus one driver qu
 anything, so it refills or drops at any block. The speakers must stay aligned with each other, so
 their cushion is one value for the whole real part and it only changes for all of them at once, at
 the bottom of a `motor.cortar` fade.
+
+Since stage 4 of the seamless transitions (spec 2026-10-08 §4b) both cushions first ask a stretcher
+(dsp/stretch.py) for the frames: the output plays slightly slower (or faster) until the pipe is back,
+with no silence and no cut. Silence (and the speakers' cut) stays as the last resort, under a quantum.
 """
 
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aurasync.chain import ChainValues
+    from aurasync.dsp.stretch import OutputStretcher
 
 DRIVER_QUANTUM_FRAMES = 2048
 """The Bluetooth driver's quantum with A2DP: 2048 frames, 42.7 ms at 48 kHz. `pw-top` showed it on
@@ -47,6 +56,102 @@ def target_frames(block: int, rate: int) -> int:
     return min(block + DRIVER_QUANTUM_FRAMES, int(MAX_CUSHION_S * rate))
 
 
+def stretch_limits(chain: ChainValues) -> tuple[float, float]:
+    """The stage-4 stretch knobs (`transition.start_stretch_ppm`, `max_stretch_ppm`)."""
+    return chain.param("transition", "start_stretch_ppm"), chain.param("transition", "max_stretch_ppm")
+
+
+def new_stretcher(channels: int | list[str], rate: int) -> OutputStretcher:
+    """A cushion's stretcher at the knobs' defaults (the session moves it to the chain's every block).
+    A cushion's level reads move by a driver quantum on their own: that is its tolerance."""
+    from aurasync.chain import ChainValues  # noqa: PLC0415 - the chain pulls the DSP; the cushion stays light
+    from aurasync.dsp.stretch import OutputStretcher  # noqa: PLC0415
+
+    start, top = stretch_limits(ChainValues())
+    return OutputStretcher(channels, rate, start, top, tolerance=DRIVER_QUANTUM_FRAMES)
+
+
+class _Steering:
+    """When a cushion asks its stretcher for frames (dsp/stretch.py; spec
+    docs/superpowers/specs/2026-10-08-seamless-transitions-design.md §4b), the same for both cushions.
+
+    A pipe that reads more than a quantum under the target (`low`) for `LOW_BLOCKS` blocks in a row
+    asks for the missing frames, `target - level`; one that reads over `high` as long asks to drop down
+    to `drain_to`. The rule is the one the last resort uses against a late block: a single reading
+    starts nothing. While the stretcher runs, every reading tells it again what is missing as the pipe
+    reads now; the stretcher steps `ε` up when that is more than it still owes by a quantum (the pipe
+    kept falling), down when it is less (it recovered), and lands once nothing is missing.
+
+    **Its own brake** (review 2026-10-09): an episode that has moved more than a target's worth of
+    frames while the pipe reads no better than when it started is not helping (a reading that lies, or
+    a drain faster than the maximum). It lands, and no stretch is asked again in this session
+    (`gave_up`), as the speakers' cut stops after `MAX_FAILED`."""
+
+    def __init__(self, stretcher: OutputStretcher, target: int, high: int, drain_to: int) -> None:
+        self.stretcher = stretcher
+        self.target = target
+        self.low = target - DRIVER_QUANTUM_FRAMES
+        self.high = high
+        self.drain_to = drain_to
+        self._short = 0
+        self._over = 0
+        self.gave_up = False
+        self._start: tuple[int, int] | None = None
+        """At the episode's first reading: the level and the stretcher's `stretched_frames`."""
+
+    @property
+    def enabled(self) -> bool:
+        return self.stretcher.enabled and not self.gave_up
+
+    def wanted(self, level: int) -> int:
+        """Frames to add (negative: to drop) for a pipe at `level`, in the direction it is stretching."""
+        if self.stretcher.direction < 0:
+            return min(0, self.drain_to - level)
+        return max(0, self.target - level)
+
+    def step(self, level: int, *, fits: bool = True) -> bool:
+        """After each reading the last resort did not take. True when it asked for a new stretch.
+        `fits`: the frames can go to every pipe (the speakers' room check); a stretch that cannot lands."""
+        s = self.stretcher
+        self._short = self._short + 1 if level < self.low else 0
+        self._over = self._over + 1 if level > self.high else 0
+        if not fits:
+            self.cancel()
+            return False
+        if s.active:
+            if self._not_helping(level):
+                self.gave_up = True
+                self.cancel()
+                return False
+            s.want(self.wanted(level))
+            return False
+        self._start = None
+        if self._short >= LOW_BLOCKS:
+            self._short = 0
+            self._start = (level, s.stretched_frames)
+            s.want(self.target - level)
+            return True
+        if self._over >= LOW_BLOCKS:
+            self._over = 0
+            self._start = (level, s.stretched_frames)
+            s.want(self.drain_to - level)
+            return True
+        return False
+
+    def _not_helping(self, level: int) -> bool:
+        if self._start is None:
+            self._start = (level, self.stretcher.stretched_frames)
+            return False
+        level0, frames0 = self._start
+        if self.stretcher.stretched_frames - frames0 <= self.target:
+            return False
+        return level <= level0 if self.stretcher.direction > 0 else level >= level0
+
+    def cancel(self) -> None:
+        self._short = self._over = 0
+        self.stretcher.cancel()
+
+
 class Cushion:
     """How much audio the monitor keeps ahead in the pipe of `pw-play`, as a pure decision.
 
@@ -56,7 +161,7 @@ class Cushion:
     the target is one block plus one driver quantum, capped at `MAX_CUSHION_S`. `plan` is asked
     before every block with the pipe level in frames."""
 
-    def __init__(self, block: int, rate: int) -> None:
+    def __init__(self, block: int, rate: int, stretcher: OutputStretcher | None = None) -> None:
         self.block = block
         self.rate = rate
         self.target_frames = target_frames(block, rate)
@@ -66,6 +171,15 @@ class Cushion:
         self._primed = False
         """The first level read after the open is the priming: the open-time silence has been
         draining while the routing was checked, so finding the pipe low then is not a starvation."""
+        self.stretcher = stretcher
+        """The monitor's own stretcher (stage 4): a pipe more than a quantum under the target, or more
+        than a block over it, is refilled or drained by playing slightly slower or faster. The silence
+        refill (under a quantum) and the trim (over two blocks) stay as the last resort."""
+        self._steer = (
+            None
+            if stretcher is None
+            else _Steering(stretcher, self.target_frames, self.target_frames + block, self.target_frames)
+        )
 
     @property
     def target_ms(self) -> float:
@@ -75,21 +189,47 @@ class Cushion:
     def level_ms(self) -> float | None:
         return None if self.level_frames is None else self.level_frames / self.rate * 1000
 
+    @property
+    def stretched_frames(self) -> int:
+        return 0 if self.stretcher is None else self.stretcher.stretched_frames
+
+    @property
+    def stretch_ppm(self) -> float:
+        return 0.0 if self.stretcher is None else self.stretcher.epsilon_ppm
+
+    @property
+    def stretch_gave_up(self) -> bool:
+        return self._steer is not None and self._steer.gave_up
+
     def plan(self, level_frames: int | None) -> tuple[int, bool]:
-        """`(frames of silence to write first, whether to write the block)`."""
+        """`(frames of silence to write first, whether to write the block)`. The block then goes
+        through `process`."""
         self.level_frames = level_frames
+        steer = self._steer if self._steer is not None and self._steer.enabled else None
         if level_frames is None:
+            if steer is not None:
+                steer.cancel()
             return 0, True
         first, self._primed = not self._primed, True
         if first and level_frames < DRIVER_QUANTUM_FRAMES:
             return self.target_frames - level_frames, True
         if level_frames < DRIVER_QUANTUM_FRAMES:
             self.refills += 1
+            if steer is not None:
+                steer.cancel()
             return self.target_frames - level_frames, True
         if level_frames > self.target_frames + BACKLOG_BLOCKS * self.block:
             self.trims += 1
+            if steer is not None:
+                steer.cancel()
             return 0, False
+        if steer is not None:
+            steer.step(level_frames)
         return 0, True
+
+    def process(self, block):
+        """The block as it goes into the pipe: through the stretcher, the very same one while idle."""
+        return block if self.stretcher is None else self.stretcher.process(block)
 
 
 class SharedCushion:
@@ -110,6 +250,14 @@ class SharedCushion:
     is unchanged (sizing each pipe on its own level would move it). There is no trim: the pipe's size
     already bounds what can wait in it, and a full pipe holds the write back.
 
+    Stage 4: that cut and pad are now the last resort. Before them, a lowest pipe more than a quantum
+    under the target (`LOW_BLOCKS` in a row) asks the speakers' one stretcher for the missing frames,
+    which every speaker gets alike, so their alignment holds as with the pad. A lowest pipe more than
+    `BACKLOG_BLOCKS` over the target (the input backed up: the speakers' clock slower) is drained to that
+    line by playing faster (INFERIDO that it reads that high only then: with the default pipe the paced
+    level sits about a block and a half over the target). Not during a calibration, and only for frames
+    that fit in the fullest pipe; a pipe that still reaches the last resort gets it, and the stretch lands.
+
     In `separado` with clocks that differ between speakers the pipes spread apart. An equal refill
     keeps that spread (it is their alignment), so it cannot stop the fastest from running dry once the
     slowest has filled its pipe and holds the write back: that is what `combinado` is for
@@ -121,11 +269,15 @@ class SharedCushion:
     back near the target within `CHECK_S`, no more (`gave_up`). A new session starts a new cushion.
     """
 
-    def __init__(self, block: int, rate: int) -> None:
+    def __init__(self, block: int, rate: int, stretcher: OutputStretcher | None = None) -> None:
         self.block = block
         self.rate = rate
         self.target_frames = target_frames(block, rate)
         self.refills = 0
+        self.stretcher = stretcher
+        """One for every real speaker (stage 4): the output set runs their blocks through it."""
+        high = self.target_frames + BACKLOG_BLOCKS * block
+        self._steer = None if stretcher is None else _Steering(stretcher, self.target_frames, high, high)
         self.level_frames: int | None = None
         """The lowest pipe level read before the last write, in frames; `None` if unreadable."""
         self.pending = False
@@ -162,22 +314,69 @@ class SharedCushion:
         self._blocks += 1
         self.level_frames = level_frames
         self._check(level_frames)
+        no_room = NO_READING if room_frames is None else NO_ROOM_SEPARATE if separate else NO_ROOM
         if level_frames is None or level_frames >= DRIVER_QUANTUM_FRAMES:
             self._low = 0
-            self.reason = None
+            refused = self._stretch(level_frames, room_frames, may_cut=may_cut)
+            self.reason = no_room if refused else None
             return False
         self._low += 1
+        if self._low < LOW_BLOCKS:
+            self._stretch(level_frames, room_frames, may_cut=may_cut)  # one late block is not dry
+        elif self._steer is not None:
+            # The pipe is about to run dry anyway: the stretch yields to the last resort, whether
+            # the cut can be asked now or not (spec §4b; review 2026-10-09).
+            self._steer.cancel()
         if self.pending or self.gave_up or not may_cut or self._low < LOW_BLOCKS:
             return False
-        if room_frames is None or self.target_frames - level_frames > room_frames - self.block:
-            self.reason = NO_READING if room_frames is None else NO_ROOM_SEPARATE if separate else NO_ROOM
+        if not self._fits(level_frames, room_frames):
+            self.reason = no_room
             return False
         if self._last_cut is not None and self._blocks - self._last_cut < self._blocks_for(MIN_GAP_S):
             return False
         self.reason = None
         self.pending = True
         self._last_cut = self._blocks
+        if self._steer is not None:
+            self._steer.cancel()  # the last resort: the pad brings the pipe back, the stretch lands
         return True
+
+    def _fits(self, level_frames: int, room_frames: int | None) -> bool:
+        """The frames that bring the lowest pipe to the target fit in the fullest one with a block."""
+        need = self.target_frames - level_frames
+        return need <= 0 or (room_frames is not None and need <= room_frames - self.block)
+
+    def _stretch(self, level_frames: int | None, room_frames: int | None, *, may_cut: bool) -> bool:
+        """Stage 4: ask the stretcher before the pipe gets near the last resort (`_Steering`). Not while
+        a calibration owns the speakers (the stretch would move what the microphone measures), nor
+        without a reading, nor while a cut is pending or after the cushion gave up (the last resort has
+        the pipe then; review 2026-10-09), and only for frames that fit in every pipe, as the pad. True
+        when the pipe is in the stretch zone and the frames do not fit (the state says why). Called
+        when no cut is asked in this reading: one that is asked lands the stretch itself."""
+        steer = self._steer
+        if steer is None or not steer.enabled:
+            if steer is not None:
+                steer.stretcher.cancel()  # turned off by its knob, or given up: it lands
+            return False
+        if not may_cut or level_frames is None or self.pending or self.gave_up:
+            steer.cancel()
+            return False
+        fits = self._fits(level_frames, room_frames)
+        steer.step(level_frames, fits=fits)
+        return not fits and level_frames < steer.low
+
+    @property
+    def stretched_frames(self) -> int:
+        return 0 if self.stretcher is None else self.stretcher.stretched_frames
+
+    @property
+    def stretch_ppm(self) -> float:
+        return 0.0 if self.stretcher is None else self.stretcher.epsilon_ppm
+
+    @property
+    def stretch_gave_up(self) -> bool:
+        """The stretch moved a target's worth of frames without raising the pipe: no more this session."""
+        return self._steer is not None and self._steer.gave_up
 
     def _check(self, level_frames: int | None) -> None:
         """Whether the last refill brought the lowest pipe back. Read before a write, a refilled pipe

@@ -50,6 +50,9 @@ SWITCH_LIMIT_PCT = DEFAULT_DEVICE_LIMIT_PCT
 (the sink may sit at an old ceiling while the software gain was low)."""
 FALLBACK_REASON = "no se pudo verificar el volumen del audífono: usando volumen por software"
 """Shown in the panel as is (panel copy is Spanish): the monitor plays at `gain_db` instead."""
+REOPEN_MIN_S = 5.0
+"""At most one reopen this often: a player that dies as soon as it opens must not spin."""
+GONE_REASON = "the target sink is gone from PipeWire: the monitor reopens when it is back"
 
 
 def forbidden_targets(installation: Instalacion | None, sink_name: str) -> set[str]:
@@ -93,6 +96,7 @@ class MonitorController:
         self._session: Any = None
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurasync-monitor-open")
         self._future: Future | None = None
+        self._close_future: Future | None = None
         self.backend = backend
         self._sleep = sleep
         self._clock = clock
@@ -107,6 +111,18 @@ class MonitorController:
         """A level asked for and not seen yet on the sink: its reason stays until it is."""
         self.fallback_reason: str | None = None
         """Why the open output plays at the software gain although the choice is the device."""
+        self._opened_with: tuple | None = None
+        """`_apply`'s arguments, to reopen the same output when its stream is lost (`watch`)."""
+        self.on_since: float | None = None
+        """Wall-clock time (`time.time`, the observer's) the attached output was verified at."""
+        self._target_id: int | None = None
+        """The target's PipeWire id as first observed while on: a new one is a rebuilt sink."""
+        self._reopened_at: float | None = None
+        self._reopen_pending = False
+        """A lost output whose reopen waits for `REOPEN_MIN_S`."""
+        self._suspect: tuple[float, str | None] | None = None
+        """A graph that showed the stream away from the target (`read_at`, where): acted on only
+        when the next graph shows the same (one read may catch a link being made)."""
 
     # -- engine thread ----------------------------------------------------------------
 
@@ -260,7 +276,7 @@ class MonitorController:
     def session_closed(self) -> None:
         self._generation += 1
         self._session = None
-        self.routed_to = None
+        self.routed_to, self.error = None, None
         if self.settings.mode != "off":
             self.state = "waiting"
 
@@ -270,10 +286,11 @@ class MonitorController:
         self._generation += 1
         generation = self._generation
         self._session = session
+        self._opened_with = (installation, sink_name, rate, block)
+        self._target_id, self.on_since, self._reopen_pending, self._suspect = None, None, False, None
         self.error, self.routed_to, self.fallback_reason = None, None, None
         attach = getattr(session, "attach_monitor", None)
-        if attach is not None:
-            attach(None)
+        self._detach(session)
         if self.settings.mode == "off":
             self.state = "off"
             return
@@ -317,6 +334,21 @@ class MonitorController:
 
         self._future = self._pool.submit(open_it)
 
+    def _detach(self, session: Any) -> None:
+        """Take the attached output out here, on the engine thread, and close it on the worker,
+        before any open queued after it. Closing waits for the writer and `pw-play` (seconds when a
+        stream linked nowhere never drains): on the engine thread it would cut the speakers
+        (review, 2026-10-09)."""
+        detach = getattr(session, "detach_monitor", None)
+        if detach is None:
+            attach = getattr(session, "attach_monitor", None)
+            if attach is not None:
+                attach(None)
+            return
+        previous = detach()
+        if previous is not None:
+            self._close_future = self._pool.submit(previous.close)
+
     def _checked_safety(self, settings: MonitorSettings) -> tuple[bool, str]:
         """The safety on the volume thread, waited for at most `SAFETY_TIMEOUT_S`. Anything but
         a sink seen at or below the ceiling is "not verified", with why."""
@@ -330,7 +362,7 @@ class MonitorController:
 
     def _opened(self, generation: int, session: Any, out: Any, where: str | None, fallback: str | None = None) -> None:
         if generation != self._generation:
-            out.close()
+            self._close_future = self._pool.submit(out.close)  # never on the engine thread
             return
         if where != self.settings.target:
             log.warning("the monitor went to %s, not to %s", where or "nothing", self.settings.target)
@@ -350,6 +382,96 @@ class MonitorController:
         session.attach_monitor(out)
         self.routed_to = where
         self.state = "on"
+        self.on_since = time.time()
+
+    # -- the target goes away (engine thread, at each new observation) --------------------
+
+    def watch(self, sinks: list[dict[str, Any]] | None, graph: tuple[float, Any] | None = None) -> None:
+        """Check, at each new observation of the system, that the attached output still reaches
+        its target, and bring it back when it does not.
+
+        The output's stream asks WirePlumber never to move it (`node.dont-reconnect`, so it never
+        lands on a speaker: experimentos/09). When the target sink goes away, WirePlumber then
+        destroys the stream instead of waiting for it (`linking/prepare-link.lua`, 0.5.18), and a
+        Bluetooth profile switch rebuilds the sink under the same name with a new id: the monitor
+        is silent from then on (HP-O16, 2026-10-09, experimentos/23 §7). Acted on at once: the
+        player stopped (`lost`), the target absent from the observed sinks, the target's id
+        changed, or the open itself not linked to the target (bounded by `REOPEN_MIN_S`). Acted on
+        when two graphs in a row read after the output opened say so: its stream linked nowhere,
+        or to another sink (experimentos/09: a monitor on a speaker loops back).
+
+        `sinks`: the observer's sinks (`node`, `id`); None or empty, nothing was observed and
+        nothing is decided. `graph`: `(read_at, pw-dump)` from the same observation, if any."""
+        if not sinks or self.settings.mode == "off" or self._session is None or self._opened_with is None:
+            return
+        target = self.settings.target
+        observed = {str(s.get("node")): s.get("id") for s in sinks}
+        if self.state == "waiting" and self.error == GONE_REASON:
+            if target in observed:
+                log.info("monitor: %s is back; reopening", target)
+                self._reopen()
+            return
+        if self.state != "on":
+            return
+        if self._reopen_pending:
+            self._reopen()
+            return
+        out = getattr(self._session, "monitor", None)
+        why, routed = None, None
+        where: str | None = None
+        fresh = (
+            graph is not None
+            and out is not None
+            and hasattr(out, "routing")
+            and self.on_since is not None
+            and graph[0] > self.on_since
+        )
+        if fresh:
+            where = out.routing(graph[1])
+        if target not in observed:
+            why = "gone"
+        elif out is not None and getattr(out, "lost", False):
+            why = "its player stopped"
+        elif self._target_id is not None and observed[target] is not None and observed[target] != self._target_id:
+            why = f"rebuilt (id {self._target_id} -> {observed[target]})"
+        elif fresh and where == target:
+            self._suspect = None
+            if self.routed_to != target:
+                log.info("monitor: now linked to %s", target)
+                self.routed_to = target  # the link came after the open's own check
+        elif self.routed_to != target:
+            # The open itself did not reach it (or a reopen landed nowhere): try again, bounded.
+            why, routed = f"not linked to it since it opened (to {self.routed_to or 'nothing'})", self.routed_to
+        elif fresh:
+            # Away from the target in this graph: acted on when the next one says the same.
+            if self._suspect is not None and self._suspect[0] != graph[0] and self._suspect[1] == where:
+                why, routed = f"its stream is linked to {where or 'nothing'}", where
+            else:
+                self._suspect = (graph[0], where)
+        if why is None:
+            if self._target_id is None:
+                self._target_id = observed[target]
+            return
+        log.warning("monitor: lost %s (%s)", target, why)
+        # What the graph showed (`reached` false at once), or nothing.
+        self.routed_to = routed
+        if why == "gone":
+            self._generation += 1
+            self._detach(self._session)
+            self.state, self.error = "waiting", GONE_REASON
+            return
+        self._reopen()
+
+    def _reopen(self) -> None:
+        """The same output again, verified as at any open. At most every `REOPEN_MIN_S`: until
+        then `routed_to` stays None, so the state does not say it reaches the target."""
+        now = self._clock()
+        if self._reopened_at is not None and now - self._reopened_at < REOPEN_MIN_S:
+            self._reopen_pending = True
+            return
+        self._reopened_at = now
+        installation, sink_name, rate, block = self._opened_with
+        self._apply(self._session, installation, sink_name, rate, block)
 
     def _levels(self, session: Any) -> Callable[[], Levels]:
         """Read on the engine thread at every block, where the service and the motor live."""
@@ -388,12 +510,16 @@ class MonitorController:
             "error": self.error,
             "routed_to": self.routed_to,
             "reached": self.state == "on" and self.routed_to == self.settings.target,
+            "target_gone": self.state == "waiting" and self.error == GONE_REASON,
             "drops": drops,
             "cushion_ms": None if cushion is None else round(cushion.target_ms, 1),
             "level_ms": None if cushion is None or cushion.level_ms is None else round(cushion.level_ms, 1),
             "refills": 0 if cushion is None else cushion.refills,
             "pipe_bytes": getattr(monitor, "pipe_bytes", None),
             "trims": 0 if cushion is None else cushion.trims,
+            "stretched_frames": getattr(cushion, "stretched_frames", 0),
+            "stretch_ppm": None if cushion is None else round(getattr(cushion, "stretch_ppm", 0.0), 1),
+            "stretch_gave_up": getattr(cushion, "stretch_gave_up", False),
             "makeup_db": round(self.match.current_db, 1) if matched else None,
             "loudness_reference": _round(getattr(monitor, "loudness_reference", None)) if matched else None,
             "loudness_monitor": _round(getattr(monitor, "loudness_monitor", None)) if matched else None,
@@ -412,7 +538,7 @@ class MonitorController:
     # -- tests and shutdown -------------------------------------------------------------
 
     def wait(self) -> None:
-        for future in (self._future, self._vol_future):
+        for future in (self._future, self._close_future, self._vol_future):
             if future is not None:
                 future.result(timeout=10)
 

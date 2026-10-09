@@ -238,6 +238,9 @@ class Observer:
         self._thread: threading.Thread | None = None
         self._busy: set[str] = set()
         self._xrun_history: list[tuple[float, dict[str, int]]] = []
+        self.graph: tuple[float, list] | None = None
+        """The last `pw-dump` and when it was read (`time.time`): the monitor checks its own
+        stream on it (monitor_control.MonitorController.watch) without reading the graph again."""
 
     def start(self) -> None:
         if not self.enabled or self._thread is not None:
@@ -269,6 +272,15 @@ class Observer:
             {"sink": o.nodo, "name": o.descripcion, "codec": o.codec, "address": o.direccion}
             for o in sonido.salidas_bluetooth()
         ]
+        read_at = time.time()
+        dump = sonido._pw_dump()  # noqa: SLF001 - the graph's one reader
+        self.graph = (read_at, dump)
+        # A Bluetooth node's device, when its name does not say it (microphones.py).
+        addresses = {
+            str(p["node.name"]): str(p["api.bluez5.address"])
+            for p in ((o.get("info") or {}).get("props") or {} for o in dump)
+            if p.get("node.name") and p.get("api.bluez5.address")
+        }
         return {
             "units": units,
             "devices": devices,
@@ -276,9 +288,11 @@ class Observer:
             "discovering": parse_bluez_discovering(bluez),
             "apps": list_apps(),
             "microphones": [
-                {"node": e.nodo, "description": e.descripcion} for e in sonido.entradas_audio() if not e.es_monitor
+                {"node": e.nodo, "description": e.descripcion, "address": addresses.get(e.nodo)}
+                for e in sonido.entradas_audio()
+                if not e.es_monitor
             ],
-            "sinks": monitor.list_sinks(sonido._pw_dump()),  # noqa: SLF001 - the graph's one reader
+            "sinks": monitor.list_sinks(dump),
             "xruns": self._read_xruns(),
             "at": time.time(),
         }

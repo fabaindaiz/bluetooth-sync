@@ -133,6 +133,17 @@ class PresetStore:
             self.presets[name] = preset
             raise
 
+    def rename(self, name: str, new_name: str) -> None:
+        """Move `name` to `new_name` in one atomic write (the caller checks `new_name` is free)."""
+        self.get(name)
+        before = self.presets
+        self.presets = {(new_name if key == name else key): value for key, value in before.items()}
+        try:
+            self._write()
+        except BaseException:
+            self.presets = before
+            raise
+
 
 def read_lenient(path: Path, log: Callable[[str], None]) -> Any:
     """The JSON in `path`, or None. A file that cannot be read is logged and kept aside as
@@ -209,3 +220,15 @@ class PresetChainStore:
         except BaseException:
             self.parts[name] = part
             raise
+
+    def rename(self, name: str, new_name: str) -> None:
+        """Copy the part of `name` to `new_name`, then drop the old one. The copy is written
+        first, so a crash in between leaves an unused entry, never a preset without its part."""
+        part = self.parts.get(name)
+        if part is None:
+            # No part to move: a stale one under `new_name` (a crash, a failed delete) must not
+            # be inherited by the renamed preset.
+            self.delete(new_name)
+            return
+        self.save(new_name, part)
+        self.delete(name)

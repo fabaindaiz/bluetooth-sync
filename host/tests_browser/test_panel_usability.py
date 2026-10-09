@@ -129,6 +129,7 @@ def test_deleting_a_preset_waits_for_the_notice_and_undo_keeps_it(page: Page, sv
     svc.command("preset_save", name="cine")
     expect(page.locator("#presets li", has_text="cine")).to_have_count(1)
     page.locator("#presets li", has_text="cine").get_by_role("button", name="Borrar").click()
+    page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
     expect(page.locator("#presets li", has_text="cine")).to_have_count(0)
     assert "cine" in svc.state()["presets"]
     undo(page)
@@ -137,6 +138,7 @@ def test_deleting_a_preset_waits_for_the_notice_and_undo_keeps_it(page: Page, sv
     assert "cine" in svc.state()["presets"]
     page.evaluate("window.aurasync.undo.setDuration(800)")
     page.locator("#presets li", has_text="cine").get_by_role("button", name="Borrar").click()
+    page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
     expect(page.locator("#undo")).to_be_hidden(timeout=5000)
     page.wait_for_timeout(500)
     assert "cine" not in svc.state()["presets"]

@@ -37,6 +37,7 @@ from aurasync.cushion import (  # noqa: F401 - DRIVER_QUANTUM_FRAMES and MAX_CUS
     DRIVER_QUANTUM_FRAMES,
     MAX_CUSHION_S,
     Cushion,
+    new_stretcher,
 )
 from aurasync.dsp.loudness import LoudnessMeter
 
@@ -190,20 +191,32 @@ def check_target(settings: MonitorSettings, forbidden: set[str]) -> None:
         raise LoopError(msg)
 
 
-def list_sinks(dump: list[dict]) -> list[dict[str, str]]:
-    """Every output PipeWire has (`Audio/Sink`), from `pw-dump`, in its order."""
+def list_sinks(dump: list[dict]) -> list[dict[str, Any]]:
+    """Every output PipeWire has (`Audio/Sink`), from `pw-dump`, in its order, with its id: a
+    Bluetooth profile switch rebuilds a sink under the same name, and only the id tells."""
     out = []
     for o in dump:
         props = (o.get("info") or {}).get("props") or {}
         if str(o.get("type")).endswith("Node") and props.get("media.class") == "Audio/Sink" and props.get("node.name"):
             name = str(props["node.name"])
-            out.append({"node": name, "description": str(props.get("node.description") or name)})
+            out.append(
+                {
+                    "node": name,
+                    "description": str(props.get("node.description") or name),
+                    "id": o.get("id"),
+                    "address": props.get("api.bluez5.address"),
+                }
+            )
     return out
 
 
-def candidates(sinks: list[dict[str, str]], forbidden: set[str]) -> list[dict[str, str]]:
+def candidates(sinks: list[dict[str, Any]], forbidden: set[str]) -> list[dict[str, str]]:
     """The sinks the monitor may go to: not a speaker of the installation, not aurasync's own."""
-    return [s for s in sinks if s["node"] not in forbidden and not s["node"].startswith("aurasync")]
+    return [
+        {"node": s["node"], "description": s["description"]}
+        for s in sinks
+        if s["node"] not in forbidden and not s["node"].startswith("aurasync")
+    ]
 
 
 def fold(blocks: dict[str, np.ndarray], angles: dict[str, float]) -> tuple[np.ndarray, np.ndarray]:
@@ -369,7 +382,8 @@ class Writer:
     """Writes frames from its own thread; `push` never waits. When the device falls behind the
     oldest frame is dropped and counted: a monitor that stutters is better than an engine that
     is late for the speakers. With a `cushion` it reads the pipe `level` (frames) before each
-    block and refills with silence or drops the block as the cushion says."""
+    block and refills with silence or drops the block as the cushion says, and sends the block through
+    the cushion's stretcher (stage 4: slightly slower or faster while the pipe is off its target)."""
 
     def __init__(
         self,
@@ -410,6 +424,7 @@ class Writer:
                         self._write(bytes(4 * self._channels * silence))
                     if not keep:
                         continue
+                    out = self.cushion.process(out)  # the cushion's stretcher (stage 4): idle, the same block
                 self._write(np.clip(out, -1.0, 1.0).astype("<f4").tobytes())
             except (BrokenPipeError, OSError, ValueError):
                 self.failed = True
@@ -449,7 +464,7 @@ class MonitorOutput:
         self._module: subprocess.Popen | None = None
         self._play: subprocess.Popen | None = None
         self.writer: Writer | None = None
-        self.cushion = Cushion(block, rate)
+        self.cushion = Cushion(block, rate, new_stretcher(self.channels, rate))
         self.pipe_bytes: int | None = None
         """The pipe's real size after asking for room for the cushion; `None` if it could not be set."""
         self.levels: Callable[[], Levels] = Levels
@@ -628,6 +643,14 @@ class MonitorOutput:
     @property
     def pid(self) -> int | None:
         return self._play.pid if self._play is not None and self._play.poll() is None else None
+
+    @property
+    def lost(self) -> bool:
+        """The player is gone: `pw-play` exited, or its pipe broke under the writer. Nothing
+        it gets reaches the target any more (monitor_control.MonitorController.watch)."""
+        if self._play is None:
+            return False
+        return self._play.poll() is not None or (self.writer is not None and self.writer.failed)
 
     def where(self) -> str | None:
         """`routing` on a fresh `pw-dump`, once the stream had time to link (it links after its

@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from aurasync import monitor
+from aurasync.dsp.stretch import OutputStretcher
 
 
 def test_a_speaker_on_the_left_folds_only_to_the_left():
@@ -117,6 +118,14 @@ def test_the_candidate_sinks_leave_out_speakers_and_aurasync():
         {"node": "alsa_out", "description": "PC"},
         {"node": "bluez_output.phones", "description": "Phones"},
     ]
+
+
+def test_each_sink_carries_its_pipewire_id_and_the_candidates_do_not():
+    """A Bluetooth profile switch rebuilds a sink under the same name: only its id tells (the
+    monitor's watch, 2026-10-09). The panel's candidates stay as they were."""
+    sinks = monitor.list_sinks([_node(2075, "bluez_output.phones", description="Phones")])
+    assert sinks == [{"node": "bluez_output.phones", "description": "Phones", "id": 2075, "address": None}]
+    assert monitor.candidates(sinks, forbidden=set()) == [{"node": "bluez_output.phones", "description": "Phones"}]
 
 
 def _graph(stream_to: str | None):
@@ -400,3 +409,125 @@ def test_a_pipe_that_cannot_be_resized_is_logged_and_reported(monkeypatch, caplo
     out.writer.close()
     assert out.pipe_bytes is None
     assert "could not be resized" in caplog.text
+
+
+# -- the monitor's cushion by stretching (spec 2026-10-08 §4b, stage 4) ----------------------------
+
+
+def _stretching_cushion(channels=2):
+    stretcher = OutputStretcher(channels, 48000, tolerance=QUANTUM)
+    return monitor.Cushion(BLOCK, 48000, stretcher=stretcher)
+
+
+class _ClockSim:
+    """The monitor's pipe with a block from the engine every two driver cycles; the headphones'
+    driver takes `take` frames a cycle (a quantum, more when their clock runs fast). Each block goes
+    through the cushion as the writer sends it: `plan`, then `process`."""
+
+    def __init__(self, cushion, take, level):
+        self.cushion, self.take, self.level = cushion, take, level
+        self.starved = 0
+        self.silence = 0
+        self.readings = []
+
+    def step(self):
+        for _ in range(2):
+            if self.level < self.take:
+                self.starved += 1
+            self.level = max(0.0, self.level - self.take)
+        reading = int(self.level)
+        self.readings.append(reading)
+        silence, write = self.cushion.plan(reading)
+        self.silence += silence
+        self.level += silence
+        if write:
+            self.level += len(self.cushion.process(np.zeros((BLOCK, 2))))
+
+
+def test_a_monitor_pipe_that_drains_is_refilled_by_stretching_not_silence():
+    """The headphones' clock 300 ppm fast: without the stretch the pipe would fall under a quantum and
+    get silence; with it, it plays slightly slower now and then and never gets there."""
+    cushion = _stretching_cushion()
+    sim = _ClockSim(cushion, QUANTUM * (1 + 300e-6), level=cushion.target_frames + 2 * QUANTUM)
+    cushion.plan(cushion.target_frames)  # the priming read
+    stretched = 0
+    for _ in range(6000):
+        sim.step()
+        stretched = max(stretched, cushion.stretcher.epsilon_ppm)
+    assert stretched > 0
+    assert cushion.refills == 0
+    assert cushion.trims == 0
+    assert sim.starved == 0
+    assert min(sim.readings[100:]) >= QUANTUM
+    assert cushion.stretched_frames > 0
+
+
+def test_without_the_stretch_the_same_drain_gets_silence():
+    cushion = _stretching_cushion()
+    cushion.stretcher.set_limits(0, 5000)
+    sim = _ClockSim(cushion, QUANTUM * (1 + 300e-6), level=cushion.target_frames + 2 * QUANTUM)
+    cushion.plan(cushion.target_frames)
+    for _ in range(6000):
+        sim.step()
+    assert cushion.refills > 0
+    assert cushion.stretched_frames == 0
+
+
+def test_a_monitor_pipe_that_fills_drops_by_stretching_not_trims():
+    """The headphones' clock 300 ppm slow: the backlog grows; it is drained by playing faster, and the
+    trim (a dropped block) stays the last resort."""
+    cushion = _stretching_cushion()
+    sim = _ClockSim(cushion, QUANTUM * (1 - 300e-6), level=cushion.target_frames + 2 * QUANTUM)
+    cushion.plan(cushion.target_frames)
+    lowest = 0.0
+    for _ in range(8000):
+        sim.step()
+        lowest = min(lowest, cushion.stretcher.epsilon_ppm)
+    assert lowest < 0
+    assert cushion.trims == 0
+    assert cushion.refills == 0
+    assert max(sim.readings) <= cushion.target_frames + 2 * BLOCK
+
+
+def test_the_last_resorts_stay_and_the_stretch_yields_to_them():
+    cushion = _stretching_cushion()
+    cushion.plan(cushion.target_frames)  # priming
+    low = cushion.target_frames - QUANTUM - 1
+    for _ in range(3):
+        assert cushion.plan(low) == (0, True)
+    s = cushion.stretcher
+    assert s.active
+    for _ in range(5):
+        cushion.process(np.zeros((BLOCK, 2)))
+    assert cushion.plan(QUANTUM - 1) == (cushion.target_frames - QUANTUM + 1, True), "silence, as before"
+    assert cushion.refills == 1
+    assert 0 <= s.pending_frames < cushion.target_frames - low, "the stretch lands"
+    assert cushion.plan(cushion.target_frames + 2 * BLOCK + 1) == (0, False), "the trim, as before"
+    assert cushion.trims == 1
+
+
+def test_the_writer_sends_the_block_through_the_stretcher():
+    stdin = _Stdin()
+    cushion = _stretching_cushion()
+    low = cushion.target_frames - QUANTUM - 1
+    levels = iter([0])  # the priming read (silence first), then low readings
+    writer = monitor.Writer(stdin.write, cushion=cushion, level=lambda: next(levels, low), channels=2)
+    try:
+        for _ in range(5):
+            writer.push(np.ones((BLOCK, 2)))
+        for _ in range(200):
+            if len(stdin.chunks) >= 6:
+                break
+            time.sleep(0.01)
+    finally:
+        writer.close()
+    sizes = [len(c) // 8 for c in stdin.chunks]
+    assert sizes[:3] == [cushion.target_frames, BLOCK, BLOCK]
+    assert cushion.stretcher.active
+    assert sum(sizes[3:]) != 3 * BLOCK, "stretched: not the blocks' own length"
+
+
+def test_the_monitor_output_opens_with_a_stretcher_for_its_channels():
+    out = monitor.MonitorOutput(monitor.MonitorSettings(mode="stereo", target="hp"), ["a"], {}, 48000, "s", block=BLOCK)
+    assert out.cushion.stretcher is not None
+    assert out.cushion.stretcher.channels == 2

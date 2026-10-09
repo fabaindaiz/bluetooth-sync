@@ -181,3 +181,81 @@ def test_the_simulated_monitor_matches_the_loudness_and_says_so(svc):
     ok(svc, op="monitor_set", mode="binaural", target="simulated_headphones")
     view = _monitor(svc, lambda v: v["state"] == "on" and v["mode"] == "binaural" and v["match"] is not None)
     assert view["match"] != "unmeasured", "the simulated binaural uses the measured HRTF"
+
+
+def _observe(service, sinks):
+    """A new observation of the system, as the observer thread publishes one every few seconds."""
+    service.observer.view = {**service.observer.view, "sinks": sinks, "at": time.time()}
+
+
+def test_a_target_that_vanishes_and_comes_back_reattaches_the_monitor(svc):
+    """2026-10-09, HP-O16: opening the headphones' own microphone switched them to the headset
+    profile, PipeWire rebuilt their sink under the same name, and the monitor stayed silent while
+    the state said it reached them. It must notice, say so, and come back by itself."""
+    ok(svc, op="start")
+    ok(svc, op="monitor_set", mode="mix", target="simulated_headphones")
+    _monitor(svc, lambda v: v["state"] == "on")
+    first = svc.session.monitor
+    sinks = svc.observer.view["sinks"]
+    _observe(svc, [s for s in sinks if s["node"] != "simulated_headphones"])
+    gone = _monitor(svc, lambda v: not v["reached"])
+    assert gone["reached"] is False
+    assert svc.session.monitor is not first
+    _observe(svc, sinks)
+    back = _monitor(svc, lambda v: v["state"] == "on" and v["reached"])
+    assert back["reached"] is True
+    assert back["routed_to"] == "simulated_headphones"
+    assert svc.session.monitor is not None
+    assert svc.session.monitor is not first
+
+
+def test_the_observer_keeps_the_graph_its_sinks_come_from(monkeypatch):
+    """The monitor checks its own stream on the observer's last `pw-dump`, read after it opened,
+    without reading the graph again; the sinks carry their ids (a rebuilt sink changes it)."""
+    from aurasync import sonido, system
+
+    sink = {
+        "type": "PipeWire:Interface:Node",
+        "id": 11643,
+        "info": {
+            "props": {
+                "node.name": "bluez_output.14_06_A7_6B_E3_F0.1",
+                "media.class": "Audio/Sink",
+                "api.bluez5.address": "14:06:A7:6B:E3:F0",
+            }
+        },
+    }
+    mic = {
+        "type": "PipeWire:Interface:Node",
+        "id": 2073,
+        "info": {
+            "props": {
+                "node.name": "headset-mic",
+                "media.class": "Audio/Source",
+                "api.bluez5.address": "14:06:A7:6B:E3:F0",
+            }
+        },
+    }
+    monkeypatch.setattr(sonido, "_pw_dump", lambda: [sink, mic])
+    monkeypatch.setattr(system, "system_unit", lambda _unit, *, user: {"state": "active", "user": user})
+    monkeypatch.setattr(system, "_bluez_objects", lambda: "")
+    monkeypatch.setattr(system, "list_apps", list)
+    monkeypatch.setattr(system, "_run", lambda _args, _timeout=5.0: "")
+    observer = system.Observer(enabled=False)
+    before = time.time()
+    view = observer.read()
+    assert view["sinks"] == [
+        {
+            "node": "bluez_output.14_06_A7_6B_E3_F0.1",
+            "description": "bluez_output.14_06_A7_6B_E3_F0.1",
+            "id": 11643,
+            "address": "14:06:A7:6B:E3:F0",
+        }
+    ]
+    # A microphone whose name does not carry its device: the BlueZ property does (microphones.py).
+    assert view["microphones"] == [
+        {"node": "headset-mic", "description": "headset-mic", "address": "14:06:A7:6B:E3:F0"}
+    ]
+    read_at, dump = observer.graph
+    assert before <= read_at <= view["at"]
+    assert dump == [sink, mic]

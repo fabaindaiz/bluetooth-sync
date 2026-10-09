@@ -554,3 +554,63 @@ def test_a_speaker_s_eq_curve_can_be_written_back(svc):
 def test_a_wrong_eq_curve_is_refused(svc, value, error):
     s = svc()
     assert code(s, op="set", speaker="Red", changes={"eq_db": value}) == error
+
+
+# -- renaming presets ---------------------------------------------------------------------
+
+
+def test_preset_rename_moves_the_preset_and_follows_the_loaded_one(svc):
+    s = svc()
+    ok(s, op="preset_save", name="old")
+    ok(s, op="preset_save", name="other")
+    assert s.preset == "other"
+    ok(s, op="preset_load", name="old")
+    ok(s, op="preset_rename", name="old", new_name="new")
+    assert ok(s, op="state")["presets"] == ["new", "other"]
+    assert s.preset == "new"
+    assert ok(s, op="state")["preset"] == "new"
+    ok(s, op="preset_load", name="new")
+    # Renaming another preset leaves the loaded one alone.
+    ok(s, op="preset_rename", name="other", new_name="third")
+    assert s.preset == "new"
+    # The same name is a no-op, even for a name that is taken by itself.
+    ok(s, op="preset_rename", name="new", new_name="new")
+    assert sorted(ok(s, op="presets")["presets"]) == ["new", "third"]
+
+
+def test_preset_rename_errors(svc):
+    s = svc()
+    ok(s, op="preset_save", name="a")
+    ok(s, op="preset_save", name="b")
+    assert code(s, op="preset_rename", name="nope", new_name="c") == "not_found"
+    assert code(s, op="preset_rename", name="a", new_name="b") == "conflict"
+    assert code(s, op="preset_rename", name="a", new_name="") == "out_of_range"
+    assert code(s, op="preset_rename", name="a") == "bad_request"
+    assert sorted(ok(s, op="presets")["presets"]) == ["a", "b"]
+
+
+def test_preset_rename_is_refused_while_the_blind_ab_uses_it(svc):
+    s = svc()
+    ok(s, op="preset_save", name="a")
+    ok(s, op="set", speaker="Blue", changes={"ambience": 0.9})
+    ok(s, op="preset_save", name="b")
+    ok(s, op="preset_save", name="c")
+    ok(s, op="start")
+    ok(s, op="ab_start", a="a", b="b")
+    assert code(s, op="preset_rename", name="a", new_name="z") == "conflict"
+    assert code(s, op="preset_rename", name="b", new_name="z") == "conflict"
+    ok(s, op="preset_rename", name="c", new_name="z")
+
+
+def test_presets_reply_carries_each_presets_chain_part(svc):
+    s = svc()
+    ok(s, op="preset_save", name="plain")
+    ok(s, op="chain_set", stage="bass", algorithm="protect")
+    ok(s, op="preset_save", name="bass")
+    reply = ok(s, op="presets")
+    assert set(reply["presets"]) == {"plain", "bass"}
+    assert reply["chain"]["bass"]["bass"]["algorithm"] == "protect"
+    assert reply["chain"]["plain"].get("bass") is None
+    ok(s, op="preset_rename", name="bass", new_name="bass2")
+    assert "bass" not in ok(s, op="presets")["chain"]
+    assert ok(s, op="presets")["chain"]["bass2"]["bass"]["algorithm"] == "protect"

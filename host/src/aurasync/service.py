@@ -68,7 +68,7 @@ from urllib.parse import urlsplit
 
 import numpy as np
 
-from aurasync import __version__, control, remote, spatial_docs, sync_docs
+from aurasync import __version__, control, microphones, priority, remote, spatial_docs, sync_docs
 from aurasync import chain as chain_model
 from aurasync import radio as radio_module
 from aurasync.access import ACCESS_OPS
@@ -116,6 +116,7 @@ CONFIG_KEYS = {
     "measurements",
     "monitor",
     "engine",
+    "engine_nice",
     *remote.REMOTE_KEYS,
 }
 PARTS = {
@@ -161,6 +162,10 @@ class ServiceConfig:
     engine: str = backend.NUMPY
     """Who runs the stages ported to Rust (`engine_set`, `dsp/backend.py`): `numpy` or `rust`.
     `AURASYNC_ENGINE` overrides it."""
+    engine_nice: int | None = -15
+    """The niceness the engine thread asks for when the service starts (`priority.py`, roadmap
+    i-7c8794-246f79): -15 by default, what RealtimeKit allows (user, 2026-10-09, after experiment 23
+    §4.1); null leaves it alone. A file without the key gets the default."""
     # Reaching the service from other devices (`remote.py`, d-7c8794-37f9bc):
     tls: bool = False
     """False in a file written before HTTPS existed; a new file gets true."""
@@ -217,6 +222,9 @@ def load_config(path: Path) -> ServiceConfig:
     if config.engine not in backend.ENGINES:
         msg = f"{path}: engine must be one of {list(backend.ENGINES)}; got {config.engine!r}"
         raise ConfigError(msg)
+    nice_problem = priority.check_nice(config.engine_nice)
+    if nice_problem is not None:
+        raise ConfigError(f"{path}: {nice_problem}")
     problems = remote.check_config(config, path)
     if problems:
         raise ConfigError("; ".join(problems))
@@ -382,6 +390,7 @@ class Service:
         monitor: dict | None = None,
         monitor_volume: Any = None,
         engine: str | None = None,
+        engine_nice: int | None = None,
     ) -> None:
         self.installation_path = installation_path
         self.config_path = config_path
@@ -424,6 +433,7 @@ class Service:
         self._stopping = threading.Event()
         self._slow_order_until = 0.0
         self._xruns_seen_at: float | None = None
+        self._monitor_seen_at: float | None = None
         self._xrun_totals: dict[str, int | None] = {}
         self._snapshot: dict = {}
         self.radio = radio
@@ -483,6 +493,10 @@ class Service:
         # A blind A/B moves its own compensation live and compares presets: nothing is learned
         # meanwhile, and the renders stay at their remembered makeups (review 2026-10-06).
         self.render_match.hold_while = lambda: self.ab is not None
+        self.engine_nice = engine_nice
+        """The engine thread's niceness asked for in `service.json`; applied when `run` starts."""
+        self.engine_priority: priority.PriorityResult | None = None
+        """What `run` got for it (`state.health.engine_priority`); None before `run`."""
         self.engine_wanted = backend.wanted(engine)
         """The engine asked for (`service.json`, `AURASYNC_ENGINE`, `engine_set`); `state.engine`
         says which one reads and why it differs."""
@@ -546,6 +560,18 @@ class Service:
         Its `finally` is the one exit of the program's every path (`shutdown`, and SIGTERM and
         Ctrl-C, which `serve` turns into a KeyboardInterrupt raised here): the radio log level
         goes back there."""
+        # The engine thread is this one: its priority is raised here (priority.py); what it starts
+        # afterwards inherits it, the HTTP threads (started elsewhere) do not.
+        self.engine_priority = priority.raise_engine_priority(self.engine_nice)
+        if self.engine_nice is not None:
+            got = self.engine_priority
+            level = logging.INFO if got.reason is None else logging.WARNING
+            self.log(
+                f"engine thread niceness {got.nice} ({got.how or 'unchanged'})"
+                + (f": {got.reason}" if got.reason else ""),
+                level=level,
+                part="engine",
+            )
         self._recover_radio_log()
         if self.radio is not None:
             self.radio.start()
@@ -556,6 +582,7 @@ class Service:
             while not self._stopping.is_set():
                 if self.session is not None:
                     self._watch_system_cuts()
+                    self._watch_monitor()
                     self._step()
                     self._report_cuts()
                     self._drain(block=False)
@@ -679,6 +706,16 @@ class Service:
             cuts.context["slow_order"] = f"{op}, {seconds * 1000:.0f} ms"
             self._slow_order_until = time.monotonic() + 2.0
 
+    def _watch_monitor(self) -> None:
+        """At each new observation of the system: does the monitor still reach its target? A
+        Bluetooth profile switch rebuilds the target and leaves the monitor silent
+        (monitor_control.MonitorController.watch, experimentos/23 §7)."""
+        view = self.observer.view
+        if view.get("at") == self._monitor_seen_at:
+            return
+        self._monitor_seen_at = view.get("at")
+        self.monitor.watch(view.get("sinks"), getattr(self.observer, "graph", None))
+
     def _watch_system_cuts(self) -> None:
         """New xruns from PipeWire, and whether Bluetooth is searching, into the cut log."""
         cuts = getattr(self.session, "cuts", None)
@@ -768,6 +805,15 @@ class Service:
             # Without a microphone the loop cannot run; playing still can.
             self.log("no microphone: playing without the recalibration loop", level=logging.WARNING, part="session")
             recalibrate = False
+        blocked = self.microphone_blocked(self.options.microphone) if recalibrate else None
+        if blocked is not None:
+            # Never opened (microphones.py); the choice stays, the panel asks for another one.
+            self.log(
+                f"{self.options.microphone} {blocked}: playing without the recalibration loop",
+                level=logging.WARNING,
+                part="session",
+            )
+            recalibrate = False
         options = replace(
             self.options,
             block=s.block_size,
@@ -795,6 +841,8 @@ class Service:
             # The speakers carry the volume: the digital one starts at 0 dB.
             motor.saltar_volumen(0.0)
         session = self.session_factory(installation, motor, options, self._session_log)
+        # Before `open`: the loop may open the microphone there.
+        session.microphone_guard = self.microphone_blocked
         if hasattr(motor, "jump_render_makeup"):
             session.render_match = self.render_match
         if hasattr(session, "bt_volumes"):
@@ -1379,7 +1427,8 @@ class Service:
         return self.set_speaker(speaker, {"pan": pan, "ambience": ambience})
 
     def presets(self) -> dict:
-        return {"presets": self.preset_store.presets}
+        # `chain` is sparse: a preset saved before the chain existed has no entry.
+        return {"presets": self.preset_store.presets, "chain": self.presets_chain.parts}
 
     def preset_save(self, name: str) -> dict:
         installation = self._need_installation()
@@ -1477,6 +1526,25 @@ class Service:
             self.preset = None
         return {}
 
+    def preset_rename(self, name: str, new_name: str) -> dict:
+        self.preset_store.get(name)
+        if new_name == name:
+            return self._changed(dirty=False)
+        if new_name in self.preset_store.presets:
+            raise ContractError("conflict", f"there is already a preset {new_name!r}")
+        if self.ab is not None and name in {self.ab.a, self.ab.b}:
+            raise ContractError("conflict", f"{name!r} is in the blind A/B test; stop it first")
+        # The chain part first: a crash after it leaves an unused entry, never an orphaned part.
+        self.presets_chain.rename(name, new_name)
+        try:
+            self.preset_store.rename(name, new_name)
+        except BaseException:
+            self.presets_chain.rename(new_name, name)
+            raise
+        if self.preset == name:
+            self.preset = new_name
+        return self._changed(dirty=False)
+
     def save(self) -> dict:
         installation = self._need_installation()
         text = json.dumps(asdict(installation), indent=2, ensure_ascii=False) + "\n"
@@ -1518,6 +1586,8 @@ class Service:
 
     def recalibrate(self, active: bool) -> dict:  # noqa: FBT001 - the contract's field
         session = self._need_session()
+        if active:
+            self._refuse_blocked_microphone(self.options.microphone)
         try:
             if active:
                 session.enable_recalibration(self.options.microphone)
@@ -1675,6 +1745,7 @@ class Service:
         available = [m["node"] for m in self.observer.view.get("microphones", [])]
         if node is not None and available and node not in available:
             raise ContractError("out_of_range", f"{node!r} is not a microphone the system lists: {available}")
+        self._refuse_blocked_microphone(node)
         session = self.session
         if (
             session is not None
@@ -1699,6 +1770,39 @@ class Service:
             write_atomic(self.config_path, json.dumps(data, indent=2) + "\n", mode=0o600)
         self.log(f"microphone: {node or 'none'}", part="calibration")
         return {}
+
+    # -- microphones that are never opened (microphones.py) ------------------------------
+
+    def outputs_in_use(self) -> list[microphones.OutputInUse]:
+        """The monitor's target (while chosen) and the installation's speakers: a Bluetooth
+        microphone of any of them is never opened."""
+        view = self.observer.view
+        names = {d.get("address"): d.get("name") for d in view.get("devices", [])}
+        sinks = {s.get("node"): s for s in view.get("sinks") or []}
+        used = []
+        target = self.monitor.settings.target if self.monitor.settings.mode != "off" else None
+        if target:
+            prop = sinks.get(target, {}).get("address")
+            address = microphones.bluetooth_address(target, prop)
+            name = names.get(address) or sinks.get(target, {}).get("description") or target
+            used.append(microphones.OutputInUse(target, "monitor", str(name), prop))
+        speakers = self.installation.parlantes if self.installation is not None else []
+        used.extend(
+            microphones.OutputInUse(p.sink, "speaker", p.nombre, sinks.get(p.sink, {}).get("address"))
+            for p in speakers
+            if p.sink is not None
+        )
+        return used
+
+    def microphone_blocked(self, node: str | None) -> str | None:
+        """Why `node` must not be opened (microphones.blocked_reason), or None."""
+        listed = next((m for m in self.observer.view.get("microphones", []) if m.get("node") == node), {})
+        return microphones.blocked_reason(node, self.outputs_in_use(), listed.get("address"))
+
+    def _refuse_blocked_microphone(self, node: str | None) -> None:
+        blocked = self.microphone_blocked(node)
+        if blocked is not None:
+            raise ContractError("unavailable", f"no se abre {node}: {blocked}")
 
     def connect(self, address: str) -> dict:
         try:
@@ -1956,8 +2060,11 @@ class Service:
         self.ab.measure_from = meter.samples + round(AB_SETTLE_S * rate) if meter is not None else None
 
     def _ab_measure(self, meter: Any) -> None:
-        """While A or B plays (never X: its loudness would say which it is), take the
-        short-term loudness of the sum of the outputs; with `match`, compensate the louder."""
+        """While A or B plays (never X: its loudness would say which it is), take the net gain
+        of the last 3 s: the outputs' summed loudness minus the input's, in the same window. A and B
+        play at different moments of the music, so the outputs alone would follow the song, not the
+        presets (experiment 23 §6.4: -1.86 dB to A, then -5.17 dB to B within a minute). With
+        `match`, compensate the louder."""
         ab = self.ab
         if ab is None or ab.playing not in {"a", "b"} or ab.measure_from is None:
             return
@@ -1967,7 +2074,7 @@ class Service:
             return
         if meter.samples < ab.measure_from:
             return
-        heard = meter.outputs_short_term
+        heard = meter.net_lu(meter.short_steps)
         if not math.isfinite(heard):
             return
         ab.raw[ab.playing] = heard - ab.applied

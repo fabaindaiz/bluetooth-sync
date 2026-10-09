@@ -148,6 +148,12 @@ class VirtualBass(_RustOwned):
         self._fir_band = PartitionedFIR(self._band, self.block)
         self._fir_out = PartitionedFIR(self._out, self.block)
 
+    @property
+    def memory_samples(self) -> int:
+        """How much input from before a block its output depends on: the band filter, then the
+        output filter after the rectifier."""
+        return len(self._band) - 1 + len(self._out) - 1
+
     def process(self, x: np.ndarray) -> np.ndarray:
         x = np.asarray(x, dtype=float)
         n = len(x)

@@ -74,10 +74,11 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
 | `start` | `recalibrate` (bool, optional) | Opens the audio session; speakers are checked first |
 | `stop` | — | Closes the session; the program stays up |
 | `set` | `speaker` (optional), `changes` | Per speaker: `pan` [-1, 1], `ambience` [0, 1], `gain_db` [-40, 6]. Global: `rear_delay_ms` [0, 50], `volume_db` [-60, 0], `extract_ambience`, `decorrelate` (bool). Works with the session stopped |
-| `presets` | — | Every saved preset |
+| `presets` | — | Every saved preset (`presets`), and each one's sparse chain part (`chain`, by preset name; a preset saved before the chain has no entry) |
 | `preset_save` | `name` | Saves the artistic fields (no `delay_ms`, no `volume_db`) |
-| `preset_load` | `name` | Applies a preset; while playing, always as a transition by the chain's `transition` mode (an 80 + 80 ms fade with `cut`; with `crossfade`, everything glides in `fade_ms`, and a stateful chain change in the preset requests its own cut) |
+| `preset_load` | `name` | Applies a preset; while playing, always as a transition by the chain's `transition` mode (an 80 + 80 ms fade with `cut`; with `crossfade`, everything glides in `fade_ms`, and a stateful chain change in the preset crossfades too, except a limiter change of latency or a render change, which request their own cut) |
 | `preset_delete` | `name` | Removes it |
+| `preset_rename` | `name`, `new_name` | Renames it, and its chain part with it (`not_found` if `name` is missing; `conflict` if `new_name` exists or a blind A/B uses `name`; the same name is a no-op). The loaded preset keeps being the loaded one |
 | `save` | — | Writes the installation file, including the loop's `delay_ms` |
 | `shutdown` | — | Replies, closes the session, exits |
 
@@ -88,7 +89,7 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
   delay would take more than 2 s to ramp (more than 1 ms of change), the change goes
   through a transition instead: by default a crossfade between the old and the new delay, no
   hole (with the chain's `transition` at `cut`, a short dip to silence).
-- `decorrelate` always goes through the fade. `preset_load`, the A/B (`ab_play`), `calibration_apply` and `sync_apply` are a transition, by the chain's `transition` mode (the fade with `cut`, a crossfade otherwise); a preset that changes a stage with state still cuts. The A/B always requests one, and decides once for its pair: if either preset needs a cut, every play cuts, so its blindness holds.
+- `decorrelate` always goes through the fade. `preset_load`, the A/B (`ab_play`), `calibration_apply` and `sync_apply` are a transition, by the chain's `transition` mode (the fade with `cut`, a crossfade otherwise); a preset that changes a stage with state crossfades it (since stage 2); only a limiter change of latency or a render change still cuts. The A/B always requests one, and decides once for its pair: if either preset needs a cut, every play cuts, so its blindness holds.
 - `extract_ambience` off keeps the extractor running and mixes it out, so the latency does
   not change.
 
@@ -130,6 +131,22 @@ software instead, at `gain_db` but never above -12 dB, until it is opened again 
 | `refills` | times the pipe was about to starve and was refilled with silence up to the target |
 | `pipe_bytes` | the pipe's real size after asking for room for the cushion, or `null` if it could not be set (a warning is logged) |
 | `trims` | blocks dropped because the pipe held more than the target plus two blocks |
+| `stretched_frames` | frames added or dropped by stretching the monitor's audio since it opened (stage 4: a pipe more than a quantum under the target, or more than a block over it, for 3 blocks in a row, plays slightly slower or faster until it is back; `refills` and `trims` are then only the last resort) |
+| `stretch_ppm` | the stretch now, in ppm (positive: slower, adding frames; negative: faster), 0 while idle; `null` without a monitor output |
+| `stretch_gave_up` | true once a stretch moved more than a target's worth of frames without bringing the pipe back: no more stretching for this output (silence and trims only) |
+
+The monitor keeps checking, at every observation of the system (about every 3 s), that its output
+still reaches the target. Its stream asks WirePlumber never to move it, so when the target sink goes
+away WirePlumber destroys the stream; a Bluetooth profile switch rebuilds the sink under the same
+name with a new PipeWire id (2026-10-09). What is detected, and acted on at once: its player stopped
+(`pw-play` exited or its pipe broke), the target is not among the observed sinks, the target's
+PipeWire id changed, or the open itself did not reach the target. Acted on when two graphs in a row,
+read after the output opened, say so: its stream linked nowhere, or linked to another sink. Then
+`reached` is `false` at once (`routed_to` is what the graph showed, or `null`) and the output is
+reopened and verified again as at any open (at most once every 5 s); a graph that shows the stream on
+the target sets `routed_to` to it. While the target is absent the monitor is `waiting` with
+`target_gone: true` and `error` "the target sink is gone from PipeWire: the monitor reopens when it is
+back", and reopens by itself when it reappears; a closed session clears both.
 
 Every mode is heard at the same loudness. The reference is the input at the chosen volume (the
 service's `volume_db`, also with `volume.avrcp`), which is what `stereo` sends; `mix` and `binaural`
@@ -183,6 +200,7 @@ no push in version 1: a client polls `GET /v1/state`.
 | `PATCH /v1/global` (body = `changes`) | `set` |
 | `GET /v1/presets` | `presets` |
 | `PUT /v1/presets/{name}` · `DELETE /v1/presets/{name}` | `preset_save` · `preset_delete` |
+| `PATCH /v1/presets/{name}` (body `{"new_name": ...}`) | `preset_rename` |
 | `POST /v1/presets/{name}/load` | `preset_load` |
 | `POST /v1/installation/save` | `save` |
 | `POST /v1/shutdown` | `shutdown` |
@@ -286,7 +304,21 @@ so the write never waits; otherwise `reason` says why not (`"separado: relojes d
 speakers' own pipes drifted apart), and is `null` the rest of the time. At least 30 s pass between two
 of these cuts, and after 3 refills that did not bring the lowest pipe back within a quantum of the
 target in 10 s, `gave_up` turns true and no more are asked in this session (a warning is logged
-once). There is no trim: the pipe's size bounds what waits in it. `devices[]` carry
+once). There is no trim: the pipe's size bounds what waits in it. **Stage 4 (2026-10-09): before that
+last resort, the stretch.** A lowest pipe that reads more than a quantum under the target for three
+blocks in a row makes every speaker play slightly slower, all through one
+stretcher (the same frames for each, so their alignment holds), until the missing frames are in: it
+starts at `transition.start_stretch_ppm`, steps up toward `max_stretch_ppm` while the pipe keeps falling,
+and ramps back to 0. A pipe that reads more than two blocks over the target as long (the input backed up)
+plays slightly faster down to that line. Not during a calibration (a calibration's stimulus waits, in
+silence, until a stretch still landing is idle), not while a refill's cut is pending or after `gave_up`,
+and only when the frames fit in the fullest pipe, as the pad (else `reason`). A pipe that reads under a
+quantum for three blocks in a row is about to run dry: the stretch lands and the cut and pad above take
+over. A stretch that moves more than a target's worth of frames while the pipe reads no better than when
+it started lands for good: `stretch_gave_up` turns true (a warning is logged once). `stretched_frames`
+counts the frames added or dropped by stretching in this session, `stretch_ppm` is the stretch now (0
+when idle). The sync loop discards a measurement with a stretch inside its window, with the reason "la
+salida se estiró durante la medición (colchón)". `devices[]` carry
 `battery_pct` when the device reports it.
 
 The state also carries `speakers[].role/muted/connected/codec/pid`, `services`, `health`,
@@ -306,6 +338,18 @@ The state also carries `speakers[].role/muted/connected/codec/pid`, `services`, 
   Version mix (contract version 1, additions only): a panel older than the service reads a virtual
   speaker as "sin observar" while stopped and "perdido" while playing and does not break on `sink: null`; a panel newer than the
   service derives `output` from `playing` when the field is missing.
+- `microphones` lists the system's sources (not monitors) as `node`, `description`, `address` (the
+  node's `api.bluez5.address`, or `null`), and
+  `blocked_reason` (addition, 2026-10-09): `null`, or why the service never opens it. The Bluetooth
+  microphone of a device that is an output in use (the monitor's target while a mode is chosen, or any
+  speaker of the installation; matched by Bluetooth address, `bluez_input.14:06:A7:6B:E3:F0` and
+  `bluez_output.14_06_A7_6B_E3_F0.1` are the same device, and a name that does not carry it, such as
+  an older `bluez_source.*`, is matched by its `api.bluez5.address`) switches that device to the headset profile
+  when opened and cuts its audio. `mic_check`, `calibrate`, `recalibrate` with `active: true` and
+  `microphone_set` with such a node are `unavailable` with that reason (Spanish, shown as is); the
+  configured `microphone` is not changed. `start` with `recalibrate` plays without the loop and logs
+  why, and the loop never opens it when it comes back by itself. A panel older than the service
+  ignores the field (and its `mic_check` is then refused).
 - `speakers[].battery_pct`: the speaker's battery in percent, as BlueZ reports it (`org.bluez.Battery1`
   `Percentage`, read by the observer), or `null` when BlueZ has none for it.
 - `sync`: the residual misalignment the recalibration loop measured last, through the
@@ -359,7 +403,7 @@ version 1.
 | `op` | Fields | Effect |
 |---|---|---|
 | `chain` | — | Every stage in processing order, with its algorithms, their knobs and the current values |
-| `chain_set` | `stage`, `algorithm` (optional), `params` (optional object), `speaker` (only with per-speaker params) | Checked completely before anything changes. Returns `{"sequence", "stage", "value", "apply"}`; `apply` says how it was applied now: `live`, `cut` (the 80 + 80 ms fade), or `none` (no session, or a stage not run yet) |
+| `chain_set` | `stage`, `algorithm` (optional), `params` (optional object), `speaker` (only with per-speaker params) | Checked completely before anything changes. Returns `{"sequence", "stage", "value", "apply"}`; `apply` says how it was applied now: `live`, `crossfade` (a stateful stage - diffuse, bass, a limiter of equal latency, EQ, decorrelator, extractor - changed through the transition, with `transition` = `crossfade`), `cut` (the 80 + 80 ms fade: a limiter change of latency, the render, or `transition` = `cut`), or `none` (no session, or a stage not run yet) |
 | `chain_reset` | `stage`, `param` (optional), `speaker` (optional, with a per-speaker `param`) | Back to the default. A whole stage clears the chain's own choices; the knobs kept in the installation (`pan`, `ambience`, `gain_db`, `rear_delay_ms`) and the session (`volume_db`, `muted`) are reset one by one, to their default value |
 
 ```json
@@ -401,9 +445,13 @@ version 1.
     on every speaker alike: `chain_latency_ms` grows by it).
   - `volume.avrcp`: the volume in the speakers (see below).
   - `transition` (title "Transiciones", last stage, 2026-10-08): how a change that used to fade the
-    output to zero is applied. `crossfade` (default; `fade_ms` 10-500, default 80, step 10, and
+    output to zero is applied. `crossfade` (default; `fade_ms` 0-500, default 80 (0 is an immediate change), step 10, and
     `shape`, `equal_gain` or `equal_power`, default `equal_gain`; both `live`) passes between
-    settings without a hole; `cut` fades out and in as before (the fast mode, no params). Changing
+    settings without a hole; `cut` fades out and in as before (the fast mode). Both modes also carry
+    the cushions' stretch (stage 4, spec 2026-10-08 §4b): `start_stretch_ppm` (int, 0-5000, default
+    1000, step 100) and `max_stretch_ppm` (int, 0-10000, default 5000, step 500), both `live`, read by the
+    session every block for the speakers' and the monitor's stretcher; either at 0 turns the stretch
+    off (the cushions refill with silence, as before). Changing
     it is `live` and never cuts: a `chain_set` of `transition` replies `apply: "none"` (it is read at the
     next transition; nothing moves now). It is the listener's, like `volume`: a preset leaves it out
     (`presets-chain.json` never has a `transition` key) and `preset_load` does not change it.
@@ -608,11 +656,14 @@ a gain on the output (the presets are not touched); `ab_stop` takes it away. `st
 reply of `ab_stop`) carry:
 
 ```json
-{"match_loudness": true, "loudness_lu": {"a": -23.1, "b": -23.0, "diff": 0.1},
+{"match_loudness": true, "loudness_lu": {"a": 1.2, "b": 1.3, "diff": 0.1},
  "compensation_db": {"a": 0.0, "b": -2.95}}
 ```
 
-`loudness_lu` is what is heard (compensation included); `diff` is `b - a`.
+`loudness_lu` is the **net gain** of each preset over the last 3 s it played: the outputs' summed
+loudness minus the input's in the same window (compensation included), so a louder passage of the
+music while one of them plays is not a difference between them (experiment 23 §6.4; before
+2026-10-09 it was the outputs alone, which followed the song). `diff` is `b - a`.
 
 **Renders are pre-matched** (`quality.render_match`, 2026-10-06): each render of the `spatial`
 stage plays at its remembered makeup, so an A/B between presets that differ in render compares
@@ -644,6 +695,15 @@ The stages ported to Rust (today the band-limited read of each speaker's delay l
   the cut the service asks for (about 160 ms); numpy reads from that bottom. During the silence
   `state.engine.active` is `numpy` and `reason` says why. The session keeps playing; the log
   (`part` `engine`) and `state.engine.reason` say why. Rust stays disabled until `engine_set {"engine": "rust"}` again or a restart.
+- **The engine thread's priority**: `"engine_nice": null | -20…19` in `service.json` (default
+  `-15`, also for a file without the key; `null`: nothing is touched). When the service starts, the engine thread asks for that niceness
+  (a thread or process it starts afterwards inherits it, as Linux does; the HTTP threads do not), through `setpriority` within `RLIMIT_NICE`, else RealtimeKit (`MakeThreadHighPriorityWithPID`,
+  down to its `MinNiceLevel`, -15 by default), else the lowest value `RLIMIT_NICE` allows
+  (`priority.py`). What the system reads back is in `state.health.engine_priority`:
+  `{"wanted": -15, "nice": -15, "how": "rtkit", "reason": null}` (`how` is `setpriority`, `rtkit` or
+  `null` when nothing changed; `reason` says why `nice` is not `wanted`). `null` before the engine
+  loop runs. A thread already above it is never lowered. It protects the engine from other processes taking
+  the CPU (experiment 23 §4.1), not from the service's own threads, which share the GIL.
 
 `state.engine`:
 

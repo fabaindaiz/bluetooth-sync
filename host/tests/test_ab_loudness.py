@@ -29,12 +29,14 @@ class MusicSession(FakeSession):
         x = np.fft.irfft(spectrum)
         self.signal = 0.05 * x / np.sqrt(np.mean(x**2))
         self.pos = 0
+        self.level = 1.0
+        """The music's own level: a test turns it up between A and B, as a song does."""
 
     def step(self):
         self.steps += 1
         idx = (self.pos + np.arange(BLOCK)) % len(self.signal)
         self.pos = (self.pos + BLOCK) % len(self.signal)
-        block = self.signal[idx]
+        block = self.level * self.signal[idx]
         pair = (block, np.roll(block, 7))
         self.quality.push(pair, self.motor.procesar(*pair))
 
@@ -100,3 +102,17 @@ def test_matching_brings_the_difference_under_0_3_lu(ab):
     result = _ok(ab, op="ab_stop")
     assert result["loudness_lu"]["diff"] is not None
     assert FakeSession.instances[-1].motor.ganancia_comparacion_db == 0.0
+
+
+def test_the_music_getting_louder_between_a_and_b_is_not_a_difference(ab):
+    """Experiment 23 §6.4: A and B play at different moments of a song. The comparison is the net
+    gain (outputs minus input in the same window), so a passage 12 dB louder while B plays does not
+    make B "louder" (before: compensation -1.86 dB to A, then -5.17 dB to B within a minute)."""
+    _ok(ab, op="preset_save", name="same")
+    _ok(ab, op="ab_start", a="loud", b="same", match_loudness=True)
+    _measure(ab, "a")
+    FakeSession.instances[-1].level = 4.0  # +12 dB in the music itself
+    _measure(ab, "b")
+    assert abs(_loudness(ab)["diff"]) < 0.3
+    comp = _ok(ab, op="state")["ab"]["compensation_db"]
+    assert comp == {"a": 0.0, "b": 0.0}

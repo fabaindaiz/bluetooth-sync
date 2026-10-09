@@ -352,6 +352,7 @@ OPS: dict[str, Op] = {
     "preset_save": Op(required={"name": NAME}),
     "preset_load": Op(required={"name": NAME}),
     "preset_delete": Op(required={"name": NAME}),
+    "preset_rename": Op(required={"name": NAME, "new_name": NAME}),
     "save": Op(),
     "shutdown": Op(),
     # The panel (spec §15):

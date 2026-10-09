@@ -18,6 +18,7 @@ from aurasync import cushion as cushion_module
 from aurasync import motor as motor_module
 from aurasync import session as session_module
 from aurasync import snapshot, sonido
+from aurasync.chain import ChainValues
 from aurasync.config import Instalacion, Parlante
 from aurasync.session import AudioSession, SessionError, SessionOptions
 from aurasync.simulated import SimulatedSession
@@ -677,6 +678,11 @@ def open_pipes(monkeypatch, output="combinado", factory=PipePlayer):
     return s, motor, players[0], events
 
 
+def no_stretch(motor) -> None:
+    """The stage-4 stretch turned off by its knob: the cushion's last resort alone, as before it."""
+    motor.cadena = ChainValues({"transition": {"params": {"start_stretch_ppm": 0}}})
+
+
 def state_of(s) -> dict:
     svc = SimpleNamespace(session=s, observer=SimpleNamespace(view={}), streams={})
     return snapshot._health(svc, REAL_BLOCK / RATE * 1000, [])["output_cushion"]  # noqa: SLF001
@@ -699,8 +705,9 @@ def test_blocks_in_two_quantum_bursts_never_starve_a_speaker_pipe(monkeypatch, o
 @pytest.mark.parametrize("output", ["combinado", "separado"])
 def test_a_draining_pipe_is_refilled_for_every_speaker_at_the_bottom_of_a_cut(monkeypatch, output):
     """Every output's clock a little faster than the input's (the same for all): the pipes drain
-    together, and each refill fits in all of them."""
+    together, and each refill fits in all of them. The stretch is off: this is the last resort."""
     s, motor, player, events = open_pipes(monkeypatch, output)
+    no_stretch(motor)
     player.drift = dict.fromkeys(player.nodes, 2)
     ran_before, bottoms, padded = [motor.ran], [], []
 
@@ -730,6 +737,9 @@ def test_a_draining_pipe_is_refilled_for_every_speaker_at_the_bottom_of_a_cut(mo
         "pending": False,
         "reason": None,
         "gave_up": False,
+        "stretched_frames": 0,
+        "stretch_ppm": 0.0,
+        "stretch_gave_up": False,
     }
     s.close()
 
@@ -739,7 +749,8 @@ def test_a_refill_leaves_the_alignment_between_speakers_as_it_was(monkeypatch):
     refill is sized on the lowest pipe and the same silence goes to every one, so the difference
     between their levels, which sets their relative timing, does not move; equalising the levels
     would move it."""
-    s, _, player, _ = open_pipes(monkeypatch, "separado")
+    s, motor, player, _ = open_pipes(monkeypatch, "separado")
+    no_stretch(motor)
     player.drift = dict.fromkeys(player.nodes, 2)
     player.level["sB"] -= 200
     player.level["sC"] -= 100
@@ -782,6 +793,161 @@ def test_separado_with_clocks_that_differ_does_not_cut_over_and_over(monkeypatch
     state = state_of(s)
     assert state["reason"] == "separado: relojes distintos"
     assert state["pending"] is False
+    s.close()
+
+
+# -- the cushion by stretching (spec 2026-10-08 §4b, stage 4) ----------------------------------
+
+DRIFT_100_PPM = QUANTUM * 100e-6
+"""Frames a cycle takes beyond its quantum when the outputs' clock runs 100 ppm fast."""
+
+
+def start_low(player, reading: int, offsets: dict | None = None) -> None:
+    """Pipes that will read `reading` (plus each one's offset) before the next write."""
+    offsets = offsets or {}
+    for n in player.nodes:
+        player.level[n] = reading + offsets.get(n, 0) + 2 * (QUANTUM + player.drift[n])
+
+
+@pytest.fixture
+def rust():
+    """These run the whole session through the stretcher: in Rust, a tenth of numpy's time."""
+    pytest.importorskip("aurasync_engine")
+    from aurasync.dsp import backend
+
+    backend.use(backend.RUST)
+
+
+@pytest.mark.parametrize("output", ["combinado", "separado"])
+def test_a_pipe_that_drains_slowly_is_kept_at_its_target_by_stretching(monkeypatch, output, rust):  # noqa: ARG001
+    """The outputs' clock 100 ppm fast: the pipe reads more than a quantum under the target, and
+    instead of a cut and a pad the speakers play slightly slower until the frames are in."""
+    s, motor, player, _ = open_pipes(monkeypatch, output)
+    player.drift = dict.fromkeys(player.nodes, DRIFT_100_PPM)
+    target = s.outputs.cushion.target_frames
+    start_low(player, target - QUANTUM - 50)
+    stretcher = s.outputs.cushion.stretcher
+    seen = []
+    run_pipes(s, player, 1200, lambda _i: seen.append(stretcher.epsilon_ppm))
+    assert max(seen) > 0, "it stretched"
+    assert not stretcher.active, "and landed"
+    assert motor.cuts == 0
+    assert pads(player) == []
+    assert player.starved == 0
+    assert min(player.level.values()) - 2 * (QUANTUM + DRIFT_100_PPM) >= target - QUANTUM
+    state = state_of(s)
+    assert state["stretched_frames"] == stretcher.stretched_frames > 0
+    assert state["refills"] == 0
+    for block in player.written[player.opened_with :]:
+        assert len({len(x) for x in block.values()}) == 1, "every speaker the same frames"
+    s.close()
+
+
+def test_a_stretch_leaves_the_alignment_between_speakers_as_it_was(monkeypatch, rust):  # noqa: ARG001
+    """The alignment test of the refill, through the stretcher: each pipe at its own level, every one
+    gets the same frames, so the differences between their levels do not move."""
+    s, motor, player, _ = open_pipes(monkeypatch, "separado")
+    player.drift = dict.fromkeys(player.nodes, DRIFT_100_PPM)
+    target = s.outputs.cushion.target_frames
+    start_low(player, target - QUANTUM - 50, {"sB": 200, "sC": 100})
+    run_pipes(s, player, 1200)
+    assert s.outputs.cushion.stretched_frames > 0
+    assert pads(player) == []
+    assert motor.cuts == 0
+    totals = {n: sum(len(b[n]) for b in player.written) for n in player.nodes}
+    assert len(set(totals.values())) == 1, "every speaker got exactly the same number of frames"
+    assert player.level["sB"] - player.level["sA"] == pytest.approx(200, abs=1e-6)
+    assert player.level["sC"] - player.level["sA"] == pytest.approx(100, abs=1e-6)
+    s.close()
+
+
+def test_a_cut_of_the_motor_during_a_stretch_does_not_stop_it(monkeypatch, rust):  # noqa: ARG001
+    """A preset loaded by a cut while the pipe is being refilled: the cut is the motor's, inside the
+    blocks; the stretch goes on through it, every speaker alike, and still no pad."""
+    s, motor, player, _ = open_pipes(monkeypatch)
+    player.drift = dict.fromkeys(player.nodes, DRIFT_100_PPM)
+    start_low(player, s.outputs.cushion.target_frames - QUANTUM - 50)
+    run_pipes(s, player, cushion_module.LOW_BLOCKS + 5)
+    stretcher = s.outputs.cushion.stretcher
+    assert stretcher.epsilon_ppm > 0
+    motor.cortar(None)
+    run_pipes(s, player, 3)
+    assert stretcher.active
+    assert stretcher.epsilon_ppm > 0
+    assert pads(player) == []
+    for block in player.written[player.opened_with :]:
+        assert len({len(x) for x in block.values()}) == 1
+    s.close()
+
+
+def test_a_lying_pipe_with_the_stretch_on_stops_stretching(monkeypatch, rust):  # noqa: ARG001
+    """Review 2026-10-09: with the stretch on, after the cushion gave up the stretcher ran at its
+    maximum for good (2995 of 3000 blocks, 51,131 frames). It must yield to the last resort and stop."""
+    s, motor, player, _ = open_pipes(monkeypatch, factory=LyingPipe)
+    stretcher = s.outputs.cushion.stretcher
+    active = []
+    run_pipes(s, player, 3000, lambda _i: active.append(stretcher.active))
+    assert motor.cuts == cushion_module.MAX_FAILED
+    assert state_of(s)["gave_up"] is True
+    assert not stretcher.active
+    assert sum(active) <= 10
+    assert stretcher.stretched_frames <= s.outputs.cushion.target_frames
+    s.close()
+
+
+def test_a_calibration_waits_for_the_stretch_to_land(monkeypatch, rust):  # noqa: ARG001
+    """Review 2026-10-09: the stimulus must not go through a stretch that is landing (its time base
+    would slide against the reference): silence until the stretcher is idle, then the stimulus whole."""
+    s, _, player, _ = open_pipes(monkeypatch)
+    player.drift = dict.fromkeys(player.nodes, DRIFT_100_PPM)
+    start_low(player, s.outputs.cushion.target_frames - QUANTUM - 50)
+    stretcher = s.outputs.cushion.stretcher
+    run_pipes(s, player, cushion_module.LOW_BLOCKS + 10)
+    assert stretcher.epsilon_ppm > 0
+    s.start_calibration(2.0, 0.1, "mic")
+    cal = s.calibration
+    held = 0
+    for _ in range(200):
+        was_active = stretcher.active
+        run_pipes(s, player, 1)
+        if was_active:
+            assert cal.pos == 0, "the stimulus waits while the stretch lands"
+            held += 1
+        if not stretcher.active and cal.pos > 0:
+            break
+    assert held > 0
+    assert not stretcher.active
+    assert cal.pos > 0, "then it plays"
+    assert stretcher.stretched_frames > 0
+    s.cancel_calibration()
+    s.close()
+
+
+def test_the_stretch_knobs_reach_the_speakers_stretcher(monkeypatch):
+    s, motor, player, _ = open_pipes(monkeypatch)
+    motor.cadena = ChainValues({"transition": {"params": {"start_stretch_ppm": 2000, "max_stretch_ppm": 3000}}})
+    run_pipes(s, player, 1)
+    stretcher = s.outputs.cushion.stretcher
+    stretcher.want(10_000)
+    run_pipes(s, player, 1)
+    assert stretcher.enabled
+    no_stretch(motor)
+    run_pipes(s, player, 1)
+    assert not stretcher.enabled
+    s.close()
+
+
+def test_a_stretch_counts_as_a_move_for_the_sync_loop(monkeypatch):
+    """The loop's reference is the engine's block, and a stretch shifts what plays against it: a
+    measurement with a stretch inside its window is discarded, as one with a cut."""
+    s, _, player, _ = open_pipes(monkeypatch)
+    run_pipes(s, player, 2)
+    before = s._last_stretch  # noqa: SLF001
+    start_low(player, s.outputs.cushion.target_frames - QUANTUM - 50)
+    run_pipes(s, player, cushion_module.LOW_BLOCKS + 1)
+    assert s.outputs.cushion.stretcher.active
+    assert s._last_stretch > before  # noqa: SLF001
+    assert s._last_fade == -1e9, "a stretch is not a cut"  # noqa: SLF001
     s.close()
 
 

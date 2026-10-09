@@ -54,6 +54,11 @@ class PeakLimiter:
     def reduction_db(self) -> float:
         return -20 * np.log10(max(self.gain, 1e-9))
 
+    @property
+    def memory_samples(self) -> int:
+        """How long its state reaches back: a full release, from no gain to unity."""
+        return round(1.0 / self.step)
+
     def process(self, x: np.ndarray) -> np.ndarray:
         n = len(x)
         if n == 0:
@@ -166,6 +171,12 @@ class TruePeakLimiter(_RustOwned):
             self._rate = 1.0 / (release_ms / 1000 * self.sr)
         if self._rust is not None:
             self._rust_call(lambda rust: rust.configure(ceiling_db=ceiling_db, release_ms=release_ms))
+
+    @property
+    def memory_samples(self) -> int:
+        """How much input from before a block its output depends on (the look-ahead, attack, hold
+        and the interpolator's reach)."""
+        return self._keep
 
     @property
     def reduction_db(self) -> float:

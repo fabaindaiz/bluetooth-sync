@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from aurasync.dsp.transition import SHAPES, Transition, fade_weights
+from aurasync.dsp.transition import SHAPES, Crossfaded, Transition, fade_weights
 
 LENGTH = 3840
 
@@ -133,3 +133,111 @@ def test_a_bare_request_during_a_fade_still_asks_for_the_next_transition():
     batch = t.advance(100)
     assert batch
     assert [action() for action in batch] == [None]
+
+
+def _warm_transition(samples: int = 1000, length: int = LENGTH) -> tuple[Transition, list]:
+    t = Transition()
+    pending_action = lambda: None  # noqa: E731
+    t.request(lambda: t.need_warm(samples))
+    t.begin(length)
+    for action in t.take_starting():
+        action()
+    return t, [pending_action]
+
+
+def test_warm_then_fade_then_idle():
+    t, (later,) = _warm_transition(1000)
+    assert t.state == Transition.WARM
+    assert t.advance(400) is None
+    t.request(later)  # during WARM the transition has started: the pending batch
+    assert t.advance(400) is None
+    assert t.advance(400) is Transition.FADE_STARTS
+    assert t.state == Transition.FADE
+    assert t.advance(LENGTH - 1) is None
+    assert t.advance(1) == [later]
+    assert not t.busy
+
+
+def test_need_warm_is_capped_at_one_second():
+    t, _ = _warm_transition(10**6)
+    assert t.advance(47999) is None
+    assert t.advance(1) is Transition.FADE_STARTS
+    t2 = Transition(sr=16000)
+    t2.request(lambda: t2.need_warm(10**6))
+    t2.begin(100)
+    t2.take_starting()[0]()
+    assert t2.advance(15999) is None
+    assert t2.advance(1) is Transition.FADE_STARTS
+
+
+def test_block_weights_in_each_phase():
+    t = Transition()
+    assert t.block_weights(100, "equal_gain") is None
+    t, _ = _warm_transition(1000)
+    assert t.block_weights(100, "equal_gain") == (1.0, 0.0)
+    t.advance(1000)
+    old, new = t.block_weights(100, "equal_gain")
+    ref_old, ref_new = fade_weights("equal_gain", 0, 100, LENGTH)
+    assert np.array_equal(old, ref_old)
+    assert np.array_equal(new, ref_new)
+    t.advance(100)  # pure: asking did not move, advancing did
+    assert t.block_weights(100, "equal_gain")[0] == pytest.approx(fade_weights("equal_gain", 100, 100, LENGTH)[0])
+
+
+def test_no_warm_is_stage_1():
+    t = Transition()
+    t.request(None)
+    t.begin(100)
+    assert t.take_starting() == []
+    assert t.state == Transition.FADE
+    assert t.advance(60) is None
+    assert t.advance(40) == []
+
+
+class _Gain:
+    """A stateful fake stage: counts calls, returns a constant array."""
+
+    def __init__(self, value: float) -> None:
+        self.value, self.calls = value, 0
+        self.label = f"gain{value}"
+
+    def process(self, x):
+        self.calls += 1
+        return np.full_like(x, self.value)
+
+    def nothing(self, _x):
+        self.calls += 1
+
+
+def test_crossfaded_mixes_arrays_and_reads_attributes_from_new():
+    old, new = _Gain(1.0), _Gain(3.0)
+    cf = Crossfaded(old, new, lambda: (0.25, 0.75))
+    out = cf.process(np.zeros(4))
+    assert np.allclose(out, 0.25 * 1.0 + 0.75 * 3.0)
+    assert cf.label == "gain3.0"
+    assert cf.resolve() is new
+    assert cf.old is old
+    assert cf.nothing(np.zeros(2)) is None
+    per_sample = Crossfaded(old, new, lambda: (np.array([1.0, 0.5]), np.array([0.0, 0.5])))
+    assert np.allclose(per_sample.process(np.zeros(2)), [1.0, 2.0])
+
+
+def test_crossfaded_runs_new_during_warm():
+    old, new = _Gain(1.0), _Gain(9.0)
+    t, _ = _warm_transition(1000)
+    cf = Crossfaded(old, new, lambda: t.block_weights(100, "equal_gain"))
+    out = cf.process(np.zeros(100))
+    assert np.allclose(out, 1.0)  # only the old is heard
+    assert (old.calls, new.calls) == (1, 1)  # but the new one ran
+    idle = Crossfaded(old, new, lambda: None)
+    assert np.allclose(idle.process(np.zeros(3)), 9.0)
+    assert (old.calls, new.calls) == (1, 2)
+
+
+def test_crossfaded_refuses_nesting():
+    a, b, c = _Gain(1), _Gain(2), _Gain(3)
+    inner = Crossfaded(a, b, lambda: None)
+    with pytest.raises(ValueError, match="nest"):
+        Crossfaded(inner, c, lambda: None)
+    with pytest.raises(ValueError, match="nest"):
+        Crossfaded(c, inner, lambda: None)

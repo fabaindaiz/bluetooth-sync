@@ -99,6 +99,11 @@ class DiffuseStage:
     def metrics(self) -> dict:
         return {"active": self.active, "tail_db": dict(self._share_db)}
 
+    def memory_samples(self) -> int:
+        """How long a fresh stage needs to run before its output is a running one's: the longest
+        tail (predelay + rt60). 0 when `off`."""
+        return max((len(tail.ir) for tail in self._tails.values()), default=0)
+
 
 # -- bass ---------------------------------------------------------------------------------
 
@@ -118,6 +123,10 @@ class _Branch:
     def __init__(self, taps: np.ndarray) -> None:
         self._fir = StreamingFIR(taps)
         self.moved_db: float | None = None
+
+    @property
+    def memory_samples(self) -> int:
+        return len(self._fir.taps) - 1
 
     def process(self, x: np.ndarray) -> np.ndarray:
         y = self._fir.process(x)
@@ -140,6 +149,9 @@ class BassStage:
         self._delay = 0
         self._history = np.zeros(0)
         self._feed_db: float | None = None
+        self._fed: np.ndarray | None = None
+        """What the last `feed` returned: `before_delay` adds it by default, so two instances of
+        the stage (a crossfade, `dsp/transition.py`) each add their own."""
         if self.algorithm == "off":
             return
         bass = [name for name, kind in speakers if chain_model.bass_capable(kind)]
@@ -183,7 +195,11 @@ class BassStage:
         (the decorrelator's mean group delay while it is on)."""
         if self._feed is None:
             return None
-        low = self._feed.process(0.5 * (left + right))
+        self._fed = self._delayed(self._feed.process(0.5 * (left + right)), delay)
+        return self._fed
+
+    def _delayed(self, low: np.ndarray, delay: int) -> np.ndarray:
+        """Meter `low`, then hold it `delay` samples."""
         self._feed_db = None
         e = float(np.dot(low, low))
         if e > 0:
@@ -197,13 +213,16 @@ class BassStage:
         self._history = joined[len(low) :]
         return joined[: len(low)]
 
-    def before_delay(self, name: str, x: np.ndarray, feed: np.ndarray | None) -> np.ndarray:
+    def before_delay(self, name: str, x: np.ndarray, feed: np.ndarray | None = None) -> np.ndarray:
         """`crossover`, on a bass speaker, before its delay line: its own signal through the
         all-pass, plus the fed low if it is the one chosen. (The all-pass goes here and not
-        after the EQ: there it would turn the fed low, already through the LP, once more.)"""
+        after the EQ: there it would turn the fed low, already through the LP, once more.)
+        `feed` None: the low this stage's last `feed` made (what the motor uses)."""
         allpass = self._allpass.get(name)
         if allpass is None:
             return x
+        if feed is None:
+            feed = self._fed
         y = allpass.process(x)
         return y + feed if feed is not None and name == self.to else y
 
@@ -216,6 +235,17 @@ class BassStage:
         if vb is not None:
             y = y + vb.process(x)
         return y
+
+    def memory_samples(self, delay: int = 0) -> int:
+        """How long a fresh stage needs to run before its output is a running one's: its longest
+        filter (the feed's adds `delay`, the decorrelator's group delay it is held by). 0 when
+        `off`."""
+        lengths = [b.memory_samples for b in self._high.values()]
+        lengths += [vb.memory_samples for vb in self._harmonics.values()]
+        lengths += [len(fir.taps) - 1 for fir in self._allpass.values()]
+        if self._feed is not None:
+            lengths.append(self._feed.memory_samples + delay)
+        return max(lengths, default=0)
 
     def metrics(self) -> dict:
         return {

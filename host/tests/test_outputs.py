@@ -5,6 +5,7 @@ import pytest
 
 from aurasync import cushion as cushion_module
 from aurasync.cushion import Cushion, SharedCushion
+from aurasync.dsp.stretch import OutputStretcher
 from aurasync.outputs import OutputSet, Pacer, output_kind
 
 RATE, BLOCK = 48000, 4096
@@ -380,3 +381,181 @@ def test_the_cushion_outlives_a_swap_of_the_real_part():
     out.attach(FakePlayer(["sA"]), {"A"})
     out.attach(FakePlayer(["sA"]), {"A"})
     assert out.cushion is shared
+
+
+# -- the speakers' cushion by stretching (spec 2026-10-08 §4b, stage 4) ----------------------------
+
+
+def _stretching(**kwargs) -> SharedCushion:
+    return SharedCushion(BLOCK, RATE, stretcher=OutputStretcher(["sA", "sB"], RATE, tolerance=QUANTUM), **kwargs)
+
+
+def test_a_pipe_under_the_target_asks_the_stretcher_not_a_cut():
+    shared = _stretching()
+    level = shared.target_frames - QUANTUM - 1
+    asked = [shared.observe(level, ROOM) for _ in range(cushion_module.LOW_BLOCKS)]
+    assert asked == [False] * cushion_module.LOW_BLOCKS, "no cut"
+    assert not shared.pending
+    assert shared.stretcher.active
+    assert shared.stretcher.pending_frames == shared.target_frames - level, "the missing frames"
+
+
+def test_one_low_reading_does_not_stretch():
+    shared = _stretching()
+    for _ in range(20):
+        shared.observe(shared.target_frames - QUANTUM - 1, ROOM)
+        shared.observe(shared.target_frames, ROOM)
+    assert not shared.stretcher.active
+
+
+def test_under_a_quantum_the_stretch_yields_to_the_cut():
+    """The pipe about to run dry: a real hole is worse than a cut. The stretch lands (by a ramp)."""
+    shared = _stretching()
+    for _ in range(cushion_module.LOW_BLOCKS):
+        shared.observe(shared.target_frames - QUANTUM - 1, ROOM)
+    s = shared.stretcher
+    x = np.zeros(BLOCK)
+    for _ in range(10):
+        s.process({"sA": x, "sB": x})
+    assert s.epsilon_ppm > 0
+    assert _ask(shared, QUANTUM - 1) == cushion_module.LOW_BLOCKS
+    s.process({"sA": x, "sB": x})
+    for _ in range(100):
+        s.process({"sA": x, "sB": x})
+        if not s.active:
+            break
+    assert not s.active
+    assert shared.at_bottom(ROOM) == shared.target_frames - (QUANTUM - 1), "today's pad, as before"
+
+
+def test_while_stretching_a_pipe_that_keeps_falling_steps_up_and_one_that_recovers_lands():
+    shared = _stretching()
+    s = shared.stretcher
+    level = shared.target_frames - QUANTUM - 1
+    for _ in range(cushion_module.LOW_BLOCKS):
+        shared.observe(level, ROOM)
+    x = np.zeros(BLOCK)
+    for _ in range(10):
+        s.process({"sA": x})
+    start = s.epsilon_ppm
+    shared.observe(level - QUANTUM - 100, ROOM)  # a quantum lower than what is still owed
+    for _ in range(10):
+        s.process({"sA": x})
+    assert s.epsilon_ppm > start
+    shared.observe(shared.target_frames + 10, ROOM)  # back over the target: the frames are in
+    for _ in range(100):
+        s.process({"sA": x})
+        if not s.active:
+            break
+    assert not s.active
+    assert s.epsilon_ppm == 0
+
+
+def test_a_pipe_far_over_its_target_drops_by_stretching():
+    """No trim for the speakers, but a pipe that reads over two blocks above its target (the input
+    backed up: the speakers' clock is slower) is drained back to that line, playing faster."""
+    shared = _stretching()
+    high = shared.target_frames + cushion_module.BACKLOG_BLOCKS * BLOCK
+    for _ in range(cushion_module.LOW_BLOCKS):
+        assert not shared.observe(high + 500, ROOM)
+    assert shared.stretcher.pending_frames == -500
+    assert not shared.observe(shared.target_frames + BLOCK, ROOM), "the normal paced level is no reason"
+
+
+def test_no_stretch_while_a_calibration_owns_the_speakers():
+    shared = _stretching()
+    for _ in range(10):
+        shared.observe(shared.target_frames - QUANTUM - 1, ROOM, may_cut=False)
+    assert not shared.stretcher.active
+    for _ in range(cushion_module.LOW_BLOCKS):
+        shared.observe(shared.target_frames - QUANTUM - 1, ROOM)
+    s = shared.stretcher
+    for _ in range(10):
+        s.process({"sA": np.zeros(BLOCK)})
+    owed = s.pending_frames
+    shared.observe(shared.target_frames - QUANTUM - 1, ROOM, may_cut=False)
+    assert 0 < s.pending_frames < owed, "it lands, by a ramp"
+
+
+def test_no_stretch_when_the_frames_would_not_fit_in_every_pipe():
+    shared = _stretching()
+    level = shared.target_frames - QUANTUM - 1
+    need = shared.target_frames - level
+    for _ in range(10):
+        shared.observe(level, need + BLOCK - 1, separate=True)
+    assert not shared.stretcher.active
+    assert shared.reason == "separado: relojes distintos"
+
+
+def test_with_the_stretch_turned_off_the_cushion_cuts_as_before():
+    shared = _stretching()
+    shared.stretcher.set_limits(0, 5000)
+    for _ in range(10):
+        assert not shared.observe(shared.target_frames - QUANTUM - 1, ROOM)
+    assert not shared.stretcher.active
+    assert _ask(shared, QUANTUM - 1) == cushion_module.LOW_BLOCKS
+
+
+def test_the_output_set_stretches_every_playing_stream_alike():
+    shared = _stretching()
+    out = OutputSet({"A": "sA", "V": None, "B": "sB"}, Pacer(RATE, BLOCK), shared)
+    player = FakePlayer(["sA", "sB"])
+    out.attach(player, {"A", "B"})
+    x = np.sin(np.arange(BLOCK) / 10)
+    out.write({"A": x, "V": x, "B": 0.5 * x}, input_paced=True)
+    assert player.written[-1]["sA"] is x, "idle: the very block, no copy"
+    shared.stretcher.want(200)
+    total = 0
+    for _ in range(300):
+        out.write({"A": x, "V": x, "B": 0.5 * x}, input_paced=True)
+        written = player.written[-1]
+        assert set(written) == {"sA", "sB"}
+        assert len(written["sA"]) == len(written["sB"])
+        np.testing.assert_array_equal(written["sB"], 0.5 * written["sA"])
+        total += len(written["sA"]) - BLOCK
+        if not shared.stretcher.active:
+            break
+    assert total == 200
+
+
+def test_the_stretch_waits_while_a_cut_is_pending_and_stops_when_the_cushion_gives_up():
+    """Review 2026-10-09: after the cut was asked, the next readings stepped the stretch up again
+    during the pending cut, and after giving up it ran at its maximum for good."""
+    shared = _stretching()
+    s = shared.stretcher
+    x = np.zeros(BLOCK)
+    assert _ask(shared, QUANTUM - 1) == cushion_module.LOW_BLOCKS
+    for _ in range(20):
+        assert not shared.observe(QUANTUM - 1, ROOM)  # the cut is pending
+        s.process({"sA": x})
+    assert not s.active
+    shared.gave_up = True
+    shared.pending = False
+    for _ in range(20):
+        shared.observe(shared.target_frames - QUANTUM - 1, ROOM)
+        s.process({"sA": x})
+    assert not s.active
+
+
+def test_a_stretch_that_does_not_raise_the_pipe_gives_up():
+    """A pipe that reads the same however much is stretched into it (a reading that lies, or a drain
+    faster than the maximum): after more than a target's worth of frames, the stretch lands and is
+    not asked again in this session."""
+    shared = _stretching()
+    s = shared.stretcher
+    level = shared.target_frames - QUANTUM - 1
+    x = np.zeros(BLOCK)
+    for _ in range(5000):
+        shared.observe(level, ROOM)
+        s.process({"sA": x})
+        if shared.stretch_gave_up and not s.active:
+            break
+    assert shared.stretch_gave_up
+    assert not s.active
+    moved = s.stretched_frames
+    assert moved <= shared.target_frames + 2 * BLOCK
+    for _ in range(50):
+        shared.observe(level, ROOM)
+        s.process({"sA": x})
+    assert not s.active
+    assert s.stretched_frames == moved

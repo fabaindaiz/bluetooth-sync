@@ -103,11 +103,13 @@ def test_mix_assignment_follows_the_model_and_order_is_the_default():
 
 
 def test_choosing_mix_goes_through_the_cut():
-    m = motor.Motor(octagon(8), SR)
-    assert m.aplicar_cadena(mix_chain()) == "cut"
-    assert list(m.metricas_cadena()["decorrelate"]["assignment"].values()) == list(range(8))
-    through_the_cut(m)
-    assert list(m.metricas_cadena()["decorrelate"]["assignment"].values()) != list(range(8))
+    """With `transition=cut`; with the crossfade (the default) the new assignment crossfades."""
+    for mode, how in (("cut", "cut"), ("crossfade", "crossfade")):
+        m = motor.Motor(octagon(8), SR, chain=ChainValues().with_algorithm("transition", mode))
+        assert m.aplicar_cadena(mix_chain().with_algorithm("transition", mode)) == how
+        assert list(m.metricas_cadena()["decorrelate"]["assignment"].values()) == list(range(8))
+        through_the_cut(m)
+        assert list(m.metricas_cadena()["decorrelate"]["assignment"].values()) != list(range(8))
 
 
 def test_a_pan_that_changes_the_best_assignment_waits_for_a_cut():

@@ -107,8 +107,14 @@ class OutputSet:
         return previous
 
     def write(self, blocks: dict[str, np.ndarray], *, input_paced: bool) -> None:
+        """The playing speakers' blocks to the player, through the cushion's stretcher when it has one
+        (stage 4): one stretcher, one ratio and one position for every stream, so they all get the
+        same frames and their alignment does not move. Idle, it hands back the very same blocks."""
         real = {self._sinks[n]: x for n, x in blocks.items() if n in self._playing}
         if real and self._player is not None:
+            stretcher = getattr(self.cushion, "stretcher", None)
+            if stretcher is not None:
+                real = stretcher.process(real)
             self._player.escribir(real)
         if input_paced:
             self._pacer.reset()

@@ -977,6 +977,41 @@ _LIMITER_STAGE = Stage(
     "peak",
 )
 
+_STRETCH_PARAMS = (
+    Param(
+        "start_stretch_ppm",
+        "Estiramiento inicial",
+        "Cuánto más lenta suena la salida al rellenar un colchón que se vacía, en partes por millón.",
+        "Cuando la tubería hacia los parlantes o los audífonos se vacía (sus relojes van un poco más rápido "
+        "que la entrada), en vez de meter silencio la salida suena un poco más lenta hasta recuperar lo que "
+        "falta, y al revés si se llena de más. 1000 ppm es 0,1 % (1,7 cents): no se nota. Si la tubería "
+        "sigue bajando, sube de a este paso hasta el máximo. En 0 no se estira: el colchón se rellena con "
+        "silencio, como antes.",
+        "int",
+        1000,
+        0,
+        5000,
+        100,
+        "ppm",
+    ),
+    Param(
+        "max_stretch_ppm",
+        "Estiramiento máximo",
+        "Lo más que se estira la salida para rellenar el colchón, en partes por millón.",
+        "5000 ppm es 0,5 % (8,6 cents). Más alto rellena antes, pero un cambio de tono mayor podría notarse "
+        "en una nota sostenida. Si la tubería baja más rápido que esto, queda el relleno con silencio. En 0 "
+        "no se estira.",
+        "int",
+        5000,
+        0,
+        10000,
+        500,
+        "ppm",
+    ),
+)
+"""Stage 4 (spec 2026-10-08 §4b): the cushions' stretcher (dsp/stretch.py). In both algorithms: it is
+not a way of changing settings, so it holds with either."""
+
 _TRANSITION_STAGE = Stage(
     "transition",
     "Transiciones",
@@ -997,10 +1032,12 @@ _TRANSITION_STAGE = Stage(
                     "fade_ms",
                     "Duración del fundido",
                     "Cuánto dura el paso de un ajuste al otro.",
-                    "Más largo suena más suave; más corto llega antes al ajuste nuevo.",
+                    "Más largo suena más suave; más corto llega antes al ajuste nuevo. En 0 el cambio es "
+                    "inmediato, y un retardo que salta puede oírse como un clic. Escuchado el 2026-10-09: 80 y "
+                    "200 ms no se notan.",
                     "float",
                     80.0,
-                    10.0,
+                    0.0,
                     500.0,
                     10.0,
                     "ms",
@@ -1016,6 +1053,7 @@ _TRANSITION_STAGE = Stage(
                     "equal_gain",
                     choices=("equal_gain", "equal_power"),
                 ),
+                *_STRETCH_PARAMS,
             ),
             cost="una lectura más de la línea por cada retardo que cambia, durante el fundido",
         ),
@@ -1024,6 +1062,7 @@ _TRANSITION_STAGE = Stage(
             "Corte",
             "Baja el sonido, cambia y lo vuelve a subir (el modo rápido).",
             "No gasta cómputo extra, pero deja un hueco breve en cada cambio.",
+            _STRETCH_PARAMS,
         ),
     ),
     "crossfade",

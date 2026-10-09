@@ -32,7 +32,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from aurasync import arrival_loop, estimulos, group_calibration, medicion, probe_measure, sincronia, sonido
-from aurasync.cushion import SharedCushion
+from aurasync.chain import ChainValues
+from aurasync.cushion import SharedCushion, new_stretcher, stretch_limits
 from aurasync.cuts import LATE_MS, LOW_MS, CutLog
 from aurasync.dsp import eq, response
 from aurasync.dsp import probe as masked_probe
@@ -453,14 +454,22 @@ class AudioSession:
         self.source: Source | None = None
         self.source_busy = False
         self.microphone = options.microphone
+        self.microphone_guard: Callable[[str], str | None] | None = None
+        """Set by the service: why a microphone must not be opened (the Bluetooth microphone of an
+        output in use, microphones.py), or None. Every opening of a microphone asks it first."""
         self._stack = contextlib.ExitStack()
         self._recal_stack = contextlib.ExitStack()
         self._sinks = {p.nombre: p.sink for p in installation.parlantes}
         self._silence = np.zeros(options.block)
         self.outputs = OutputSet(
-            self._sinks, Pacer(options.rate, options.block), SharedCushion(options.block, options.rate)
+            self._sinks,
+            Pacer(options.rate, options.block),
+            SharedCushion(
+                options.block, options.rate, new_stretcher([s for s in self._sinks.values() if s], options.rate)
+            ),
         )
-        """Who plays and who is only computed; the only way to the speakers (outputs.py)."""
+        """Who plays and who is only computed; the only way to the speakers (outputs.py). Its
+        cushion holds the speakers' stretcher (stage 4), one for all of them."""
         self._cushion_warned = False
         self._cushion_bottom = False
         """The cut the speakers' cushion asked for reached its bottom in this step (`_refill`)."""
@@ -483,6 +492,9 @@ class AudioSession:
         self._next_measure = 0.0
         self._started = time.monotonic()
         self._last_fade = -1e9
+        self._last_stretch = -1e9
+        """When the speakers' stretch last ran: the loop discards a measurement with one inside, and says so."""
+        self._stretch_warned = False
         self._launched_at = 0.0
         self._next_routing_check = time.monotonic() + ROUTING_CHECK_S
         self._tones: dict[str, list[int]] = {}
@@ -641,8 +653,15 @@ class AudioSession:
             # The calibration owns the speakers: its stimulus instead of the motor's output.
             # Only the playing ones take part; the others get silence, so every consumer (the
             # monitor's per-speaker inputs above all) still receives every channel.
-            stimulus = self.calibration.next_blocks(o.block)
-            blocks = {n: stimulus.get(n, self._silence) for n in self._sinks}
+            stretcher = getattr(self.outputs.cushion, "stretcher", None)
+            if stretcher is not None and stretcher.active:
+                # A stretch still landing would slide the stimulus against its reference (up to
+                # ~150 frames at 5000 ppm): silence until it is idle, then the stimulus, whole. The
+                # microphone keeps the last stretch of the recording, so a later start is fine.
+                blocks = dict.fromkeys(self._sinks, self._silence)
+            else:
+                stimulus = self.calibration.next_blocks(o.block)
+                blocks = {n: stimulus.get(n, self._silence) for n in self._sinks}
         elif pair is None:
             # Con nada reproduciéndose se manda silencio igual, para que los streams A2DP no
             # se suspendan: al despertar traerían un desfase distinto. **Y el silencio pasa por
@@ -704,6 +723,10 @@ class AudioSession:
             # The loop discards a measurement with a cut or a crossfade inside its window. Looked at
             # before the block too: an 80 ms crossfade starts and ends within one 4096-sample block.
             self._last_fade = time.monotonic()
+        stretcher = getattr(self.outputs.cushion, "stretcher", None)
+        if stretcher is not None and stretcher.active:
+            # A stretch too: what plays slides against the block the loop keeps as its reference.
+            self._last_stretch = time.monotonic()
         # Only a cut is logged as one: a crossfade has no hole, and the log is what the listening
         # counts (experiment 23). A motor without the difference (the tests' fakes) logs any.
         cutting = getattr(self.motor, "cortando", self.motor.en_corte)
@@ -755,6 +778,13 @@ class AudioSession:
         if previous is not None and previous is not monitor:
             previous.close()
 
+    def detach_monitor(self):
+        """Take the monitor out without closing it, and hand it back: closing waits for its
+        writer and its `pw-play` (seconds when the stream never drains), so the caller closes it
+        off the engine thread (monitor_control.MonitorController)."""
+        previous, self.monitor = self.monitor, None
+        return previous
+
     def _feed_monitor(self, pair, blocks: dict[str, np.ndarray]) -> None:
         """After the speakers, never before: the monitor must not delay them. It does not wait
         (its writer drops blocks), and if it fails it is dropped and the speakers go on."""
@@ -799,6 +829,7 @@ class AudioSession:
         cushion = self.outputs.cushion
         if cushion is None:
             return
+        self._follow_stretch_knobs()
         level = self._frames(level_ms)
         room = self._room() if level is not None else None
         calibrating = self.calibration is not None and self.calibration.state == "running"
@@ -806,6 +837,11 @@ class AudioSession:
         if cushion.observe(level, room, may_cut=not calibrating, separate=separate):
             self._fade_detail = "colchón de la salida: la tubería se vaciaba"
             self.motor.cortar(lambda: setattr(self, "_cushion_bottom", True))
+        if getattr(cushion, "stretch_gave_up", False) and not self._stretch_warned:
+            self._stretch_warned = True
+            message = "colchón: dejó de estirar; el estiramiento no subía la tubería y no se pide más en esta sesión"
+            _log.warning("%s", message)
+            self.log("salida", motivo=message)
         if cushion.gave_up and not self._cushion_warned:
             self._cushion_warned = True
             message = (
@@ -814,6 +850,20 @@ class AudioSession:
             )
             _log.warning("%s", message)
             self.log("salida", motivo=message)
+
+    def _follow_stretch_knobs(self) -> None:
+        """The chain's stretch knobs to the speakers' stretcher and the monitor's, every block (they
+        are live). A motor without a chain (the tests' fakes) leaves the defaults."""
+        chain = getattr(self.motor, "cadena", None)
+        if not isinstance(chain, ChainValues):
+            return
+        limits = stretch_limits(chain)
+        for stretcher in (
+            getattr(self.outputs.cushion, "stretcher", None),
+            getattr(getattr(self.monitor, "cushion", None), "stretcher", None),
+        ):
+            if stretcher is not None:
+                stretcher.set_limits(*limits)
 
     def _frames(self, ms: float | None) -> int | None:
         return None if ms is None else round(ms * self.options.rate / 1000)
@@ -1226,6 +1276,13 @@ class AudioSession:
             return
         if not microphone:
             raise SessionError("unavailable", "recalibration needs a microphone and none was found")
+        blocked = self._microphone_blocked(microphone)
+        if blocked is not None:
+            # The loop is a side channel: it stays off and never ends the audio, also when it
+            # comes back by itself (after a calibration, when two speakers play again).
+            self._loop_wanted = False
+            self.log("lazo", motivo=f"no se abre {microphone}: {blocked}")
+            return
         o = self.options
         self.microphone = microphone
         self._loop_wanted = True
@@ -1339,6 +1396,9 @@ class AudioSession:
                 # The loop proposes nothing while a fade was inside the measured window:
                 # it would be measuring a cut signal (spec §6.5).
                 self._record("descartado", motivo="hubo un corte durante la medición")
+            elif self._last_stretch >= self._launched_at - window - sincronia.VentanaDeEmision.MARGEN_S:
+                # Nor with a stretch of the output inside it: what played slid against the reference.
+                self._record("descartado", motivo="la salida se estiró durante la medición (colchón)")
             elif result is None:
                 self._record("descartado", motivo="no se pudo alinear la grabación con las referencias")
             else:
@@ -1429,6 +1489,9 @@ class AudioSession:
             raise SessionError("conflict", "a calibration is already running")
         if not microphone:
             raise SessionError("unavailable", "calibrating needs a microphone and none was found")
+        blocked = self._microphone_blocked(microphone)
+        if blocked is not None:
+            raise SessionError("unavailable", f"no se abre {microphone}: {blocked}")
         # Only the playing speakers take part: the others never reach the microphone (spec §3).
         # Checked before pausing the loop, so a refusal leaves everything as it was.
         participants = self.outputs.playing()
@@ -1496,6 +1559,9 @@ class AudioSession:
             return False
         if not microphone:
             raise SessionError("unavailable", "there is no microphone to check")
+        blocked = self._microphone_blocked(microphone)
+        if blocked is not None:
+            raise SessionError("unavailable", f"no se abre {microphone}: {blocked}")
         if self._check_mic is not None:
             return True
         span = MIC_CHECK_S if seconds is None else seconds
@@ -1585,6 +1651,10 @@ class AudioSession:
         threading.Thread(target=run, name="aurasync-source-switch", daemon=True).start()
 
     # -- what a simulated session replaces ------------------------------------------
+
+    def _microphone_blocked(self, name: str) -> str | None:
+        guard = self.microphone_guard
+        return None if guard is None else guard(name)
 
     def _microphone(self, name: str, seconds: float) -> sonido.MicrofonoContinuo:
         return sonido.MicrofonoContinuo(name, self.options.rate, segundos=seconds)

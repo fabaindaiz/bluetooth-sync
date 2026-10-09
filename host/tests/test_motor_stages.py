@@ -173,9 +173,11 @@ def test_diffuse_makes_the_speakers_less_alike(pink_stereo):
     louder, _ = _run(_set(v, "diffuse", level_db=-6.0), two(), mono, mono, decorrelar=False, extraer_ambiente=False)
     assert corr(louder["A"], louder["B"]) < corr(wet["A"], wet["B"]) - 0.1
     assert m.metricas_cadena()["diffuse"]["active"]
-    # The level is live; the rest of the knobs go through the cut.
+    # The level is live; the rest of the knobs go through the transition: a crossfade of the whole
+    # stage by default (seamless transitions, stage 2), the cut with `transition=cut`.
     assert m.aplicar_cadena(_set(v, "diffuse", level_db=-20.0)) == "live"
-    assert m.aplicar_cadena(_set(v, "diffuse", rt60_s=1.0)) == "cut"
+    assert m.aplicar_cadena(_set(v, "diffuse", rt60_s=1.0)) == "crossfade"
+    assert m.aplicar_cadena(_set(v.with_algorithm("transition", "cut"), "diffuse", rt60_s=0.5)) == "cut"
 
 
 def test_true_peak_keeps_every_output_under_the_ceiling_oversampled(pink_stereo):
@@ -218,7 +220,7 @@ def test_eq_budget_and_treble_cap_act_on_what_plays_and_keep_the_stored_curve():
     inst = _three(eq_db=curve)
     m = motor.Motor(inst, SR, ecualizar=True, bloque=BLOCK)
     before = m.metricas_cadena()["eq"]["boost_energy_db"]["Go 4 A"]
-    assert m.aplicar_cadena(_set(ChainValues(), "eq", treble_cap_db=2.0)) == "cut"
+    assert m.aplicar_cadena(_set(ChainValues(), "eq", treble_cap_db=2.0)) == "crossfade"
     motor.procesar_completo(m, np.zeros(SR // 2), np.zeros(SR // 2), BLOCK)
     sounding = m.curva_sonando(inst.por_nombre("Go 4 A"))
     assert max(sounding[22:]) == pytest.approx(2.0)  # the thirds from 8 kHz up
@@ -246,7 +248,7 @@ def test_decorrelate_knobs_change_the_filters_and_their_shared_delay():
     assert all(int(np.argmax(np.abs(h))) == 192 for h in later)
     assert decorrelate.largo_necesario(256, 4.0, 2.0) > 256
     m = motor.Motor(_three(), SR, bloque=BLOCK)
-    assert m.aplicar_cadena(_set(ChainValues(), "decorrelate", mean_ms=4.0, spread_ms=2.0)) == "cut"
+    assert m.aplicar_cadena(_set(ChainValues(), "decorrelate", mean_ms=4.0, spread_ms=2.0)) == "crossfade"
     motor.procesar_completo(m, np.zeros(SR // 2), np.zeros(SR // 2), BLOCK)
     assert m.metricas_cadena()["decorrelate"]["length"] == decorrelate.largo_necesario(256, 4.0, 2.0)
 

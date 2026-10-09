@@ -388,19 +388,41 @@ def test_a_preset_of_pan_gain_and_delay_loads_without_a_cut(frozen):
     assert motor.en_corte
 
 
-def test_a_preset_with_a_stateful_change_cuts_once(frozen):
-    _ok(frozen, op="chain_set", stage="decorrelate", params={"seed": 5})
+def test_a_preset_with_an_eq_change_crossfades(frozen):
+    """Stage 1 cut once for any stateful chain change; since stage 2 the EQ (like diffuse, bass, the
+    decorrelator, the extractor and a limiter of equal latency) crossfades whole objects, so the
+    load goes through the transition with its fields, with no cut."""
+    _ok(frozen, op="chain_set", stage="eq", algorithm="boost_only")
     _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": -0.3})
-    _ok(frozen, op="preset_save", name="seeded")
-    _ok(frozen, op="chain_reset", stage="decorrelate", param="seed")
+    _ok(frozen, op="preset_save", name="equalised")
+    _ok(frozen, op="chain_set", stage="eq", algorithm="off")
     _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": 0.9})
     _ok(frozen, op="start")
     motor = FrozenSession.instances[0].motor
-    _ok(frozen, op="preset_load", name="seeded")
-    # `aplicar_cadena` asked for its cut and the fields joined it: one fade, no transition.
+    _ok(frozen, op="preset_load", name="equalised")
+    assert not motor._corte.busy  # noqa: SLF001
+    assert motor._transicion.busy  # noqa: SLF001
+    # The fields wait for the start of the transition with everything else.
+    assert frozen.installation.por_nombre("Go 4 Red").pan == 0.9
+    motor.procesar(np.zeros(8192), np.zeros(8192))
+    assert frozen.installation.por_nombre("Go 4 Red").pan == -0.3
+    _through(motor)
+    assert not motor.en_corte
+
+
+def test_a_preset_with_a_latency_changing_limiter_still_cuts(frozen):
+    """A limiter whose lookahead (its latency) changes cannot be crossfaded: it keeps the stage 1
+    behaviour, one cut, with the fields joining it at the bottom."""
+    _ok(frozen, op="chain_set", stage="limiter", algorithm="true_peak", params={"lookahead_ms": 4.0})
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": -0.3})
+    _ok(frozen, op="preset_save", name="lookahead")
+    _ok(frozen, op="chain_reset", stage="limiter", param="lookahead_ms")
+    _ok(frozen, op="set", speaker="Go 4 Red", changes={"pan": 0.9})
+    _ok(frozen, op="start")
+    motor = FrozenSession.instances[0].motor
+    _ok(frozen, op="preset_load", name="lookahead")
     assert motor._corte.busy  # noqa: SLF001
     assert not motor._transicion.busy  # noqa: SLF001
-    # The fields wait for the bottom of the cut with everything else.
     assert frozen.installation.por_nombre("Go 4 Red").pan == 0.9
     motor.procesar(np.zeros(8192), np.zeros(8192))
     assert frozen.installation.por_nombre("Go 4 Red").pan == -0.3
@@ -499,11 +521,10 @@ def _seeded_preset_assignment(tmp_path, mode):
         _ok(svc, op="start")
         motor = FrozenSession.instances[-1].motor
         _ok(svc, op="preset_load", name="p")
-        assert motor._corte.busy  # noqa: SLF001
-        assert not motor._transicion.busy  # noqa: SLF001
-        motor.procesar(np.zeros(8192), np.zeros(8192))
-        motor.procesar(np.zeros(16384), np.zeros(16384))
-        assert not motor.en_corte
+        # Stage 2: the seed change crossfades in `crossfade` mode and cuts in `cut` mode.
+        assert motor._corte.busy is (mode == "cut")  # noqa: SLF001
+        assert motor._transicion.busy is (mode == "crossfade")  # noqa: SLF001
+        _through(motor)
         return list(motor._orden), motor._banco_actual  # noqa: SLF001
     finally:
         svc.handle({"v": 1, "op": "shutdown"})
@@ -512,6 +533,8 @@ def _seeded_preset_assignment(tmp_path, mode):
 
 
 def test_a_stateful_preset_in_crossfade_mode_assigns_the_bank_from_the_new_mixes(tmp_path):
+    """Since stage 2 the `decorrelate.seed` change crossfades instead of cutting; the bank is still
+    assigned from the speakers' new mixes, the same as through the cut."""
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
     crossfade = _seeded_preset_assignment(tmp_path / "a", "crossfade")
@@ -552,19 +575,34 @@ def _ab_blindness(svc, first_changes, second_changes, *, plays=("x", "b", "a", "
     return seen
 
 
-def test_ab_presets_with_a_stateful_difference_cut_on_every_play(frozen):
-    """A and B differ in `decorrelate.seed`: every play of a, b and x cuts, whichever plays now, or
-    the hole would tell X apart (spec §4, "Blindness of the A/B"). The compensation joins the cut."""
+def test_ab_presets_with_a_latency_changing_limiter_cut_on_every_play(frozen):
+    """A and B differ in the limiter's lookahead (a latency change, still a cut): every play of a, b
+    and x cuts, whichever plays now, or the hole would tell X apart (spec §4, "Blindness of the A/B").
+    The compensation joins the cut."""
     seen = _ab_blindness(
         frozen,
-        [{"op": "chain_set", "stage": "decorrelate", "params": {"seed": 5}}],
-        [{"op": "chain_set", "stage": "decorrelate", "params": {"seed": 9}}],
+        [{"op": "chain_set", "stage": "limiter", "algorithm": "true_peak", "params": {"lookahead_ms": 4.0}}],
+        [{"op": "chain_set", "stage": "limiter", "algorithm": "true_peak", "params": {"lookahead_ms": 5.0}}],
     )
     for which, cut, faded, _before, after, applied in seen:
         assert (cut, faded) == (True, False), which
         # The compensation waited for the bottom and landed there with everything else.
         assert after == applied, which
     assert any(s[3] != s[4] for s in seen)  # it did move between plays (0 and -2 dB)
+
+
+def test_ab_between_eq_presets_is_blind_and_crossfades(frozen):
+    """A and B differ in the EQ (a stateful stage that crossfades since stage 2): every play of a, b
+    and x crossfades, with no hole to tell X apart. The compensation lands with the transition."""
+    seen = _ab_blindness(
+        frozen,
+        [{"op": "chain_set", "stage": "eq", "algorithm": "boost_only"}],
+        [{"op": "chain_set", "stage": "eq", "algorithm": "off"}],
+    )
+    for which, cut, faded, _before, after, applied in seen:
+        assert (cut, faded) == (False, True), which
+        assert after == applied, which
+    assert any(s[3] != s[4] for s in seen)
 
 
 def test_ab_presets_differing_only_in_ramps_always_crossfade(frozen):
@@ -585,7 +623,9 @@ def test_ab_loudness_counts_only_from_the_end_of_the_transition(frozen):
     _ok(frozen, op="chain_set", stage="transition", params={"fade_ms": 500.0})
     motor = _two_presets(frozen)
     # The service's loop reads it too (its summary every 0.5 s, the same `_ab_measure`).
-    meter = type("Meter", (), {"samples": 0, "outputs_short_term": -20.0, "summary": lambda *_a: {}})()
+    meter = type(
+        "Meter", (), {"samples": 0, "net_lu": lambda _self, _steps: -20.0, "short_steps": 30, "summary": lambda *_a: {}}
+    )()
     FrozenSession.instances[0].quality = meter
     _ok(frozen, op="ab_start", a="a", b="b")
     settle = round(service_module.AB_SETTLE_S * frozen.options.rate)

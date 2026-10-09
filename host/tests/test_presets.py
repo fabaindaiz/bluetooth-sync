@@ -70,3 +70,11 @@ def test_delete(tmp_path):
     store.save("wide", WIDE)
     store.delete("wide")
     assert PresetStore(tmp_path / "p.json").presets == {}
+
+
+def test_renaming_a_preset_without_a_part_drops_a_stale_part_of_the_new_name(tmp_path):
+    store = presets.PresetChainStore(tmp_path / "c.json")
+    store.save("stale", {"bass": {"algorithm": "protect"}})
+    store.rename("plain", "stale")
+    assert store.get("stale") is None
+    assert json.loads((tmp_path / "c.json").read_text())["presets"] == {}

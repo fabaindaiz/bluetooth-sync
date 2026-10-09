@@ -96,6 +96,7 @@ def test_start_twice_is_409(server):
             {"op": "set", "speaker": "Go 4 Blue", "changes": {"gain_db": -2}},
         ),
         ("GET", "/v1/presets", None, {"op": "presets"}),
+        ("PATCH", "/v1/presets/nope", {"new_name": "x"}, {"op": "preset_rename", "name": "nope", "new_name": "x"}),
         ("PATCH", "/v1/global", {"volume_db": 9}, {"op": "set", "changes": {"volume_db": 9}}),
         ("PATCH", "/v1/speakers/Ghost", {"pan": 0}, {"op": "set", "speaker": "Ghost", "changes": {"pan": 0}}),
     ],

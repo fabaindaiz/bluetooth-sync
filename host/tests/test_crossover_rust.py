@@ -332,9 +332,9 @@ def installation():
 
 @pytest.mark.parametrize("algorithm", ["protect", "crossover"])
 def test_a_live_cutoff_change_through_the_motor_matches_numpy(algorithm):
-    """The cutoff is a `cut` change: the motor builds the new stage outside the cut's bottom (its
-    Rust objects are made on the new stage's first block, through `backend.built`) and swaps it
-    in at the bottom. Both engines hear the same."""
+    """The cutoff is a `cut`-class change: the motor builds the new stage outside the block (its
+    Rust objects are made on the new stage's first block, through `backend.built`) and, with the
+    default `transition`, crossfades it in, then keeps only it. Both engines hear the same."""
     left, right = full_scale(4 * SR, seed=21), full_scale(4 * SR, seed=22)
     values = _set(ChainValues().with_algorithm("bass", algorithm), "bass", cutoff_hz=80.0)
     outs = {}
@@ -347,11 +347,13 @@ def test_a_live_cutoff_change_through_the_motor_matches_numpy(algorithm):
         swapped = False
         for k, i in enumerate(range(0, len(left), BLOCK)):
             if k == 12:
-                assert m.aplicar_cadena(_set(values, "bass", cutoff_hz=130.0)) == "cut"
+                assert m.aplicar_cadena(_set(values, "bass", cutoff_hz=130.0)) == "crossfade"
             for name, x in m.procesar(left[i : i + BLOCK], right[i : i + BLOCK]).items():
                 got[name].append(x)
             swapped = swapped or m._graves is not old  # noqa: SLF001
-        assert swapped, "the cut never reached its bottom"
+        assert swapped, "the transition never started"
+        assert not m.en_corte
+        assert isinstance(m._graves, chain_stages.BassStage)  # noqa: SLF001  (resolved to the new one)
         assert_engine_owns(stage_filters(m._graves), engine)  # noqa: SLF001
         assert backend.failure() is None
         outs[engine] = {n: np.concatenate(v) for n, v in got.items()}

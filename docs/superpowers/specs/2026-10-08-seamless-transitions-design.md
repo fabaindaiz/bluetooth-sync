@@ -63,6 +63,11 @@ and its API is `request/begin/take_starting/advance/cancel` (`dsp/transition.py`
 - `block(n)` returns, per block, the output envelope (1.0 in crossfade mode), whether the cut's
   bottom falls after this block (cut mode only), and the **weight of the new** `w[n]` (0 during WARM,
   rising during FADE, 1 after).
+- **Stage 2 as built (2026-10-09):** the ramps of a transition (pan, ambience, gain, mix, compensation, makeup)
+  hold during WARM and glide with the FADE; volume and mute keep moving. A limiter crossfade always uses
+  `equal_gain` whatever `shape` says (the two limiters see the same input; `equal_power` broke the ceiling by
+  3 dB, MEASURED in review), as delay crossfades always use `equal_power`. A decorrelator crossfade (two banks,
+  or dry vs decorrelated: nearly uncorrelated) always uses `equal_power` (`equal_gain` dipped 2.4–3.0 dB, MEASURED).
 - **WARM** lasts the longest warm-up asked by the pieces that changed (`need_warm(samples)`, max 1 s;
   0 when only ramps and delays change).
 - **Requests in a row collapse** (user, review 2026-10-08). A request during WARM joins the
@@ -78,7 +83,7 @@ and its API is `request/begin/take_starting/advance/cancel` (`dsp/transition.py`
   loudness, the probe correlation) freeze during a transition too, with no change on their side.
 
 **The knob.** A new chain stage `transition` ("Transiciones", last in `CHAIN`, no audio of its own)
-with two algorithms: `crossfade` (default) and `cut`. Its params are `fade_ms` (default 80, range 10–500,
+with two algorithms: `crossfade` (default) and `cut`. Its params are `fade_ms` (default 80, range 0–500 since the listening of 2026-10-09 (user), was 10–500;
 step 10) and `shape` (`choice`: `equal_gain` | `equal_power`). They are live params: they apply to the
 next transition. The panel shows it like any stage. **Presets do not carry it** (user, review
 2026-10-08): it is how one setting passes to another, not how a setting sounds, so it is left out of
@@ -173,6 +178,8 @@ own spec.
    presets that differ in pan, gain, delay or ambience has no hole.
 2. **Stateful stages through `Crossfaded`:** EQ, limiter, diffuse, bass, decorrelator, extractor.
    After this, every `cut`-class chain knob is seamless.
+   **Status: built 2026-10-09** (see "Stage 2 as built" in §3); a limiter change of latency and the render
+   still cut (the render is stage 3, deferred).
 3. **The render switch**, including `direct` and the makeup (`on_render_switch` called at the
    request; `render_match` already holds while `en_corte`).
 4. **The cushion by stretching** (§4b), for the speakers' shared cushion and the monitor's.

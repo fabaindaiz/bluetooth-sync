@@ -243,3 +243,21 @@ def test_a_loop_measurement_overlapping_a_crossfade_is_still_discarded(monkeypat
     s._recalibration_step({})  # noqa: SLF001
     assert s.last_recalibration["kind"] == "descartado"
     assert "corte" in s.last_recalibration["reason"]
+
+
+def test_a_loop_measurement_with_a_stretch_inside_is_discarded_as_a_stretch(monkeypatch):
+    """Stage 4: a stretch of the speakers' output inside the measured window discards it too, and
+    the reason names the stretch, not a cut (review 2026-10-09)."""
+    s, clock, _motor = _real_motor_session(monkeypatch, "crossfade")
+    s._launched_at = clock[0]  # noqa: SLF001
+    s._launch = {"window": 3.0}  # noqa: SLF001
+    s._last_stretch = clock[0]  # noqa: SLF001 - the speakers' stretcher ran inside the window
+    s.loop = type("Loop", (), {"advance": lambda _self: None})()
+    s._mic = type("Mic", (), {"bombear": lambda _self: None, "ultimos": lambda _self, _s: None})()  # noqa: SLF001
+    s._measured = set()  # noqa: SLF001
+    s._emission = s._probe_emission = type("E", (), {"agregar": lambda _self, _b: None})()  # noqa: SLF001
+    s._measurer = _Done()  # noqa: SLF001
+    s._recalibration_step({})  # noqa: SLF001
+    assert s.last_recalibration["kind"] == "descartado"
+    assert "estiró" in s.last_recalibration["reason"]
+    assert "corte" not in s.last_recalibration["reason"]

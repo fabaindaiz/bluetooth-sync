@@ -87,6 +87,7 @@ CONTROL_OPS = frozenset(
         "preset_save",
         "preset_load",
         "preset_delete",
+        "preset_rename",
         "save",
         "source",
         "tone",

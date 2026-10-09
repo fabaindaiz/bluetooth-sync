@@ -113,3 +113,65 @@ def test_moving_the_level_sets_the_headphones_volume(page: Page, svc: Running):
     )
     _wait(lambda: backend.volumes["simulated_headphones"] == 25.0)
     assert svc.service.monitor.settings.device_volume_pct == 25.0
+
+
+# -- the headphones' own microphone, and a target that goes away (2026-10-09, HP-O16) -----------
+# Entering Calibrar opened the WH-CH520's microphone: the headphones went to hands-free, their sink
+# was rebuilt, and the monitor fell silent while the card said it reached them.
+
+PHONES = "bluez_output.14_06_A7_6B_E3_F0.1"
+PHONES_MIC = "bluez_input.14:06:A7:6B:E3:F0"
+
+
+def _phones(svc: Running) -> None:
+    """The headphones next to the simulated room: their sink and their microphone, as PipeWire
+    lists them while they play A2DP; their microphone is the one chosen."""
+    observer = svc.service.observer
+    observer.view = {
+        **observer.view,
+        "sinks": [*observer.view["sinks"], {"node": PHONES, "description": "WH-CH520"}],
+        "microphones": [{"node": PHONES_MIC, "description": "WH-CH520"}, *observer.view["microphones"]],
+        "at": time.time(),
+    }
+    svc.command("microphone_set", node=PHONES_MIC)
+
+
+def test_calibrar_never_opens_the_monitors_own_microphone_and_says_why(page: Page, svc: Running):
+    _phones(svc)
+    svc.command("start")
+    svc.command("monitor_set", mode="mix", target=PHONES)
+    _wait(lambda: svc.service.monitor.state == "on")
+    asked: list[str] = []
+    page.on(
+        "request",
+        lambda r: asked.append((r.post_data_json or {}).get("op")) if r.url.endswith("/v1/command") else None,
+    )
+    page.locator("[data-goto]:visible", has_text="Calibrar").first.click()
+    expect(page.locator("#mic-note")).to_contain_text("salida del monitor", timeout=5000)
+    expect(page.locator("#mic-note")).to_contain_text("WH-CH520")
+    page.wait_for_timeout(1500)
+    assert "mic_check" not in asked
+    assert svc.service.session.pids()["microphone"] is None
+    expect(page.locator("#mic-recheck")).to_be_hidden()
+    option = page.locator(f'#cal-mic option[value="{PHONES_MIC}"]')
+    expect(option).to_have_attribute("disabled", "")
+    expect(option).to_have_attribute("title", re.compile("salida del monitor"))
+    assert svc.service.options.microphone == PHONES_MIC  # the choice stays: the panel asks for another
+
+
+def test_a_target_that_goes_away_says_the_monitor_waits_for_it(page: Page, svc: Running):
+    svc.command("start")
+    _open(page, svc)
+    svc.command("monitor_set", mode="mix", target="simulated_headphones")
+    state = page.locator("#monitor-state")
+    expect(state).to_contain_text("Llega a Audífonos (simulados)", timeout=5000)
+    observer = svc.service.observer
+    sinks = observer.view["sinks"]
+    observer.view = {
+        **observer.view,
+        "sinks": [s for s in sinks if s["node"] != "simulated_headphones"],
+        "at": time.time(),
+    }
+    expect(state).to_contain_text("desapareció de PipeWire", timeout=5000)
+    observer.view = {**observer.view, "sinks": sinks, "at": time.time()}
+    expect(state).to_contain_text("Llega a", timeout=5000)

@@ -86,7 +86,7 @@ def test_chain_set_reaches_the_playing_motor_and_returns_the_new_value(started, 
     assert reply["value"]["params"]["ceiling_db"] == -3.0
     assert all(abs(lim.ceiling - 10 ** (-3 / 20)) < 1e-12 for lim in motor._limitadores.values())  # noqa: SLF001
     reply = _ok(svc, op="chain_set", stage="decorrelate", params={"seed": 5})
-    assert reply["apply"] == "cut"
+    assert reply["apply"] == "crossfade"  # a new bank crossfades (the default transition)
     assert _chain_file(tmp_path) == {
         "v": 1,
         "chain": {"limiter": {"params": {"ceiling_db": -3.0}}, "decorrelate": {"params": {"seed": 5}}},
@@ -328,6 +328,25 @@ def test_changing_the_transition_mode_is_live(started):
     assert motor.aplicar_cadena(motor.cadena.with_algorithm("transition", "crossfade")) == "none"
 
 
+def test_the_stretch_knobs_are_live_and_not_in_a_preset(started, tmp_path):
+    """Stage 4: `start_stretch_ppm` and `max_stretch_ppm` reach the motor's chain (the session reads
+    them from there every block), move nothing now, and a preset neither saves nor loads them."""
+    svc = started()
+    _ok(svc, op="start")
+    motor = FakeSession.instances[0].motor
+    reply = _ok(svc, op="chain_set", stage="transition", params={"start_stretch_ppm": 2000, "max_stretch_ppm": 3000})
+    assert reply["apply"] == "none"
+    assert not motor.en_corte
+    assert motor.cadena.param("transition", "start_stretch_ppm") == 2000
+    assert motor.cadena.param("transition", "max_stretch_ppm") == 3000
+    _ok(svc, op="preset_save", name="p")
+    _ok(svc, op="chain_set", stage="transition", params={"start_stretch_ppm": 500})
+    _ok(svc, op="preset_load", name="p")
+    assert motor.cadena.param("transition", "start_stretch_ppm") == 500
+    side = json.loads((tmp_path / "presets-chain.json").read_text())
+    assert all("transition" not in entry for entry in side["presets"].values())
+
+
 def test_old_files_load_as_before(started, tmp_path):
     """New reader x old files: no chain.json, no presets-chain.json, a presets.json written
     before the chain. Everything at its default, and the preset loads as it always did."""
@@ -367,3 +386,26 @@ def test_the_installation_file_keeps_its_shape(started, tmp_path):
     assert set(data) == before
     assert data["retardo_traseros_ms"] == 9
     Instalacion.cargar(tmp_path / "inst.json")
+
+
+def test_renaming_a_preset_moves_its_chain_part(started, tmp_path):
+    svc = started()
+    _ok(svc, op="chain_set", stage="bass", algorithm="protect")
+    _ok(svc, op="preset_save", name="bass")
+    _ok(svc, op="preset_rename", name="bass", new_name="graves")
+    assert set(json.loads((tmp_path / "presets.json").read_text())["presets"]) == {"graves"}
+    side = json.loads((tmp_path / "presets-chain.json").read_text())
+    assert side["presets"] == {"graves": {"bass": {"algorithm": "protect"}}}
+    _ok(svc, op="chain_set", stage="bass", algorithm="off")
+    _ok(svc, op="preset_load", name="graves")
+    assert _ok(svc, op="state")["chain_summary"]["bass"] == "protect"
+
+
+def test_renaming_a_preset_without_a_chain_part_adds_none(started, tmp_path):
+    svc = started()
+    _ok(svc, op="preset_save", name="plain")
+    path = tmp_path / "presets-chain.json"
+    path.write_text(json.dumps({"v": 1, "presets": {}}))
+    svc.presets_chain.parts.clear()
+    _ok(svc, op="preset_rename", name="plain", new_name="liso")
+    assert json.loads(path.read_text())["presets"] == {}

@@ -265,9 +265,11 @@ def test_the_chain_off_reaches_every_stage_of_the_engine():
 
 
 def test_a_live_change_moves_without_a_cut_and_a_cut_change_waits_for_the_bottom():
-    m = motor.Motor(_inst(), SR, ecualizar=True)
+    """With `transition=cut`; in crossfade mode the decorrelator crossfades (test_motor_transitions)."""
+    cut_mode = ChainValues().with_algorithm("transition", "cut")
+    m = motor.Motor(_inst(), SR, ecualizar=True, chain=cut_mode)
     _play(m, 4)
-    live = ChainValues().with_change(chain.validate_set("ambience", params={"mix": 0.5}))
+    live = cut_mode.with_change(chain.validate_set("ambience", params={"mix": 0.5}))
     assert m.aplicar_cadena(live) == "live"
     assert not m.en_corte
     assert m._mezcla_ambiente.target == 0.5  # noqa: SLF001
@@ -282,9 +284,11 @@ def test_a_live_change_moves_without_a_cut_and_a_cut_change_waits_for_the_bottom
 
 
 def test_extractor_params_and_decorrelator_bank_change_at_the_bottom():
-    m = motor.Motor(_inst(), SR)
+    """With `transition=cut`; in crossfade mode both crossfade (test_motor_transitions)."""
+    cut_mode = ChainValues().with_algorithm("transition", "cut")
+    m = motor.Motor(_inst(), SR, chain=cut_mode)
     before = dict(m._filtros)  # noqa: SLF001
-    v = ChainValues().with_change(chain.validate_set("ambience", params={"lam": 0.8}))
+    v = cut_mode.with_change(chain.validate_set("ambience", params={"lam": 0.8}))
     v = v.with_change(chain.validate_set("decorrelate", params={"seed": 7, "length": 512}))
     assert m.aplicar_cadena(v) == "cut"
     assert m._extractor.p.lam == 0.9  # noqa: SLF001
@@ -297,7 +301,7 @@ def test_extractor_params_and_decorrelator_bank_change_at_the_bottom():
 def test_max_boost_caps_the_stored_curve_when_it_is_read():
     m = motor.Motor(_inst(), SR, ecualizar=True)
     v = ChainValues().with_change(chain.validate_set("eq", params={"max_boost_db": 2.0}))
-    assert m.aplicar_cadena(v) == "cut"
+    assert m.aplicar_cadena(v) == "crossfade"
     _play(m, 6)
     assert m.instalacion.por_nombre("L").ecualizacion_db == [6.0] * 27  # the input is kept
     assert m.metricas_cadena()["eq"]["max_boost_db"] == {"L": 2.0, "R": 2.0}
@@ -311,14 +315,33 @@ def test_the_transition_stage_defaults():
     v = ChainValues()
     assert v.algorithm("transition") == "crossfade"
     fade = stage.find_param("fade_ms", "crossfade")
-    assert (fade.default, fade.low, fade.high, fade.step) == (80, 10, 500, 10)
+    assert (fade.default, fade.low, fade.high, fade.step) == (80, 0, 500, 10)
     assert v.param("transition", "fade_ms") == 80
     shape = stage.find_param("shape", "crossfade")
     assert shape.kind == "choice"
     assert shape.choices == ("equal_gain", "equal_power")
     assert shape.default == "equal_gain"
     assert fade.apply == shape.apply == "live"
-    assert stage.algorithm("cut").params == ()
+    assert [p.id for p in stage.algorithm("cut").params] == ["start_stretch_ppm", "max_stretch_ppm"]
+
+
+def test_the_stretch_knobs_are_in_both_transition_modes():
+    """Stage 4 (spec 2026-10-08 §4b): the cushions' stretch, in ppm, live, the same in either mode."""
+    stage = chain.stage("transition")
+    for algorithm in ("crossfade", "cut"):
+        start = stage.find_param("start_stretch_ppm", algorithm)
+        top = stage.find_param("max_stretch_ppm", algorithm)
+        assert (start.kind, start.default, start.low, start.high, start.step) == ("int", 1000, 0, 5000, 100)
+        assert (top.kind, top.default, top.low, top.high, top.step) == ("int", 5000, 0, 10000, 500)
+        assert start.apply == top.apply == "live"
+        assert start.unit == top.unit == "ppm"
+        values = ChainValues().with_algorithm("transition", algorithm)
+        assert values.param("transition", "start_stretch_ppm") == 1000
+        assert values.param("transition", "max_stretch_ppm") == 5000
+    v = ChainValues().with_change(chain.validate_set("transition", params={"start_stretch_ppm": 0}))
+    assert v.param("transition", "start_stretch_ppm") == 0
+    with pytest.raises(chain.ChainError):
+        chain.validate_set("transition", params={"max_stretch_ppm": 20000})
 
 
 def test_limiter_knobs_are_live_and_its_activity_is_measured():
@@ -337,7 +360,7 @@ def test_the_metrics_are_cheap_plain_data():
     m = motor.Motor(_inst(), SR)
     _play(m, 10)
     v = ChainValues().with_algorithm("bass", "protect")
-    assert m.aplicar_cadena(v) == "cut"
+    assert m.aplicar_cadena(v) == "crossfade"  # the default `transition`; metrics read the new stage
     _play(m, 4)
     metrics = m.metricas_cadena()
     json.dumps(metrics)

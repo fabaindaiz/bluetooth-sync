@@ -85,6 +85,8 @@ def route(method: str, path: str, body: Any) -> dict:
             return {"v": v, "op": "preset_save", "name": name}
         case "DELETE", ["presets", name]:
             return {"v": v, "op": "preset_delete", "name": name}
+        case "PATCH", ["presets", name]:
+            return {**extra, "v": v, "op": "preset_rename", "name": name}
         case "POST", ["presets", name, "load"]:
             return {"v": v, "op": "preset_load", "name": name}
         case "POST", ["installation", "save"]:

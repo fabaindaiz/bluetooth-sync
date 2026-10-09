@@ -159,7 +159,7 @@ class QualityMeter:
 
     @property
     def outputs_short_term(self) -> float:
-        """LUFS of the sum of the outputs over the last 3 s (the A/B's number)."""
+        """LUFS of the sum of the outputs over the last 3 s."""
         meter = next(iter(self.outputs.values()), None)
         return self._sum(meter._short_steps) if meter is not None else -math.inf  # noqa: SLF001
 

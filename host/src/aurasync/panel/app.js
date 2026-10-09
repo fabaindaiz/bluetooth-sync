@@ -1248,6 +1248,9 @@ function renderHealth(s) {
   const cushion = h.output_cushion;
   const refills = !cushion ? ""
     : (cushion.refills ? ` · ${cushion.refills} relleno(s): la tubería se vaciaba y se rellenó para todos en un corte` : "")
+      + (cushion.stretch_ppm ? ` · estirando ${cushion.stretch_ppm > 0 ? "más lento" : "más rápido"} (${Math.abs(cushion.stretch_ppm)} ppm)` : "")
+      + (cushion.stretched_frames ? ` · ${cushion.stretched_frames} muestras corregidas estirando el audio, sin corte` : "")
+      + (cushion.stretch_gave_up ? " · dejó de estirar: no alcanzaba para subir la tubería" : "")
       + (cushion.gave_up ? " · el colchón dejó de rellenar: los rellenos no alcanzaban" : "")
       + (cushion.reason ? ` · sin relleno (${cushion.reason})` : "");
   $("t-pipe-sub").textContent = (h.bt_discovering
@@ -1846,12 +1849,24 @@ function renderMicrophones(s) {
   if (select.dataset.key === key || isEditing(select)) return;
   select.dataset.key = key;
   const known = mics.some((m) => m.node === current);
+  // El micrófono Bluetooth de una salida en uso (el monitor, un parlante) nunca se abre: abrirlo
+  // la pasa a manos libres y le corta el sonido. Se muestra deshabilitado, con el porqué.
   select.replaceChildren(
     el("option", { value: "", text: "ninguno" }),
-    ...mics.map((m) => el("option", { value: m.node, text: m.description })),
+    ...mics.map((m) => el("option", {
+      value: m.node,
+      text: m.blocked_reason ? `${m.description} (no se puede usar)` : m.description,
+      ...(m.blocked_reason ? { disabled: "", title: m.blocked_reason } : {}),
+    })),
     ...(current && !known ? [el("option", { value: current, text: `${current} (no está conectado)` })] : []),
   );
   select.value = current || "";
+}
+
+// Por qué el micrófono elegido no se puede abrir (`state.microphones[].blocked_reason`), o null.
+function micBlockedReason(s) {
+  const current = s && s.recalibration && s.recalibration.microphone;
+  return ((s && s.microphones) || []).find((m) => m.node === current)?.blocked_reason || null;
 }
 
 // -- configuración ------------------------------------------------------------------
@@ -1910,6 +1925,8 @@ const MIC_ADVICE = {
 const MIC_BLOCKING = new Set(["low", "high", "clip"]);
 
 function micReading(s) {
+  const blocked = micBlockedReason(s);
+  if (blocked) return { state: "none", why: `No se abre: ${blocked}.` };
   if (!s || s.session.status !== "playing") return { state: "none", why: "Iniciá la sesión para ver el nivel del micrófono." };
   const fresh = live.meters && performance.now() - live.metersAt < 500;
   const frame = (fresh ? live.meters.meters : s.meters) || {};
@@ -2011,6 +2028,7 @@ function micCheckPossible(s) {
   return document.visibilityState === "visible"
     && s.session.status === "playing" && !s.recalibration.active
     && !(cal && ["running", "measuring"].includes(cal.state))
+    && !micBlockedReason(s) // el micrófono de una salida en uso: nunca se pide abrirlo
     && s.recalibration.mic_check !== undefined; // un servicio anterior no tiene `mic_check`
 }
 
@@ -2248,6 +2266,153 @@ async function clearEq() {
 // Los presets que se están borrando (el aviso «Deshacer» sigue abierto): ya no se muestran.
 const hiddenPresets = new Set();
 
+// Los presets con la tarjeta abierta (sobreviven a que la lista se vuelva a dibujar).
+const openPresets = new Set();
+let presetSeq = 0;
+
+// Un diálogo para renombrar o confirmar un borrado (no `confirm()`: ver conftest.no_dialogs).
+// Devuelve el texto escrito (con `field`) o true al aceptar, y null al cancelar. `validate(valor)`
+// devuelve un mensaje de error, o async null/undefined si está bien; el diálogo sigue abierto.
+function askPreset({ title, text, field, confirm, danger, validate }) {
+  const dialog = $("preset-dialog");
+  const input = field ? el("input", { type: "text", id: "preset-dialog-input", maxlength: "64", autocomplete: "off", class: "preset-input", "aria-label": field.label, "aria-describedby": "preset-dialog-error" }) : null;
+  if (input) input.value = field.value;
+  const error = el("p", { id: "preset-dialog-error", class: "small", role: "alert" });
+  const ok = el("button", { type: "submit", class: danger ? "btn danger" : "btn", text: confirm });
+  const cancel = el("button", { type: "button", class: "ghost btn", text: "Cancelar" });
+  const form = el("form", { class: "mt-3" }, ...(input ? [input] : []), error,
+    el("div", { class: "row mt-3", style: "justify-content:flex-end" }, cancel, ok));
+  dialog.replaceChildren(el("h2", { class: "card-title", id: "preset-dialog-title", text: title }), el("p", { class: "mt-2 text-sm", text }), form);
+  dialog.setAttribute("aria-labelledby", "preset-dialog-title");
+  return new Promise((resolve) => {
+    let answer = null;
+    cancel.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", () => resolve(answer), { once: true });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      ok.disabled = true;
+      const message = input ? await validate(input.value.trim()) : null;
+      ok.disabled = false;
+      if (message) { error.textContent = message; (input || ok).focus(); return; }
+      answer = input ? input.value.trim() : true;
+      dialog.close();
+    });
+    dialog.showModal();
+    // Al borrar, el foco empieza en «Cancelar»: el gesto seguro (research/10 §9).
+    if (input) { input.focus(); input.select(); } else cancel.focus();
+  });
+}
+
+async function renamePreset(name) {
+  const known = () => (latest ? latest.presets : []);
+  const newName = await askPreset({
+    title: `Renombrar el preset «${name}»`,
+    text: "El nuevo nombre no puede estar vacío, ni pasar de 64 caracteres, ni repetir otro preset.",
+    field: { label: "Nuevo nombre del preset", value: name },
+    confirm: "Guardar",
+    validate: async (value) => {
+      if (!value) return "Escribí un nombre para el preset.";
+      if (value.length > 64) return "El nombre pasa de 64 caracteres.";
+      if (value === name) return null;
+      if (known().includes(value)) return `Ya hay un preset llamado «${value}».`;
+      $("preset-dialog").querySelector("button[type=button]").disabled = true;
+      const reply = await send("preset_rename", { name, new_name: value });
+      $("preset-dialog").querySelector("button[type=button]").disabled = false;
+      return reply && reply.ok ? null : (reply ? reply.error.message : "Sin conexión: la orden no se envió.");
+    },
+  });
+  if (newName && newName !== name) {
+    if (openPresets.delete(name)) openPresets.add(newName);
+    toast(`Preset «${name}» renombrado a «${newName}»`);
+    if (latest) { $("presets").dataset.key = ""; renderPresets(latest); }
+    // Some browsers give the focus back to the removed opener after `close`: ask again a moment later.
+    for (const wait of [0, 60, 250]) setTimeout(() => focusRename(newName), wait);
+  }
+}
+
+function focusAfterDelete(neighbour) {
+  if ($("preset-dialog").open) return;
+  const target = neighbour
+    ? $("presets").querySelector(`[data-delete="${CSS.escape(neighbour)}"]`)
+    : $("preset-name");
+  if (target && document.activeElement !== target) target.focus();
+}
+
+function focusRename(name) {
+  const target = $("presets").querySelector(`[data-rename="${CSS.escape(name)}"]`);
+  if (target && document.activeElement !== target && !$("preset-dialog").open) target.focus();
+}
+
+async function deletePreset(name) {
+  const yes = await askPreset({
+    title: "Borrar un preset",
+    text: `¿Borrar el preset «${name}»? No se puede deshacer después de 10 s.`,
+    confirm: "Borrar",
+    danger: true,
+  });
+  if (!yes) return;
+  // El foco pasa a la fila siguiente (o la anterior, o el campo de nombre si no queda ninguna).
+  const names = [...$("presets").querySelectorAll("[data-rename]")].map((b) => b.dataset.rename);
+  const at = names.indexOf(name);
+  const neighbour = names[at + 1] ?? names[at - 1] ?? null;
+  // Un preset borrado no se puede volver a escribir desde el panel: se borra al vencer el aviso.
+  hiddenPresets.add(name);
+  if (latest) renderPresets(latest);
+  for (const wait of [0, 60, 250]) setTimeout(() => focusAfterDelete(neighbour), wait);
+  const back = () => { hiddenPresets.delete(name); if (latest) renderPresets(latest); };
+  deferUndo(`Preset «${name}» borrado`, async () => { await send("preset_delete", { name }); back(); }, back);
+}
+
+// La tarjeta de un preset: lo que guarda, en pocas líneas. La cadena se muestra con los títulos que
+// el servicio describe; lo que el preset no guarda dice «por defecto».
+const PRESET_CARD_STAGES = ["spatial", "diffuse", "ambience", "decorrelate", "eq", "bass", "limiter"];
+
+function presetValue(value, unit) {
+  if (typeof value === "boolean") return value ? "sí" : "no";
+  if (typeof value === "number") return `${nf(value, Number.isInteger(value) ? 0 : 2)}${unit ? ` ${unit}` : ""}`;
+  return String(value);
+}
+
+function presetChainLines(stages, part) {
+  return PRESET_CARD_STAGES.map((id) => {
+    const stage = stages.find((x) => x.id === id);
+    if (!stage) return null;
+    const entry = part ? part[id] : null;
+    if (!entry) return `${stage.title}: por defecto`;
+    const algo = stage.algorithms.find((x) => x.id === (entry.algorithm || stage.default_algorithm));
+    const params = Object.entries(entry.params || {}).map(([pid, value]) => {
+      const info = algo && algo.params.find((x) => x.id === pid);
+      return `${info ? info.title : pid} ${presetValue(value, info && info.unit)}`;
+    });
+    const label = `${algo ? algo.title : entry.algorithm}${entry.algorithm ? "" : " (por defecto)"}`;
+    return `${stage.title}: ${label}${params.length ? ` · ${params.join(" · ")}` : ""}`;
+  }).filter(Boolean);
+}
+
+function presetSpeakerLines(preset) {
+  const lines = Object.entries(preset.speakers).map(([speaker, f]) => {
+    const parts = [];
+    if (f.pan != null) parts.push(`pan ${nf(f.pan, 2)}`);
+    if (f.ambience != null) parts.push(`ambiente ${nf(f.ambience, 2)}`);
+    if (f.gain_db != null) parts.push(`ganancia ${nf(f.gain_db, 1)} dB`);
+    return `${speaker}: ${parts.join(" · ")}`;
+  });
+  if (preset.global.rear_delay_ms != null) lines.push(`Retardo de los traseros: ${nf(preset.global.rear_delay_ms, 1)} ms`);
+  return lines;
+}
+
+async function fillPresetDetail(name, box) {
+  if (!api) return;
+  const [list, chain] = await Promise.all([api.raw({ op: "presets" }), api.raw({ op: "chain" })]);
+  if (!list || !list.ok || !chain || !chain.ok || !list.result.presets[name]) {
+    box.replaceChildren(el("p", { class: "muted small", text: "No se pudo leer el preset." }));
+    return;
+  }
+  const part = (list.result.chain || {})[name] || null;
+  const lines = [...presetChainLines(chain.result.stages, part), ...presetSpeakerLines(list.result.presets[name])];
+  box.replaceChildren(el("div", { class: "small", role: "list" }, ...lines.map((line) => el("p", { text: line, role: "listitem", style: "margin:0" }))));
+}
+
 function renderPresets(s) {
   const list = $("presets");
   const presets = s.presets.filter((n) => !hiddenPresets.has(n));
@@ -2259,16 +2424,33 @@ function renderPresets(s) {
       // Cargar pisa los ajustes de cada parlante: «Deshacer» los vuelve a poner (research/11 §4.3).
       load.addEventListener("click", () => withUndo(`Preset «${name}» cargado`, () => send("preset_load", { name })));
       load.disabled = Boolean(s.ab && s.ab.active);
-      const del = el("button", { type: "button", class: "ghost small-btn danger", text: "Borrar" });
-      del.addEventListener("click", () => {
-        // Un preset borrado no se puede volver a escribir desde el panel: se borra al vencer el aviso.
-        hiddenPresets.add(name);
-        if (latest) renderPresets(latest);
-        const back = () => { hiddenPresets.delete(name); if (latest) renderPresets(latest); };
-        deferUndo(`Preset «${name}» borrado`, async () => { await send("preset_delete", { name }); back(); }, back);
+      load.setAttribute("aria-label", `Cargar el preset ${name}`);
+      const rename = el("button", { type: "button", class: "ghost small-btn", text: "Renombrar", "data-rename": name });
+      rename.setAttribute("aria-label", `Renombrar el preset ${name}`);
+      rename.disabled = Boolean(s.ab && s.ab.active);
+      rename.addEventListener("click", () => renamePreset(name));
+      const del = el("button", { type: "button", class: "ghost small-btn danger", text: "Borrar", "data-delete": name });
+      del.setAttribute("aria-label", `Borrar el preset ${name}`);
+      del.addEventListener("click", () => deletePreset(name));
+      const detailId = `preset-detail-${++presetSeq}`;
+      const open = openPresets.has(name);
+      const toggle = el("button", { type: "button", class: "ghost small-btn", text: open ? "Ocultar" : "Ver", "aria-expanded": String(open), "aria-controls": detailId });
+      const toggleLabel = (isOpen) => `${isOpen ? "Ocultar" : "Ver"} el detalle del preset ${name}`;
+      toggle.setAttribute("aria-label", toggleLabel(open));
+      const box = el("div", { id: detailId, class: "muted", style: "flex-basis:100%", "data-preset-detail": name });
+      box.hidden = !open;
+      if (open) fillPresetDetail(name, box);
+      toggle.addEventListener("click", () => {
+        const now = box.hidden;
+        box.hidden = !now;
+        toggle.setAttribute("aria-expanded", String(now));
+        toggle.textContent = now ? "Ocultar" : "Ver";
+        toggle.setAttribute("aria-label", toggleLabel(now));
+        if (now) { openPresets.add(name); fillPresetDetail(name, box); } else openPresets.delete(name);
       });
-      return el("li", { class: name === s.preset ? "current" : "" },
-        el("span", { class: "preset-name", text: name + (name === s.preset ? " · actual" : "") }), load, del);
+      const item = el("li", { class: name === s.preset ? "current" : "", style: "flex-wrap:wrap" },
+        el("span", { class: "preset-name", text: name + (name === s.preset ? " · actual" : "") }), toggle, load, rename, del, box);
+      return item;
     }));
     if (presets.length === 0) list.append(el("li", { class: "muted small", text: "Sin presets guardados." }));
     for (const id of ["ab-a", "ab-b"]) {
@@ -2942,11 +3124,14 @@ function setupSpatial() {
 function monitorStateText(m) {
   const name = (node) => ((m.candidates || []).find((c) => c.node === node) || {}).description || node;
   if (m.state === "off") return "Apagado.";
+  // La salida desapareció de PipeWire (un cambio de perfil Bluetooth, una desconexión): el monitor
+  // vuelve solo cuando reaparece.
+  if (m.state === "waiting" && m.target_gone) return `Esperando a ${name(m.target)}: desapareció de PipeWire; el monitor vuelve solo cuando reaparezca.`;
   if (m.state === "waiting") return `Elegido ${name(m.target)}: se enciende al reproducir.`;
   if (m.state === "opening") return "Abriendo…";
   if (m.state === "failed") return `No se pudo: ${m.error}`;
   if (!m.reached) return `PipeWire lo mandó a ${m.routed_to ? name(m.routed_to) : "ninguna salida"}, no a ${name(m.target)}.`;
-  const cushion = m.cushion_ms == null ? "" : ` Colchón ${Math.round(m.cushion_ms)} ms · rellenos ${m.refills || 0}${m.refills ? " (la salida se quedó sin audio y se rellenó)" : ""}${m.trims ? ` · recortes ${m.trims}` : ""}.`;
+  const cushion = m.cushion_ms == null ? "" : ` Colchón ${Math.round(m.cushion_ms)} ms · rellenos ${m.refills || 0}${m.refills ? " (la salida se quedó sin audio y se rellenó)" : ""}${m.trims ? ` · recortes ${m.trims}` : ""}${m.stretched_frames ? ` · ${m.stretched_frames} muestras corregidas estirando el audio, sin silencio` : ""}${m.stretch_gave_up ? " · dejó de estirar" : ""}${m.stretch_ppm ? ` (ahora ${m.stretch_ppm > 0 ? "más lento" : "más rápido"}, ${Math.abs(m.stretch_ppm)} ppm)` : ""}.`;
   return `Llega a ${name(m.target)}.${m.drops ? ` Se descartaron ${m.drops} bloques: la salida no da abasto.` : ""}${cushion}${monitorMatchText(m)}`;
 }
 

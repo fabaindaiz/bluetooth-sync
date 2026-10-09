@@ -14,7 +14,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from aurasync import __version__, chain, control
+from aurasync import __version__, chain, control, microphones
 from aurasync import outputs as outputs_module
 from aurasync.dsp import profiles
 from aurasync.session import pipe_size_ms
@@ -205,7 +205,8 @@ def build_snapshot(svc: Service) -> dict[str, Any]:
             "microphone": svc.options.microphone,
             "mic_check": bool(getattr(session, "mic_check", False)) if session is not None else False,
         },
-        "microphones": observer.get("microphones", []),
+        # Each with why it must not be opened (the Bluetooth microphone of an output in use).
+        "microphones": microphones.mark(observer.get("microphones", []), svc.outputs_in_use()),
         "monitor": svc.monitor.view(observer.get("sinks", []), svc.installation, svc.options.sink_name)
         if getattr(svc, "monitor", None) is not None
         else None,
@@ -447,13 +448,17 @@ def _health(svc: Service, block_ms: float, lost: list[str]) -> dict[str, Any]:
         "bt_discovering": bool(svc.observer.view.get("discovering")),
         "cuts": session.cuts.latest() if session is not None and hasattr(session, "cuts") else None,
         "streams_open": svc.streams.get("open", 0),
+        # The engine thread's niceness (priority.py): asked, read back, how, and why not.
+        "engine_priority": svc.engine_priority.view() if getattr(svc, "engine_priority", None) else None,
     }
 
 
 def _output_cushion(session: Any) -> dict[str, Any] | None:
     """The speakers' cushion (cushion.SharedCushion): its target, how many times a pipe that was
     running dry was refilled for every speaker, whether a refill waits for its cut, why one is not
-    being asked (`reason`), and whether it stopped asking (`gave_up`)."""
+    being asked (`reason`), and whether it stopped asking (`gave_up`). Stage 4: the frames added or
+    dropped by stretching (`stretched_frames`), the stretch now (`stretch_ppm`, 0 when idle), and
+    whether it stopped because it did not raise the pipe (`stretch_gave_up`)."""
     cushion = getattr(getattr(session, "outputs", None), "cushion", None)
     if cushion is None:
         return None
@@ -463,6 +468,9 @@ def _output_cushion(session: Any) -> dict[str, Any] | None:
         "pending": cushion.pending,
         "reason": cushion.reason,
         "gave_up": cushion.gave_up,
+        "stretched_frames": cushion.stretched_frames,
+        "stretch_ppm": round(cushion.stretch_ppm, 1),
+        "stretch_gave_up": cushion.stretch_gave_up,
     }
 
 

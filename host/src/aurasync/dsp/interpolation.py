@@ -86,6 +86,14 @@ def read(data: np.ndarray, position: np.ndarray) -> np.ndarray:
 
 def read_numpy(data: np.ndarray, position: np.ndarray) -> np.ndarray:
     """`read` in numpy: the oracle the Rust port is held to."""
+    index, weights = taps_numpy(position)
+    return np.sum(data[index] * weights, axis=1)
+
+
+def taps_numpy(position: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """What `read_numpy` reads for each position: the samples' indices and their weights, both
+    `(len(position), 2 * HALF)`. Several signals read at the same positions (the output stretcher's
+    channels, dsp/stretch.py) compute them once."""
     i0 = np.floor(position).astype(int)
     frac = position - i0
     distinct, which = np.unique(frac, return_inverse=True)
@@ -96,4 +104,4 @@ def read_numpy(data: np.ndarray, position: np.ndarray) -> np.ndarray:
     else:
         weights = _kernel_from_table(frac)
         weights /= weights.sum(axis=1, keepdims=True)
-    return np.sum(data[i0[:, None] + _OFFSETS[None, :]] * weights, axis=1)
+    return i0[:, None] + _OFFSETS[None, :], weights

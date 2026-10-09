@@ -50,8 +50,14 @@ flujo continuo. `procesar` devuelve exactamente tantas muestras como recibió.
   bloque siguiente corren las acciones pedidas, cada rampa (pan, ambiente, mezcla del extractor,
   compensación del A/B, makeup del render y la ganancia de cada parlante) llega a su objetivo en
   exactamente `fade_ms`, y cada línea cuyo retardo cambia funde su lectura vieja con la nueva en
-  el mismo largo, siempre a igual potencia (`equal_power`). El reloj y la cola son `dsp/transition.py`; lo que tiene
-  estado (la ecualización, el limitador, el render) sigue pasando por el corte.
+  el mismo largo, siempre a igual potencia (`equal_power`). El reloj y la cola son `dsp/transition.py`.
+  Etapa 2: la difusión, los graves, la ecualización, el banco del decorrelador, el extractor y un
+  limitador de la misma latencia se cruzan enteros (un `Crossfaded`): la etapa nueva se calienta a
+  la sombra con la misma entrada (WARM, hasta 1 s; las rampas y las líneas esperan), se mezcla con
+  la vieja en `fade_ms` según `shape`, y queda sola. El limitador se mezcla siempre a igual ganancia
+  y el decorrelador a igual potencia. Prender o apagar el decorrelador mezcla la señal seca con la
+  decorrelada, que el motor ya calcula, y la bandera cambia al terminar. Lo demás que tiene estado
+  (el render, un limitador de otra latencia) sigue pasando por el corte.
 
 **La cadena** (`chain.py`, spec 2026-10-02 §4). Los parámetros de cada etapa —los del
 extractor, el decorrelador, la ecualización, el limitador y las velocidades— salen de un
@@ -101,7 +107,7 @@ from aurasync.dsp import ambience, decorrelate, decorrelation_bank, eq, interpol
 from aurasync.dsp.ramps import DecibelRamp, FadeGate, Smoothed
 from aurasync.dsp.retardo import LineaDeRetardo
 from aurasync.dsp.spatial import SPATIAL_RENDERS, SpatialParams, SpatialUpmix, from_character
-from aurasync.dsp.transition import Transition
+from aurasync.dsp.transition import Crossfaded, Transition
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -128,6 +134,10 @@ MAXIMO_RAMPA_S = 2.0
 alcanzar pasa por el corte en vez de arrastrarse."""
 DIRECT = "direct"
 """The `spatial` stage's pure aligned stereo render."""
+ETAPAS_CRUZABLES = ("_difusion", "_graves", "_extractor")
+"""Los atributos del motor que un fundido puede tener cruzados (un `Crossfaded`, etapa 2 de la spec)."""
+DICCIONARIOS_CRUZABLES = ("_limitadores", "_ecualizador", "_decorreladores")
+"""Lo mismo, por parlante: cada valor del diccionario puede ser un `Crossfaded`."""
 
 
 class Motor:
@@ -176,7 +186,10 @@ class Motor:
             c.param("volume", "gain_speed_db_s") if velocidad_ganancia_db_s is None else velocidad_ganancia_db_s
         )
         self.decorrelacion_activa = decorrelar and c.algorithm("decorrelate") != "off"
-        """Si la salida pasa por el decorrelador. Solo cambia a través del corte."""
+        """Si la salida pasa por el decorrelador. Cambia en el fondo de un corte o al terminar un fundido."""
+        self._decorrelacion_destino: bool | None = None
+        """Durante un fundido que prende o apaga el decorrelador, lo que `decorrelacion_activa` va a
+        valer al terminar (`_cruzar_decorrelacion`); mientras tanto se mezclan las dos señales."""
         self.silenciados: set[str] = set()
         """Los parlantes en silencio. Es un estado del oyente: no va a la instalación."""
         self.sonda = None
@@ -185,7 +198,8 @@ class Motor:
         y quieta, el motor no la llama: la salida es bit a bit la de siempre."""
         self.ecualizar = ecualizar
         self.ecualizacion_activa = c.algorithm("eq") != "off"
-        """Si se aplica la ecualización de cada parlante. Solo cambia a través del corte."""
+        """Si se aplica la ecualización de cada parlante. Cambia en el fondo de un corte, o al empezar un
+        fundido, con los filtros nuevos (los viejos siguen con sus coeficientes hasta que terminan)."""
         self.render: str = c.algorithm("spatial")
         """The render playing (`classic`, `spatial`, `front` or `direct`): it changes at a cut's bottom."""
         self.on_render_switch: Callable[[str], float] | None = None
@@ -332,7 +346,7 @@ class Motor:
         claves_banco = {("decorrelate", k) for k in ("length", "seed", "mean_ms", "spread_ms", "assignment")}
         if self.decorrelar and claves_banco & cambios:
             clases.add("banco")
-        if (self.decorrelar and nuevo.algorithm("decorrelate") != "off") != self.decorrelacion_activa:
+        if (self.decorrelar and nuevo.algorithm("decorrelate") != "off") != self._decorrelacion_objetivo():
             clases.add("decorrelacion")
         ecualizar = nuevo.algorithm("eq") != "off"
         if self.ecualizar and (
@@ -350,15 +364,32 @@ class Motor:
             clases.add("limitador")
         return clases
 
+    def _clases_sin_corte(self, clases: set[str], anterior: ChainValues, nuevo: ChainValues) -> set[str]:
+        """De `clases`, las que el fundido cruzado pasa sin corte (spec 2026-10-08 §4, etapa 2): la
+        difusión, los graves, la ecualización, el decorrelador (su banco y prenderlo o apagarlo), el
+        extractor y el limitador si su latencia no cambia. Con `transition=cut`, ninguna."""
+        if nuevo.algorithm("transition") == "cut":
+            return set()
+        sin_corte = {"difusion", "graves", "eq", "banco", "decorrelacion", "ambiente"}
+        if chain_stages.limiter_latency(anterior, self.sr) == chain_stages.limiter_latency(nuevo, self.sr):
+            sin_corte.add("limitador")
+        return clases & sin_corte
+
     def pide_corte(self, valores: ChainValues) -> bool:
         """Si `aplicar_cadena(valores)` pediría un corte. Consulta pura, sin efectos."""
-        return bool(self._clases_de_corte(set(cadena.changed_params(self._cadena, valores.copy())), valores))
+        nuevo = valores.copy()
+        clases = self._clases_de_corte(set(cadena.changed_params(self._cadena, nuevo)), nuevo)
+        return bool(clases - self._clases_sin_corte(clases, self._cadena, nuevo))
 
     def aplicar_cadena(self, valores: ChainValues, *, en_corte: bool = False) -> str:
-        """Lleva el motor a `valores`. Devuelve cómo: `"none"`, `"live"` o `"cut"`.
+        """Lleva el motor a `valores`. Devuelve cómo: `"none"`, `"live"`, `"crossfade"` o `"cut"`.
 
         Lo `live` se mueve ya, con sus rampas; lo `cut` se pide al corte (o, con
         `en_corte`, se aplica ya: quien llama está en el fondo de uno, como `preset_load`).
+        Con `transition=crossfade`, si todo lo que tiene estado es la difusión, los graves, la
+        ecualización, el decorrelador, el extractor o un limitador de la misma latencia, va por el
+        fundido (`cambiar`): la etapa nueva se calienta a la sombra y se mezcla con la vieja
+        (`_cruzar`), y devuelve `"crossfade"`.
         Los algoritmos de `ambience`, `decorrelate` y `eq` se comparan con el estado que el
         motor tiene de verdad, no con la cadena anterior: los atributos de antes
         (`decorrelacion_activa`, …) se pueden haber cambiado a mano.
@@ -369,8 +400,17 @@ class Motor:
         hubo_vivo = self._aplicar_vivo(cambios, nuevo)
 
         al_corte = []
+        al_fundido: list[Callable[[], None]] = []
         clases = self._clases_de_corte(cambios, nuevo)
-        if "ambiente" in clases:
+        # Si una sola clase todavía corta, las demás viajan en ese corte: no se mezclan los dos caminos.
+        fundir = not en_corte and bool(clases) and not clases - self._clases_sin_corte(clases, anterior, nuevo)
+        if "ambiente" in clases and fundir:
+            # Un segundo extractor con los parámetros nuevos y el mismo `n_fft`: la misma latencia,
+            # así el camino directo sigue alineado.
+            actual = _instancias(self._extractor)[-1]
+            extractor = ambience.Extractor(self._parametros_ambiente(), actual.n_fft, actual.salto)
+            al_fundido.append(lambda: self._cruzar("_extractor", extractor, extractor.n_fft + 10 * extractor.salto))
+        elif "ambiente" in clases:
             parametros = self._parametros_ambiente()
             al_corte.append(lambda: setattr(self._extractor, "p", parametros))
         if "banco" in clases:
@@ -380,17 +420,33 @@ class Motor:
             orden, aviso = self._asignacion(banco), self._aviso_de(banco)
             # Lo pendiente era del banco de antes: lo reemplaza esta asignación.
             self._orden_pendiente = None
-            al_corte.append(lambda: self._cambiar_banco(banco, orden, aviso))
+            if fundir:
+                al_fundido.append(lambda: self._cruzar_banco(banco, aviso))
+            else:
+                al_corte.append(lambda: self._cambiar_banco(banco, orden, aviso))
         elif self.decorrelar and ("ambience", None) in cambios:
             # Prender o apagar el extractor cambia las mezclas: la asignación espera al corte.
             self._revisar_asignacion()
         decorrelar = self.decorrelar and nuevo.algorithm("decorrelate") != "off"
-        if "decorrelacion" in clases:
+        if "decorrelacion" in clases and fundir:
+            # Con el cruce de graves, una etapa nueva para la alimentación con el otro atraso.
+            graves_nuevos = self._nuevos_graves() if _instancias(self._graves)[-1].to is not None else None
+            al_fundido.append(lambda: self._cruzar_decorrelacion(graves_nuevos))
+        elif "decorrelacion" in clases:
             al_corte.append(lambda: setattr(self, "decorrelacion_activa", decorrelar))
         ecualizar = nuevo.algorithm("eq") != "off"
         if not self.ecualizar:
             # Sin la etapa en el camino no hay nada que cambie el sonido: no hace falta el corte.
             self.ecualizacion_activa = ecualizar
+        elif "eq" in clases and fundir:
+
+            def cruzar_ecualizacion() -> None:
+                # De la cadena al correr, no de cuando se pidió: otro pedido antes del inicio que la
+                # devolvió a su valor no tiene clase propia (se compara con el estado de ahora).
+                self.ecualizacion_activa = self._cadena.algorithm("eq") != "off"
+                self._cruzar_taps()
+
+            al_fundido.append(cruzar_ecualizacion)
         elif "eq" in clases:
 
             def cambiar_ecualizacion() -> None:
@@ -398,14 +454,21 @@ class Motor:
                 self._cambiar_taps()
 
             al_corte.append(cambiar_ecualizacion)
-        # Las etapas nuevas (`chain_stages.py`): se arman ahora, fuera del fondo del corte que
-        # corre dentro de `procesar`, y se cambian enteras en el fondo.
+        # Las etapas nuevas (`chain_stages.py`): se arman ahora, fuera del bloque (el fondo del
+        # corte y el inicio del fundido corren dentro de `procesar`), y se cambian enteras en el
+        # fondo o se cruzan con las viejas en el fundido.
         if "difusion" in clases:
             difusion = self._nueva_difusion()
-            al_corte.append(lambda: setattr(self, "_difusion", difusion))
+            if fundir:
+                al_fundido.append(lambda: self._cruzar("_difusion", difusion, difusion.memory_samples()))
+            else:
+                al_corte.append(lambda: setattr(self, "_difusion", difusion))
         if "graves" in clases:
             graves = self._nuevos_graves()
-            al_corte.append(lambda: setattr(self, "_graves", graves))
+            if fundir:
+                al_fundido.append(lambda: self._cruzar_graves(graves))
+            else:
+                al_corte.append(lambda: setattr(self, "_graves", graves))
         if "espacial" in clases:
             render = nuevo.algorithm("spatial")
             espacial = self._nuevo_espacial(nuevo) if render in SPATIAL_RENDERS else None
@@ -418,7 +481,10 @@ class Motor:
                 else None
             )
             al_corte.append(lambda: self._switch_render(render, espacial, fresh))
-        if "limitador" in clases:
+        if "limitador" in clases and fundir:
+            limitadores = {p.nombre: self._nuevo_limitador() for p in self.instalacion.parlantes}
+            al_fundido.append(lambda: self._cruzar_limitadores(limitadores))
+        elif "limitador" in clases:
 
             def cambiar_limitadores() -> None:
                 self._limitadores = {p.nombre: self._nuevo_limitador() for p in self.instalacion.parlantes}
@@ -426,6 +492,9 @@ class Motor:
             al_corte.append(cambiar_limitadores)
         # `volume.avrcp` no es del motor: el servicio mueve el volumen digital (`bt_volume.py`).
 
+        if al_fundido:
+            self.cambiar(lambda: [accion() for accion in al_fundido])
+            return "crossfade"
         if not al_corte:
             return "live" if hubo_vivo else "none"
         if en_corte:
@@ -463,26 +532,32 @@ class Motor:
                 suave.rate = 1000 / nuevo.param("volume", "mute_fade_ms")
             hubo = True
         if {("limiter", "ceiling_db"), ("limiter", "release_ms")} & cambios:
-            techo_db = nuevo.param("limiter", "ceiling_db")
-            liberacion_ms = nuevo.param("limiter", "release_ms")
-            techo = 10 ** (techo_db / 20)
-            paso = 1.0 / (liberacion_ms / 1000 * self.sr)
-            for lim in self._limitadores.values():
-                if isinstance(lim, limiter.TruePeakLimiter):
-                    lim.configure(techo_db, liberacion_ms)
-                else:
-                    lim.ceiling, lim.step = techo, paso
+            for lim in (i for cada in self._limitadores.values() for i in _instancias(cada)):
+                self._configurar_limitador(lim, nuevo)
             hubo = True
         if self.espacial is not None and any(e == "spatial" and k is not None for e, k in cambios):
             self.espacial.set_params(self._parametros_espaciales(nuevo))
             hubo = True
         if ("diffuse", "level_db") in cambios and nuevo.algorithm("diffuse") == self._cadena_difusion():
-            self._difusion.set_level(nuevo.param("diffuse", "level_db"))
+            for difusion in _instancias(self._difusion):
+                difusion.set_level(nuevo.param("diffuse", "level_db"))
             hubo = True
         if ("bass", "harmonics_db") in cambios and nuevo.algorithm("bass") == self._graves.algorithm:
-            self._graves.set_harmonics(nuevo.param("bass", "harmonics_db"))
+            for graves in _instancias(self._graves):
+                graves.set_harmonics(nuevo.param("bass", "harmonics_db"))
             hubo = True
         return hubo
+
+    def _configurar_limitador(
+        self, lim: limiter.PeakLimiter | limiter.TruePeakLimiter, valores: ChainValues | None = None
+    ) -> None:
+        """Las perillas vivas del limitador (`ceiling_db`, `release_ms`) de `valores` (la cadena)."""
+        c = valores or self._cadena
+        techo_db, liberacion_ms = c.param("limiter", "ceiling_db"), c.param("limiter", "release_ms")
+        if isinstance(lim, limiter.TruePeakLimiter):
+            lim.configure(techo_db, liberacion_ms)
+        else:
+            lim.ceiling, lim.step = 10 ** (techo_db / 20), 1.0 / (liberacion_ms / 1000 * self.sr)
 
     def _parametros_espaciales(self, cadena: ChainValues | None = None) -> SpatialParams:
         """`cadena`: the chain the renderer is for (a change builds it before the chain is swapped)."""
@@ -543,6 +618,90 @@ class Motor:
             if p.nombre in self._ecualizador:
                 self._ecualizador[p.nombre].set_taps(self._taps_de(p))
 
+    def _cruzar_taps(self) -> None:
+        """La ecualización de cada parlante con sus coeficientes de ahora (la curva, el tope, la
+        bandera, el render). En el fondo de un corte (el fundido ya se canceló), los coeficientes
+        cambian como siempre (`_cambiar_taps`). Al empezar un fundido, se cruza una sola vez después
+        de todas las acciones del inicio (`_cruzar_ecualizador`): con las curvas que dejaron (un preset
+        las escribe en otra acción) y sin rehacer los filtros por cada perilla arrastrada del lote."""
+        if not self._transicion.busy:
+            self._cambiar_taps()
+            return
+        self._taps_pendientes = True
+
+    def _cruzar_ecualizador(self) -> None:
+        """Un `StreamingFIR` nuevo por parlante, cruzado con el que suena, que sigue con sus
+        coeficientes hasta que termina el fundido; el nuevo calienta `TAPS - 1`."""
+        for p in self.instalacion.parlantes:
+            if p.nombre in self._ecualizador:
+                nuevo = eq.StreamingFIR(self._taps_de(p))
+                self._ecualizador[p.nombre] = self._cruce(self._ecualizador[p.nombre], nuevo)
+        if self._ecualizador:
+            self._memorias["_ecualizador"] = eq.TAPS - 1
+
+    def _cruzar_banco(self, banco: decorrelation_bank.Bank, aviso: str | None) -> None:
+        """Una acción del inicio de un fundido: el banco nuevo. Como la ecualización, se cruza una sola
+        vez después de todas las acciones del inicio (`_cruzar_decorreladores`), y la asignación de
+        filtros se calcula entonces, con las mezclas que dejaron (un preset escribe los pan y los
+        ambientes en otra acción, después de la de la cadena). En el fondo de un corte, el cambio de
+        siempre (`_cambiar_banco`)."""
+        if not self._transicion.busy:
+            self._cambiar_banco(banco, self._asignacion(banco), aviso)
+            return
+        self._banco_pendiente = (banco, aviso)
+
+    def _cruzar_decorreladores(self, banco: decorrelation_bank.Bank, aviso: str | None) -> None:
+        """Un `StreamingFIR` nuevo por parlante con el banco nuevo, cruzado con el que suena (sin filtro,
+        la señal tal cual). Las métricas leen el banco nuevo desde ya."""
+        orden = self._asignacion(banco)
+        self._banco_actual, self._orden, self._orden_pendiente, self._aviso = banco, orden, None, aviso
+        self._filtros = self._filtros_en_orden(banco, orden)
+        nuevos = self._nuevos_decorreladores()
+        self._decorreladores = {
+            nombre: self._cruce(
+                _PASO if actual is None else actual,
+                _PASO if nuevos[nombre] is None else nuevos[nombre],
+                self._pesos_decorrelador,
+            )
+            for nombre, actual in self._decorreladores.items()
+        }
+        self._memorias["_decorreladores"] = max(
+            (len(h) - 1 for h in self._filtros.values() if h is not None), default=0
+        )
+
+    def _cruzar_decorrelacion(self, graves: chain_stages.BassStage | None = None) -> None:
+        """Una acción del inicio de un fundido: prender o apagar el decorrelador. El motor ya calcula
+        las dos señales (el decorrelador convoluciona aunque esté desviado): las mezcla con los pesos
+        del bloque (`_decorrelado_o_seco`) y `decorrelacion_activa` cambia al terminar
+        (`_resolver_cruces`). El destino sale de la cadena al correr, como el de la ecualización.
+
+        La alimentación de graves (`crossover`) se atrasa con la bandera, y un atraso nuevo empieza
+        con su historia vacía (`BassStage._delayed`): cambiarlo sonando era un salto en lo que recibe el
+        parlante de graves (MEDIDO: 19-44 veces el paso más grande de la alimentación). `graves`, una
+        etapa nueva armada al pedirse, se cruza con la de ahora y se alimenta desde ya con el atraso
+        nuevo (`_alimentar_graves`)."""
+        destino = self.decorrelar and self._cadena.algorithm("decorrelate") != "off"
+        self._decorrelacion_destino = None if destino == self.decorrelacion_activa else destino
+        if self._decorrelacion_destino is not None and graves is not None:
+            self._cruzar_graves(graves)
+
+    def _decorrelacion_objetivo(self) -> bool:
+        """Lo que `decorrelacion_activa` vale, o va a valer al terminar el fundido en curso."""
+        destino = self._decorrelacion_destino
+        return self.decorrelacion_activa if destino is None else destino
+
+    def _decorrelado_o_seco(self, seco: np.ndarray, decorrelado: np.ndarray) -> np.ndarray:
+        """Lo que sale del decorrelador de un parlante: la señal decorrelada o la seca según la
+        bandera; mientras un fundido la cambia, las dos mezcladas a igual potencia (`_pesos_decorrelador`)."""
+        destino, activa, pesos = self._decorrelacion_destino, self.decorrelacion_activa, self._pesos_decorrelador()
+        if destino is None or destino == activa or pesos is None:
+            return decorrelado if activa else seco
+        viejo, nuevo = (decorrelado, seco) if activa else (seco, decorrelado)
+        peso_viejo, peso_nuevo = pesos
+        if np.ndim(peso_nuevo) == 0 and peso_nuevo == 0:
+            return viejo  # calentando: solo suena la de antes
+        return viejo * peso_viejo + nuevo * peso_nuevo
+
     def metricas_cadena(self) -> dict[str, dict]:
         """Lo que cada etapa informa mientras suena (spec §4.1): chico y barato de leer."""
         pendiente = cadena.pending(self._cadena)
@@ -553,7 +712,7 @@ class Motor:
                 "share": round(self._ambiente_energia / self._entrada_energia, 3) if self._entrada_energia else None,
             }
         )
-        m["decorrelate"]["active"] = self.decorrelacion_activa
+        m["decorrelate"]["active"] = self._decorrelacion_objetivo()  # durante un fundido, el nuevo
         m["align"].update(
             {
                 "delay_now_ms": {n: round(v, 3) for n, v in self.retardos_actuales_ms().items()},
@@ -568,7 +727,8 @@ class Motor:
                 **self._metricas_separacion(),
             }
         )
-        m["diffuse"].update(self._difusion.metrics())
+        # Durante un fundido, las de la etapa nueva (`Crossfaded.new`).
+        m["diffuse"].update(_instancias(self._difusion)[-1].metrics())
         m["eq"].update(
             {
                 "active": self.ecualizar and self.ecualizacion_activa and self.render != DIRECT,
@@ -578,7 +738,7 @@ class Motor:
                 },
             }
         )
-        m["bass"].update(self._graves.metrics())
+        m["bass"].update(_instancias(self._graves)[-1].metrics())
         m["spatial"].update({"render": self.render, "makeup_db": round(self._makeup.current_db, 2)})
         m["volume"]["volume_db_now"] = round(self._volumen.current_db, 2)
         m["transition"].update({"mode": self._cadena.algorithm("transition"), "busy": self._transicion.busy})
@@ -626,6 +786,12 @@ class Motor:
 
     def reiniciar(self) -> None:
         """Vacía el estado. Hay que llamarlo al empezar una reproducción nueva."""
+        # Una reproducción nueva no sigue ningún fundido: lo cruzado que no se rearma abajo (el
+        # extractor, la bandera del decorrelador) queda en lo nuevo.
+        if isinstance(self._extractor, Crossfaded):
+            self._extractor = self._extractor.resolve()
+        if self._decorrelacion_destino is not None:
+            self.decorrelacion_activa, self._decorrelacion_destino = self._decorrelacion_destino, None
         # Cola de la convolución: la parte del bloque anterior que todavía no salió.
         self._decorreladores = self._nuevos_decorreladores()
         # Una línea de retardo **variable** por parlante. Se arranca con `saltar_a`, que no
@@ -659,7 +825,20 @@ class Motor:
         self._mezcla_ambiente = Smoothed(inicial, velocidad, self.sr)
         self._corte = FadeGate(self.sr)
         self._al_saltar: list[Callable[[], None]] = []
-        self._transicion = Transition()
+        self._transicion = Transition(self.sr)
+        self._pesos_bloque: tuple | None = None
+        """Los pesos (viejo, nuevo) del bloque en curso para los `Crossfaded`, calculados una vez al
+        empezarlo (`Transition.block_weights`); None fuera de una transición."""
+        self._pesos_bloque_limitador: tuple | None = None
+        """Los mismos, siempre `equal_gain`: los de los limitadores (`_cruzar_limitadores`)."""
+        self._pesos_bloque_decorrelador: tuple | None = None
+        """Los mismos, siempre `equal_power`: los del decorrelador (`_pesos_decorrelador`)."""
+        self._memorias: dict[str, int] = {}
+        """Lo que cada etapa cruzada en este inicio pide calentar; la última cruzada de cada una manda."""
+        self._taps_pendientes = False
+        """Si una acción del inicio de un fundido pidió cruzar la ecualización (`_cruzar_taps`)."""
+        self._banco_pendiente: tuple[decorrelation_bank.Bank, str | None] | None = None
+        """El banco (y su aviso) que una acción del inicio de un fundido pidió cruzar (`_cruzar_banco`)."""
         self._ganancia_deslizando: dict[str, tuple[float, int]] = {}
         """(objetivo en dB, muestras que faltan) de la ganancia de un parlante durante un fundido:
         reemplaza el límite de `velocidad_ganancia_db_s` hasta llegar."""
@@ -715,7 +894,8 @@ class Motor:
         if self._graves.algorithm == "off":
             return
         graves = self._nuevos_graves()
-        self.cortar(lambda: setattr(self, "_graves", graves))
+        # Con `cut` es el corte de siempre: en el fondo, `_saltar` resuelve el cruce a la nueva.
+        self.cambiar(lambda: self._cruzar_graves(graves))
 
     def saltar_volumen(self, valor_db: float) -> None:
         """Fija el volumen digital sin rampa. Solo en el fondo de un corte (el modo `avrcp`)."""
@@ -825,12 +1005,31 @@ class Motor:
         return max(1, round(self._cadena.param("transition", "fade_ms") * self.sr / 1000))
 
     def _empezar_transicion(self) -> None:
-        """Al empezar un bloque: corre las acciones pedidas y lleva cada parámetro a su objetivo
-        deslizándolo (o fundiendo dos lecturas, el retardo) en el largo del fundido."""
+        """Al empezar un bloque: corre las acciones pedidas. Si alguna cruzó una etapa con estado
+        (`_cruzar`), la nueva se calienta primero (WARM) y lo demás espera a que empiece el
+        fundido; si no, empieza ya (`_empezar_fundido`)."""
         transicion = self._transicion
+        self._memorias.clear()
         for accion in transicion.take_starting():
             accion()
-        largo = transicion.length
+        if self._taps_pendientes:
+            self._taps_pendientes = False
+            self._cruzar_ecualizador()
+        if self._banco_pendiente is not None:
+            banco_y_aviso, self._banco_pendiente = self._banco_pendiente, None
+            self._cruzar_decorreladores(*banco_y_aviso)
+        # El calentamiento se pide por la etapa que quedó puesta, no por cada una que un lote
+        # arrastrado armó en el camino (2 s → 0,3 s calienta 0,315 s, no 1 s).
+        transicion.need_warm(max(self._memorias.values(), default=0))
+        self._memorias.clear()
+        if transicion.state != Transition.WARM:
+            self._empezar_fundido()
+
+    def _empezar_fundido(self) -> None:
+        """Lleva cada parámetro a su objetivo deslizándolo (o fundiendo dos lecturas, el retardo)
+        en el largo del fundido, desde el bloque siguiente: todo lo que el cambio toca se mueve
+        junto con la mezcla de las etapas cruzadas."""
+        largo = self._transicion.length
         for p in self.instalacion.parlantes:
             for suave, objetivo in ((self._pan[p.nombre], p.pan), (self._ambiente[p.nombre], p.ambiente)):
                 suave.target = objetivo
@@ -841,7 +1040,8 @@ class Motor:
         # Las dos lecturas de una línea a retardos distintos no se parecen (música de banda ancha):
         # se funden siempre a igual potencia, diga lo que diga `shape`; con `equal_gain` el medio
         # bajaba ~3 dB (MEDIDO 2026-10-08). `shape` es para los fundidos entre dos instancias de una
-        # etapa con estado (etapa 2 de la spec), que sí suenan parecido.
+        # etapa con estado (etapa 2 de la spec), que sí suenan parecido; los limitadores, siempre a
+        # igual ganancia (`_cruzar_limitadores`).
         for nombre, objetivo in self.retardos_efectivos_ms().items():
             linea = self._lineas[nombre]
             if abs(objetivo - linea.actual_ms) > _NADA:
@@ -855,8 +1055,13 @@ class Motor:
         sus rampas los retardos que se pidieron mientras tanto (`objetivo_ms` no se mueve mientras
         una línea funde)."""
         lote = self._transicion.advance(n)
+        if lote is Transition.FADE_STARTS:
+            # Terminó el calentamiento: las rampas y las líneas empiezan junto con la mezcla.
+            self._empezar_fundido()
+            return
         if lote is None:
             return
+        self._resolver_cruces()
         if lote and self._cadena.algorithm("transition") == "cut":
             self.cortar(lambda: [accion() for accion in lote])
             return
@@ -887,6 +1092,92 @@ class Motor:
             self._al_saltar.append(asignar_pendiente)
         self._corte.request()
 
+    def _pesos(self) -> tuple | None:
+        """Lo que cada `Crossfaded` pregunta: los pesos de este bloque."""
+        return self._pesos_bloque
+
+    def _pesos_limitador(self) -> tuple | None:
+        """Los de un limitador cruzado: siempre `equal_gain`. Los dos limitan la misma entrada y
+        salen casi iguales; a igual potencia (cos + sin, hasta 1,414) la mezcla pasaba el techo por
+        +3 dB (MEDIDO en la revisión de la tarea 2, 2026-10-09)."""
+        return self._pesos_bloque_limitador
+
+    def _pesos_decorrelador(self) -> tuple | None:
+        """Los del decorrelador (su banco, y prenderlo o apagarlo): siempre `equal_power`, como las
+        líneas de retardo. Dos bancos distintos, o la señal seca y la decorrelada, casi no se parecen
+        (para eso está): a igual ganancia la mezcla bajaba 2,4-3,0 dB en el medio del fundido sobre
+        ruido, a igual potencia queda a 0,5 dB (MEDIDO 2026-10-09, tareas 3-5 del plan de la etapa 2)."""
+        return self._pesos_bloque_decorrelador
+
+    def _cruce(self, actual: object, nueva: object, pesos: Callable[[], tuple | None] | None = None) -> Crossfaded:
+        """`actual` → `nueva` en un `Crossfaded`. Nunca anida: si `actual` ya es un cruce, es de
+        este mismo inicio (otra acción del lote, que todavía no sonó), y se cruza desde su vieja."""
+        if isinstance(actual, Crossfaded):
+            actual = actual.resolve() if self._transicion.started else actual.old
+        return Crossfaded(actual, nueva, pesos or self._pesos)
+
+    def _cruzar(self, atributo: str, nueva: object, memoria: int) -> None:
+        """Una acción del inicio de un fundido: pone `nueva` cruzada con la etapa que suena y anota
+        que se caliente `memoria` muestras (hasta 1 s) antes de la mezcla (`_empezar_transicion`).
+
+        Las perillas vivas se le vuelven a poner con la cadena de ahora: `nueva` se armó al pedirse,
+        y una perilla viva movida mientras esperaba en el lote pendiente solo llegó a las puestas."""
+        if atributo == "_difusion":
+            nueva.set_level(self._cadena.param("diffuse", "level_db"))
+        elif atributo == "_graves":
+            nueva.set_harmonics(self._cadena.param("bass", "harmonics_db"))
+        setattr(self, atributo, self._cruce(getattr(self, atributo), nueva))
+        self._memorias[atributo] = memoria
+
+    def _cruzar_graves(self, graves: chain_stages.BassStage) -> None:
+        # Con el atraso con que va a quedar: un fundido que prende o apaga el decorrelador la alimenta
+        # desde ya con el nuevo (`_alimentar_graves`).
+        self._cruzar(
+            "_graves", graves, graves.memory_samples(self._atraso_graves(decorrelando=self._decorrelacion_objetivo()))
+        )
+
+    def _cruzar_limitadores(self, limitadores: dict) -> None:
+        """Cada limitador nuevo, cruzado con el de su parlante (uno que todavía no existía entra solo),
+        con las perillas vivas de ahora y a igual ganancia (`_pesos_limitador`)."""
+        for nombre, nuevo in limitadores.items():
+            self._configurar_limitador(nuevo)
+            actual = self._limitadores.get(nombre)
+            self._limitadores[nombre] = nuevo if actual is None else self._cruce(actual, nuevo, self._pesos_limitador)
+        self._memorias["_limitadores"] = max((lim.memory_samples for lim in limitadores.values()), default=0)
+
+    def _resolver_cruces(self) -> None:
+        """Cada `Crossfaded` queda en su etapa nueva, y la bandera del decorrelador en su destino: al
+        terminar el fundido y en el fondo de un corte."""
+        for atributo in ETAPAS_CRUZABLES:
+            etapa = getattr(self, atributo)
+            if isinstance(etapa, Crossfaded):
+                setattr(self, atributo, etapa.resolve())
+        for atributo in DICCIONARIOS_CRUZABLES:
+            etapas = getattr(self, atributo)
+            for nombre, etapa in etapas.items():
+                if isinstance(etapa, Crossfaded):
+                    nueva = etapa.resolve()
+                    etapas[nombre] = None if nueva is _PASO else nueva
+        if self._decorrelacion_destino is not None:
+            self.decorrelacion_activa, self._decorrelacion_destino = self._decorrelacion_destino, None
+
+    def _atraso_graves(self, *, decorrelando: bool | None = None) -> int:
+        """Lo que se atrasa la alimentación de graves: el retardo medio del decorrelador si está activo
+        (`decorrelando`: si lo estaría; None, la bandera de ahora)."""
+        activo = self.decorrelacion_activa if decorrelando is None else decorrelando
+        return round(self._cadena.param("decorrelate", "mean_ms") * self.sr / 1000) if activo else 0
+
+    def _alimentar_graves(self, izq: np.ndarray, der: np.ndarray) -> None:
+        """La alimentación de graves, una vez por bloque. Mientras un fundido prende o apaga el
+        decorrelador, cada etapa cruzada con su atraso: la vieja con el de ahora y la nueva con el que
+        va a quedar, así ninguna lo cambia sonando (`_cruzar_decorrelacion`)."""
+        graves = self._graves
+        if isinstance(graves, Crossfaded) and self._decorrelacion_destino is not None:
+            graves.old.feed(izq, der, self._atraso_graves())
+            graves.new.feed(izq, der, self._atraso_graves(decorrelando=self._decorrelacion_destino))
+        else:
+            graves.feed(izq, der, self._atraso_graves())
+
     def _saltar(self) -> None:
         """Con la salida en cero: aplica lo pendiente y lleva cada parámetro a su objetivo.
 
@@ -894,8 +1185,12 @@ class Motor:
         cada rampa y cada línea (`saltar_a` corta su fundido) en su objetivo."""
         acciones, self._al_saltar = [*self._transicion.cancel(), *self._al_saltar], []
         self._ganancia_deslizando.clear()
+        # Un cruce en curso queda en la etapa nueva; y lo que se cruce ahora (una acción del fundido
+        # cancelado) también: con la salida en cero no hay nada que mezclar.
+        self._resolver_cruces()
         for accion in acciones:
             accion()
+        self._resolver_cruces()
         for p in self.instalacion.parlantes:
             self._pan[p.nombre].target = p.pan
             self._pan[p.nombre].jump()
@@ -945,12 +1240,13 @@ class Motor:
         return eq.fir(self._curva_de(parlante))
 
     def actualizar_ecualizacion(self) -> None:
-        """Relee la ecualización de cada parlante y la cambia en el fondo de un corte.
+        """Relee la ecualización de cada parlante y la cambia por `cambiar`: en el fondo de un corte
+        o, con el fundido, cruzando cada filtro con uno nuevo (`_cruzar_taps`).
 
         Cambiar los coeficientes de un filtro mientras suena es un salto en la señal.
         """
 
-        self.cortar(self._cambiar_taps)
+        self.cambiar(self._cruzar_taps)
 
     def actualizar_desde_control(self) -> None:
         """Como `actualizar`, pero un retardo que tardaría más de 2 s en llegar va por `cambiar`
@@ -1019,11 +1315,23 @@ class Motor:
         # bloque (reentrada: una acción o un callback de `procesar` que llama a `cambiar`) empieza
         # en el próximo, con sus acciones.
         fundiendo = self._transicion.busy
+        # Mientras la etapa nueva se calienta (WARM) las rampas no avanzan: empiezan con la mezcla.
+        calentando = self._transicion.state == Transition.WARM
+        self._pesos_bloque = self._pesos_bloque_limitador = self._pesos_bloque_decorrelador = None
+        if fundiendo:
+            forma = self._cadena.param("transition", "shape")
+            self._pesos_bloque = self._transicion.block_weights(n, forma)
+            self._pesos_bloque_limitador = (
+                self._pesos_bloque if forma == "equal_gain" else self._transicion.block_weights(n, "equal_gain")
+            )
+            self._pesos_bloque_decorrelador = (
+                self._pesos_bloque if forma == "equal_power" else self._transicion.block_weights(n, "equal_power")
+            )
 
         if self._extractor is not None:
             amb = self._extractor.procesar(izq, der)
             izq_d, der_d = self._directo_retrasado(izq, der)
-            mezcla = self._mezcla_ambiente.block(n)
+            mezcla = self._mezcla_ambiente.current if calentando else self._mezcla_ambiente.block(n)
             # Métrica: la parte del ambiente en la entrada, suavizada (no toca el sonido).
             self._ambiente_energia = 0.8 * self._ambiente_energia + 0.2 * float(amb @ amb)
             self._entrada_energia = 0.8 * self._entrada_energia + 0.1 * float(izq_d @ izq_d + der_d @ der_d)
@@ -1036,20 +1344,22 @@ class Motor:
         envolvente, saltar = self._corte.block(n)
         self.volumen_del_bloque_db = self._volumen.block_db(n)
         salida_global = 10 ** (self.volumen_del_bloque_db / 20) * envolvente
-        self.comparison_block_db = self._compensacion.block_db(n)
+        self.comparison_block_db = self._compensacion.current_db if calentando else self._compensacion.block_db(n)
         compensacion = 10 ** (self.comparison_block_db / 20)
         if not (isinstance(compensacion, float) and compensacion == 1.0):
             salida_global = salida_global * compensacion
-        self.render_makeup_block_db = self._makeup.block_db(n)
+        self.render_makeup_block_db = self._makeup.current_db if calentando else self._makeup.block_db(n)
         if not (isinstance(self.render_makeup_block_db, float) and self.render_makeup_block_db == 0.0):
             salida_global = salida_global * 10 ** (self.render_makeup_block_db / 20)
         directo_puro = self.render == DIRECT and canales is None
         # El cruce de graves: lo bajo del centro para el parlante de graves, atrasado como su
-        # propia señal por el decorrelador (`chain_stages.py`).
-        atraso = (
-            round(self._cadena.param("decorrelate", "mean_ms") * self.sr / 1000) if self.decorrelacion_activa else 0
-        )
-        graves = self._graves.feed(izq_d, der_d, atraso) if canales is None and not directo_puro else None
+        # propia señal por el decorrelador (`chain_stages.py`). Cada etapa guarda lo suyo y
+        # `before_delay` lo suma: dos etapas cruzadas suman cada una su propia alimentación.
+        alimentar = canales is None and not directo_puro
+        if alimentar:
+            self._alimentar_graves(izq_d, der_d)
+        # La difusión sigue sonando si la vieja o la nueva tiene cola (prenderla o apagarla funde).
+        difundir = alimentar and any(d.active for d in _instancias(self._difusion))
         sonda = self.sonda if self.sonda is not None and self.sonda.active else None
         if sonda is not None:
             sonda.begin(n)
@@ -1062,8 +1372,8 @@ class Motor:
             # son escalares en reposo y arreglos solo mientras se mueven.
             suave_pan, suave_amb = self._pan[p.nombre], self._ambiente[p.nombre]
             suave_pan.target, suave_amb.target = p.pan, p.ambiente
-            pan = suave_pan.block(n)
-            ambiente = suave_amb.block(n) * mezcla
+            pan = suave_pan.current if calentando else suave_pan.block(n)
+            ambiente = (suave_amb.current if calentando else suave_amb.block(n)) * mezcla
             if canales is not None:
                 given = canales.get(p.nombre)
                 x = np.zeros(n) if given is None or len(given) != n else np.asarray(given, dtype=float)
@@ -1079,7 +1389,7 @@ class Motor:
                 directo_e, ambiente_e = espacial[p.nombre]
                 mezcla_propia = directo_e + ambiente_e
                 decorrelado = self._convolucionar(p.nombre, ambiente_e)
-                x = directo_e + (decorrelado if self.decorrelacion_activa else ambiente_e)
+                x = directo_e + self._decorrelado_o_seco(ambiente_e, decorrelado)
             else:
                 directo = (1 - pan) / 2 * izq_d + (1 + pan) / 2 * der_d
                 x = (1 - ambiente) * directo + ambiente * amb
@@ -1087,12 +1397,11 @@ class Motor:
                 # cuando vuelva.
                 mezcla_propia = x
                 decorrelado = self._convolucionar(p.nombre, x)
-                if self.decorrelacion_activa:
-                    x = decorrelado
-            if self._difusion.active and canales is None and not directo_puro:
+                x = self._decorrelado_o_seco(x, decorrelado)
+            if difundir:
                 x = self._difusion.process(p.nombre, x, mezcla_propia)
-            if graves is not None:
-                x = self._graves.before_delay(p.nombre, x, graves)
+            if alimentar:
+                x = self._graves.before_delay(p.nombre, x)
             x = self._lineas[p.nombre].procesar(x)
             if self.ecualizar:
                 x = self._ecualizador[p.nombre].process(x)
@@ -1100,7 +1409,8 @@ class Motor:
                 x = self._graves.process(p.nombre, x)
             activo = self._activo[p.nombre]
             activo.target = 0.0 if p.nombre in self.silenciados else 1.0
-            x = x * self._rampa_de_ganancia(p.nombre, p.ganancia_db, n) * salida_global * activo.block(n)
+            ganancia = self._ganancia[p.nombre] if calentando else self._rampa_de_ganancia(p.nombre, p.ganancia_db, n)
+            x = x * ganancia * salida_global * activo.block(n)
             # La ecualización solo realza: un pasaje fuerte puede pasar de escala completa, y
             # el limitador baja la ganancia en vez de recortar (`dsp/limiter.py`).
             if sonda is not None:
@@ -1110,11 +1420,18 @@ class Motor:
             if p.nombre not in self._limitadores:
                 self._limitadores[p.nombre] = self._nuevo_limitador()
             lim = self._limitadores[p.nombre]
+            vigente = _instancias(lim)[-1]  # durante un cruce, el nuevo cuenta
+            previa = vigente.gain
             limitado = lim.process(x)
-            if isinstance(lim, limiter.TruePeakLimiter):
-                self._contar_limitador(p.nombre, n, activas=round(lim.active_fraction * n))
+            if isinstance(vigente, limiter.TruePeakLimiter):
+                activas = round(vigente.active_fraction * n)
+            elif vigente is lim:
+                activas = n if limitado is not x else 0
             else:
-                self._contar_limitador(p.nombre, n, activas=n if limitado is not x else 0)
+                # Cruzado, la salida es siempre otra: el de pico no tocó el bloque si venía sin
+                # reducción y nada pasó del techo (su propia prueba en `PeakLimiter.process`).
+                activas = 0 if previa >= 1.0 and float(np.max(np.abs(x))) <= vigente.ceiling else n
+            self._contar_limitador(p.nombre, n, activas=activas)
             salida[p.nombre] = limitado
         if saltar:
             # El fondo primero: termina el fundido y corre su lote pendiente. Contarlo antes
@@ -1195,6 +1512,22 @@ class Motor:
         idéntico a convolucionar todo de una vez."""
         filtro = self._decorreladores[nombre]
         return x if filtro is None else filtro.process(x)
+
+
+class _Paso:
+    """El decorrelador de un parlante sin filtro, dentro de un cruce: la señal tal cual."""
+
+    def process(self, x: np.ndarray) -> np.ndarray:
+        return x
+
+
+_PASO = _Paso()
+
+
+def _instancias(etapa: object) -> tuple:
+    """Las instancias de una etapa: (vieja, nueva) si está cruzada, si no ella sola. La última es
+    la que queda."""
+    return (etapa.old, etapa.new) if isinstance(etapa, Crossfaded) else (etapa,)
 
 
 def procesar_completo(motor: Motor, izq: np.ndarray, der: np.ndarray, bloque: int = 4096) -> dict[str, np.ndarray]:
