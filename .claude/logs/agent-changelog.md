@@ -7,6 +7,120 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-09 · s-7c8794-816f05 — Verificación de la etapa 1, Rust idiomático y port del decorrelador y del limitador (Mac), pausada para seguir en otro equipo
+**Qué.**
+- **Verificación de la tanda final de la etapa 1 de transiciones sin corte** (pendiente de s-7c8794-402f44).
+  - La suite terminó: 1905 bien y 4 fallas propias de macOS (i-7c8794-437907).
+  - Una re-revisión acotada encontró los puntos 1–10 arreglados, y cada test cubridor falla con su mutante.
+  - Arreglo nuevo con test primero: `render_match` no veía un fundido de 80 ms dentro de un bloque; ahora se congela con `moving` (`session.py`).
+  - El texto de `shape` dice que se aplicará en la etapa 2, a pedido del usuario.
+- **Investigación de Rust idiomático:**
+  [research/15](../../docs/research/15-rust-idiomatico-y-buenas-practicas.md), con fuentes primarias de las versiones fijadas.
+  Puntos principales:
+  - el puente con Python es lo débil;
+  - no se aplican las sugerencias `mul_add`/`midpoint`, porque cambian el redondeo frente a numpy;
+  - Rust nunca contrae a FMA;
+  - el FTZ desde Rust es UB.
+- **El plan `2026-10-09-rust-idioms-and-decorrelation`** (aprobado por el usuario), ejecutado con un subagente y una revisión por tarea:
+  1. lints del workspace, perfil de release (`lto`, `panic = "unwind"` explícito) y docs;
+  2. ayudantes de test compartidos (`tests/common`) y tests unitarios de lo numérico privado;
+  3. API del núcleo:
+     - errores con datos (`BadShape`, `OutOfRange`, `InvalidConfig`) y constructores con `Result`;
+     - módulos compartidos `complex`/`fft`/`stft`, `to_state()` y `VirtualBassError`;
+     - comprobado idéntico bit a bit con 12,4 M muestras;
+  4. puente reorganizado:
+     - `EngineError`/`EnginePanic` (subclases de `RuntimeError`);
+     - módulo declarativo y `.pyi` con su test;
+     - `capabilities()["api"]`;
+  5. `Reader` como clase en lugar del `Mutex` global, y `set_params` solo por nombre;
+  6. **port tarea 8:** el decorrelador por `eq.StreamingFIR` (experimentos/20 §8);
+  7. **port tarea 9:** `TruePeakLimiter` en Rust, ≤ 1,55e-15 frente a numpy (§9). **Tarea 12:** la cola difusa no tiene nada que portar (§10).
+- **Revisión de toda la rama:** «con arreglos»; ningún defecto cambia el audio.
+- **Una tanda de 13 arreglos**, hecha. Incluye:
+  - las afirmaciones de experimentos/20 sin fuente o sin repetir;
+  - el sustituto del test de navegador;
+  - dos probes rotos;
+  - el README del motor;
+  - las constantes del limitador en `capabilities()`;
+  - `fir` en la versión 2, para que un host viejo rechace la extensión nueva.
+- **Decisión nueva:** d-7c8794-ef6117 (API 2 del puente).
+- **El usuario pausó la sesión** para seguir en otro equipo: la tanda terminó, y su re-revisión no se lanzó.
+**Archivos.**
+- `engine/` completo:
+  - `Cargo.toml`;
+  - `crates/aurasync-dsp/src/{lib,complex,fft,stft,fir,ambience,spatial,interpolation,virtual_bass,limiter}.rs` y `tests/`;
+  - `crates/aurasync-engine/src/*` (nuevo, por clase), `aurasync_engine.pyi` y `pyproject.toml`;
+  - `README.md`.
+- `host/src/aurasync/{session,chain,motor}.py` y `host/src/aurasync/dsp/{backend,spatial,ambience,limiter}.py`.
+- `host/tests/` (`test_session`, `test_engine_*`, `test_decorrelate_rust`, `test_limiter_rust`, `conftest`, entre otros) y `host/tests_browser/test_panel_engine.py`.
+- `probes/20-costo-sinc-rust/` y `docs/research/experimentos/{20-…md,datos/20/}`.
+- `docs/research/{15-…md,README.md}`, `docs/{decisions,roadmap}.md`, `CLAUDE.md` (tabla de documentos).
+- `docs/superpowers/plans/{2026-10-08-seamless-transitions-stage-1,2026-10-09-rust-idioms-and-decorrelation,2026-10-05-rust-engine-scaffold-and-sinc}.md`.
+**Por qué.** El usuario pidió continuar lo pendiente, después investigar Rust para corregir la
+implementación «con las mejores prácticas y usos idiomáticos» (eligió incluir la API y la estructura) y
+seguir con la siguiente fase (eligió seguir portando a Rust y trabajar todo en `seamless-transitions`).
+**Arquitectura.** ✅ Cumple.
+- Se mantienen el núcleo Rust puro y el puente delgado. numpy sigue como oráculo con el golden ≤ 1e-9, y ningún golden se volvió a grabar.
+- El cambio de numpy a FFT en el decorrelador lo validó el golden del motor sin tocarlo.
+**Qué salió mal en el camino.**
+1. **La primera suite no corrió nada:** `hatch test -p no:cacheprovider` (hatch se come `-p`). Lo delató «no tests ran».
+2. **Se lanzó la suite desprendida** sin `--deselect` del test que se cuelga (i-7c8794-d5c5d6). En el Mac no se colgó.
+3. **`check.sh` no corre entero en el Mac:** PyO3 toma Python 3.11 si no se pone `PYO3_PYTHON`, y quedan las 4 fallas de macOS. Se corrió por partes.
+4. **El controlador escribió un id de roadmap inventado** en research/15 §D. Lo vio antes del chequeo y lo reemplazó por uno generado.
+5. **research/15 §A.3 afirmó que el módulo declarativo pone `module` solo;** en la tarea 4 se midió que no: queda `builtins`. Se corrigió.
+6. **La tarea 6 escribió el cambio antes que los tests** (sin RED); la revisión juzgó que cada test atrapa las fallas plausibles.
+7. **La tarea 7 dejó afirmaciones medidas sin fuente o con una sola corrida** en experimentos/20 §9, y la tarea 6 dijo «una corrida» de algo que se repetía. Lo detectaron las revisiones; la tanda final guardó los probes y los datos, o marcó cada cifra.
+8. **Las tareas 5 y 6 rompieron el sustituto del test de navegador y dos probes,** que nadie corre en el gate. Lo detectó la revisión final.
+**Qué quedó pendiente** (en este orden; todo sin commit en `seamless-transitions`):
+1. **La re-revisión acotada de la tanda final** contra sus 13 puntos (lista en el estado del plan
+   `2026-10-09-rust-idioms-and-decorrelation`), y el gate. El gate es `scripts/check.sh` en Linux; en el Mac, por partes con `PYO3_PYTHON`.
+2. **El test de navegador `tests_browser/test_panel_engine.py` con la instalación normal de Playwright.**
+3. **Lo que dejó la tanda** (roadmap i-7c8794-a75d67):
+   - `OutputMismatch` de espacial y ambiente sigue saliendo como `ValueError`;
+   - una pregunta de diseño: el pánico en `set_state` del limitador y desde dónde sigue numpy;
+   - si se guardan los probes nuevos.
+4. **La escucha de la etapa 1** (i-7c8794-93f50c) y **medir otra vez en `HP-O16`** lo que se midió en el Mac (§8–§10).
+5. **El port sigue** con la tarea 13 (rampas) y la 14 (medidores de sonoridad); la 15, `RustMotor`, lleva su propio plan.
+6. **De antes, sin cambios:**
+   - la prioridad del hilo del motor (i-7c8794-246f79);
+   - las etapas 2–4 de transiciones;
+   - la curva de prueba del EQ en `HP-O16`;
+   - borrar `probes/24-ab-monitor/`;
+   - los tests de macOS (i-7c8794-437907);
+   - los experimentos de rendimiento de Rust (i-7c8794-b4b8b1).
+- **Al cambiar de rama o de equipo hay que recompilar** (`hatch run engine-build`): la API del puente cambió, y un host viejo rechaza la extensión nueva con su aviso (por `fir` en la versión 2).
+- **El registro local del plan** (`.superpowers/sdd/2026-10-09-rust-idioms-and-decorrelation/`, ignorado por git) queda en el Mac. Lo necesario está copiado en el estado del plan y en el roadmap.
+**Desvío del plan.**
+- Hubo dictámenes del controlador durante la ejecución, cada uno con su costo, listados en el estado del plan:
+  - una variante `OutOfRange` y `EngineError::Python`;
+  - `module=` se mantuvo en cada clase;
+  - archivos extra en el puente;
+  - `configure()` con `Result`;
+  - `fir` en la versión 2.
+- La tanda final sumó 8 menores a los 5 importantes de la revisión.
+- La re-revisión de la tanda no se hizo, por la pausa.
+**No verificado.**
+- Nada se escuchó.
+- Todo corrió en el Mac, no en Linux.
+- La tanda final no tuvo su re-revisión.
+- El test de navegador solo pasó con un plugin provisorio.
+- Las mediciones de costo son de un Mac en uso, con carga de 1,4 a 10.
+**Medido.**
+- Suites en el Mac:
+  - 1906 bien tras la verificación de la etapa 1;
+  - 1976 bien tras la tarea 7;
+  - 1995 bien tras la tanda final.
+  Las tres, con las 4 fallas de macOS.
+- El limitador Rust frente a numpy: salida ≤ 1,55e-15 y métricas ≤ 1,78e-15.
+- El decorrelador con 8 parlantes:
+  - 0,97–1,16 ms con `np.convolve`;
+  - 0,48–0,58 ms con la FFT de numpy;
+  - 0,27–0,32 ms en Rust.
+- La cola difusa, fuera del FIR: 0,026 ms por bloque.
+- **Fricciones contadas en el registro:** «nice -n 19», 3 menciones; Chromium que falta, 4; la suite desprendida, 4.
+
+---
+
 ## 2026-10-08 · s-7c8794-402f44 — Transiciones sin corte, etapa 1: motor entre bloques y fundido por defecto (HP-O16)
 **Qué.**
 - **Experimento 23**, un ensayo de las pruebas A/B del motor y del EQ escuchadas por el monitor de

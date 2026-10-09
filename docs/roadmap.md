@@ -1530,6 +1530,22 @@ vez de tumbar la sesión: `backend.built` atrapa cualquier `Exception` en el con
 (crossover) y 11 (graves virtuales). Siguen pendientes la 8, la 9 y de la 12 a la 15 (la
 convolución de la 12 ya corre en Rust a través de los FIR).
 
+**Avance (2026-10-09, en el Mac, sin commit en `seamless-transitions`):**
+- **El motor quedó idiomático, sin cambiar ningún número** (research/15, d-7c8794-ef6117):
+  - lints del workspace, ayudantes de test compartidos, errores con datos y constructores sin pánico;
+  - un puente reorganizado: excepciones `EngineError`/`EnginePanic`, módulo declarativo, `.pyi`, `Reader` como clase y `set_params` solo por nombre.
+- **Etapas portadas:**
+  - **la 8, el decorrelador**: su convolución pasa por `eq.StreamingFIR`; 8 parlantes cuestan 0,27–0,32 ms en Rust contra 0,97–1,16 ms del `np.convolve` anterior (experimentos/20 §8);
+  - **la 9, el limitador true peak**: ≤ 1,55e-15 frente a numpy; 1,6–2,5× numpy cuando limita y empate cuando solo detecta (§9).
+- **La 12, la cola difusa, no tiene nada más que portar**: 0,026 ms por bloque fuera del FIR con 3 parlantes (§10).
+- **Siguen** la 13 (rampas), la 14 (medidores de sonoridad) y la 15 (`RustMotor`, con su propio plan).
+- **Falta cerrar esta tanda:**
+  - la re-revisión de los arreglos de la revisión final;
+  - el test de navegador `tests_browser/test_panel_engine.py`, que el Mac no puede correr.
+
+  Los pasos están en el estado del plan `docs/superpowers/plans/2026-10-09-rust-idioms-and-decorrelation.md`.
+- **Las mediciones del 2026-10-09 son del Mac en uso:** falta repetirlas en `HP-O16`.
+
 **Los menores diferidos del motor Rust**, copiados el 2026-10-08 del ledger local
 (`.superpowers/sdd/…/progress.md`, que git ignora), para retomarlos desde cualquier equipo. Ninguno bloquea; la
 revisión final de la rama los clasificó como "pueden esperar".
@@ -1830,6 +1846,76 @@ pytest o `scripts/check.sh` corren en segundo plano (sin terminal), y pasa en pr
 la suite completa se corre con `--deselect` de ese test y el test aparte, en primer plano (etapa 1 de
 transiciones sin corte, 2026-10-08). Falta ver por qué: el test se manda a sí mismo `SIGINT`/`SIGTERM`, y
 INFERIDO que, desacoplado, la señal no llega al hilo que la espera o la toma el grupo de procesos.
+
+### La ventana del A/B desde el fin real de la transición · i-7c8794-ee3f38
+**Estado: Planificado (menor).** `_ab_measure` vuelve a esperar mientras `en_corte`, pero solo se consulta
+cada 0,5 s (`QUALITY_S`): la ventana de 3 s puede empezar hasta ~0,2 s antes del fin de una transición
+larga (`fade_ms` 500 con un lote pendiente). Antes del arreglo eran ~0,7 s. INFERIDO por la re-revisión
+del 2026-10-09; el test llama a `_ab_measure` a mano y no modela el sondeo. **Recomendación:** que el motor
+anote el instante (o el bloque) en que terminó su última transición, y la ventana cuente desde ahí.
+
+### Menores diferidos del Rust idiomático y del port del 2026-10-09 · i-7c8794-a75d67
+**Estado: Planificado (menores).** Salen de las revisiones por tarea y de la revisión final del plan
+`2026-10-09-rust-idioms-and-decorrelation`. La revisión final los clasificó como «pueden esperar»;
+ninguno cambia el audio.
+- **Del lint (tarea 1):**
+  - los comentarios de `cast_sign_loss`/`cast_possible_truncation` en `engine/Cargo.toml` afirman cosas no comprobadas;
+  - `expect(struct_field_names)` en `fir.rs` podría ser un cambio de nombre;
+  - los `# Panics: Never in practice` son vagos.
+- **De los tests (tarea 2):** la referencia `numpy_pairwise` no comprueba el orden de su rama `n > 128` (solo con enteros).
+- **De la API del núcleo (tarea 3):**
+  - el texto de `OutOfRange` no se comprueba en un test de Rust;
+  - el formato de `BadShape`/`OutOfRange` se repite en 4 enums;
+  - el caso de filas se lee «fdl rows: 2 values where 3 are needed»;
+  - `fft.rs` afirma que el plan es idéntico entre planners sin citar la comprobación bit a bit de 12,4 M muestras.
+- **Del puente (tareas 4 y 5):**
+  - líneas largas sin reenvolver en `backend.py`, `engine/README.md`, `lib.rs`, `Cargo.toml` y `host/pyproject.toml`;
+  - `read.__module__` queda en `aurasync_engine.aurasync_engine` y `dir()` muestra el submódulo;
+  - nombres de test que todavía dicen `_is_a_runtime_error_`;
+  - `EngineError::Internal` no se alcanza en ningún test;
+  - `match="tap"` es suelto;
+  - falta un comentario de por qué solo `RuntimeError` descarta el `Reader`.
+- **Del decorrelador (tarea 6):**
+  - el test del pánico llama a `backend.reset()` y no recorre el camino del fondo del corte;
+  - `test_a_new_bank_starts_from_silence_in_both_engines` no comprueba la cola en silencio;
+  - el test de pertenencia no usa `AURASYNC_ENGINE=rust`;
+  - un import queda dentro de una función.
+- **De la tanda final (2026-10-09), para decidir o arreglar con la re-revisión:**
+  - `OutputMismatch` de `SpatialError`/`AmbienceError` sigue saliendo como `ValueError`, aunque la tanda pasó los de FIR y del limitador a `EngineError` (mismo caso, no se amplió);
+  - **pregunta de diseño:** un pánico plantado en `set_state` del limitador, al pasar a Rust, deja a numpy seguir desde su propio estado y no desde reposo. El test lo fija así; ¿debería empezar desde reposo?;
+  - `probes/README.md` dice que un probe se borra al anotar su resultado, pero la tanda guardó probes nuevos como fuente de experimentos/20 §9. Hay que decidir si quedan;
+  - el test de navegador pasó con un plugin de Playwright provisorio que apunta al headless shell 1243 en caché, porque el build 1223 no está en el Mac. Falta correrlo con la instalación normal.
+- **Del limitador (tarea 7):**
+  - el test con bloques de 1 muestra cubre solo las primeras 11 000;
+  - `reduction_db` queda viejo en la ventana de silencio tras una falla de Rust.
+
+### Experimentos de rendimiento del motor Rust · i-7c8794-b4b8b1
+**Estado: Planificado.** Salen de la investigación de Rust idiomático
+([research/15](research/15-rust-idiomatico-y-buenas-practicas.md) §B.11–16). Cada uno cambia el
+rendimiento y no la forma, así que se mide antes de tocarlo (en `HP-O16` o `PC-Ryzen5`, con `nice` si
+el servicio suena):
+- buffers planos en lugar de `Vec<Vec<f64>>` por parlante;
+- lazos con iteradores en vez de índices en ambiente y espacial;
+- una salida `out=` que evite el arreglo numpy nuevo por bloque;
+- `Python::detach` durante el bloque, para no retener el GIL. Pide copiar la entrada, y antes
+  distinguir los errores de uso (ya hecho en el refactor del 2026-10-09);
+- los denormales en los suavizados recursivos tras un silencio largo; un arreglo iría en numpy y en
+  Rust a la vez;
+- `target-cpu=native` en `engine-build`.
+
+### Cuatro tests fallan en macOS · i-7c8794-437907
+**Estado: Planificado (menor).** MEDIDO en el Mac el 2026-10-09 (suite completa: 1905 bien, 4 fallas),
+sin relación con la rama de transiciones:
+- `test_sonido.py::test_room_is_that_of_the_fullest_pipe` y `::test_room_of_the_combined_stream_counts_its_channels`:
+  `sonido.tamano_de_tuberia` usa `F_GETPIPE_SZ`, que solo existe en Linux, y devuelve `None`.
+- `test_spatial_rust.py::test_numpy_itself_changes_0_349_for_one_ulp_at_the_anti_phase_tie[60.0|150.0]`:
+  en el Mac (arm64) el FFT de numpy da 0,361 y no 0,349, lo que el propio docstring del test prevé.
+
+Por esto, `scripts/check.sh` no pasa en el Mac. Además, en el Mac `cargo clippy`/`cargo test` de `engine/`
+toman un Python 3.11 del PATH y PyO3 (abi3-py312) no compila. Se resuelve con
+`PYO3_PYTHON=/opt/homebrew/bin/python3.14`, que `check.sh` podría exportar desde `$PY`. **Recomendación:** marcar los dos primeros como solo-Linux
+(`skipif`), porque el servicio corre solo en Linux. En el tercero, dejar el número exacto solo para Linux y
+comprobar en todas partes lo que importa (que no baje de 1e-9).
 
 ### Cambio del reproductor de salida con dos streams superpuestos · i-7c8794-43c2a5
 **Estado: Planificado.** Cambiar de `ReproductorCombinado` a `separado` (o al revés) sin silencio, con los dos
