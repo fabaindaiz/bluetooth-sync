@@ -35,6 +35,12 @@
 //!   owns one when the engine is Rust; `process(x)` gives `(out, gain, max_reduction_db,
 //!   active_fraction)`, and the state (`x`, `gain`) moves in and out (`state`, `set_state`) at a
 //!   switch.
+//! - `LoudnessMeter`: `aurasync.dsp.loudness.LoudnessMeter`'s per-block work (the K-weighted
+//!   energy of every 100 ms step and the 4x true peak), within 1e-9 of numpy
+//!   (`host/tests/test_loudness_rust.py`). The numpy meter keeps the design (the step, `k_power`,
+//!   the weights and the kernels) and the readings, and owns one when the engine is Rust;
+//!   `push(frames)` gives `(true_peak, steps)`, and the state (`context`, `pending`) moves in and
+//!   out (`state`, `set_state`) at a switch.
 //! - `capabilities()`: the constants each stage was built with, for the host to check against its
 //!   own.
 //!
@@ -50,7 +56,7 @@
 //! The source is one file per concern: `error` (the error type and the exceptions), `convert`
 //! (Python values to Rust ones), `planted` (the `test-panic` switch), `reader` (`Reader`),
 //! `capabilities`, and one file per class (`spatial`, `ambience`, `fir`, `virtual_bass`,
-//! `limiter`). The
+//! `limiter`, `loudness`). The
 //! module itself is declared below, and `aurasync_engine.pyi` is its type stub.
 #![forbid(unsafe_code)]
 
@@ -60,6 +66,7 @@ mod convert;
 mod error;
 mod fir;
 mod limiter;
+mod loudness;
 mod planted;
 mod reader;
 mod spatial;
@@ -78,6 +85,8 @@ mod aurasync_engine {
     use super::fir::{PartitionedFir, StreamingFir};
     #[pymodule_export]
     use super::limiter::TruePeakLimiter;
+    #[pymodule_export]
+    use super::loudness::LoudnessMeter;
     #[cfg(feature = "test-panic")]
     #[pymodule_export]
     use super::planted::_panic_outside_the_read;

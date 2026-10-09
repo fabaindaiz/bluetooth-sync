@@ -16,7 +16,7 @@ import sys
 import types
 from typing import Any
 
-from aurasync.dsp import ambience, backend, eq, interpolation, limiter, spatial, virtual_bass
+from aurasync.dsp import ambience, backend, eq, interpolation, limiter, loudness, spatial, virtual_bass
 
 OWNERS = (
     spatial.SpatialUpmix,
@@ -25,6 +25,7 @@ OWNERS = (
     eq.PartitionedFIR,
     virtual_bass.VirtualBass,
     limiter.TruePeakLimiter,
+    loudness.LoudnessMeter,
 )
 """Every stage that owns a Rust object (`_build_rust`)."""
 
@@ -92,6 +93,11 @@ class Through:
 
     def skip(self, x: Any) -> None:
         self.owner._skip_numpy(x)  # noqa: SLF001
+
+    def push(self, frames: Any) -> Any:
+        owner = self.owner
+        # The meter's interleaved frames back to its (channels, n) block.
+        return owner._measure_numpy(frames.reshape(-1, owner.channels).T)  # noqa: SLF001
 
     def process(self, *args: Any) -> Any:
         owner = self.owner

@@ -7,7 +7,7 @@ use numpy::PyArray1;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::convert::{float64_rows, float64_vector, item, matrix, samples, taps_of, vector};
+use crate::convert::{float64_rows, float64_vector, item, matrix, owned, samples, taps_of, vector};
 use crate::error::{EngineError, guard};
 use crate::planted::Planted;
 
@@ -115,10 +115,13 @@ impl StreamingFir {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         guard(|| {
             self.planted.check("StreamingFIR", "process");
-            let x = float64_vector("x", x)?;
-            let x = samples(&x);
-            let mut out = vec![0.0; x.len()];
-            self.inner.process(&x, &mut out)?;
+            let x = owned("x", x)?;
+            let inner = &mut self.inner;
+            // Without the interpreter while it filters (`convert::owned`): the input is a copy.
+            let out = py.detach(|| {
+                let mut out = vec![0.0; x.len()];
+                inner.process(&x, &mut out).map(|()| out)
+            })?;
             Ok(PyArray1::from_vec(py, out))
         })
     }
@@ -186,10 +189,13 @@ impl PartitionedFir {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         guard(|| {
             self.planted.check("PartitionedFIR", "process");
-            let x = float64_vector("x", x)?;
-            let x = samples(&x);
-            let mut out = vec![0.0; x.len()];
-            self.inner.process(&x, &mut out)?;
+            let x = owned("x", x)?;
+            let inner = &mut self.inner;
+            // Without the interpreter while it filters (`convert::owned`): the input is a copy.
+            let out = py.detach(|| {
+                let mut out = vec![0.0; x.len()];
+                inner.process(&x, &mut out).map(|()| out)
+            })?;
             Ok(PyArray1::from_vec(py, out))
         })
     }

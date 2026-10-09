@@ -1,0 +1,16 @@
+uptime antes: 16:08:44 up  6:04,  1 user,  load average: 2,11, 3,08, 3,23
+load1 antes: 2.11
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, x86_64
+python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras = 85.3 ms; motor numpy (los medidores no tienen port)
+       senal         caso    medidores       np med       np p95
+       ruido          uno            1       0.0936       0.1066
+       ruido    calidad 4            6       0.6463       0.9120
+       ruido    calidad 8           10       1.0595       1.3174
+       ruido  monitor mix            2       0.2745       0.3030
+      musica          uno            1       0.0922       0.1152
+      musica    calidad 4            6       0.6447       0.8446
+      musica    calidad 8           10       1.0807       1.4891
+      musica  monitor mix            2       0.2680       0.3137
+uptime despues: 16:08:48 up  6:04,  1 user,  load average: 2,11, 3,08, 3,23
+load1 despues: 2.11

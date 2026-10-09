@@ -111,7 +111,14 @@ Fuente: `pyo3-0.29.3/guide/src`, VERIFICADO.
   la debilidad 1.
 - **Soltar el GIL.** `Python::detach` conviene para trabajo de «varios milisegundos». El cierre tiene
   que ser `Send`, así que no puede capturar `Bound` ni el préstamo de un arreglo numpy (los préstamos
-  siguen activos y un préstamo en conflicto produce un pánico). *Aquí:* experimento aparte.
+  siguen activos y un préstamo en conflicto produce un pánico). *Aquí:* aplicado el 2026-10-09
+  (§B.14), copiando la entrada.
+- **`detach` y los pánicos** (VERIFICADO, `pyo3-0.29.3/src/marker.rs`): `detach` retoma el GIL con
+  un guardia que se suelta también al desenrollar, así que un pánico dentro del cierre sigue hasta el
+  `guard` del puente, que lo atrapa como siempre. El cierre y lo que devuelve tienen que ser `Ungil`,
+  que sin la feature `nightly` es `Send`: el compilador rechaza capturar un `Bound` o el token
+  `Python`. Un `&[f64]` prestado de numpy sí es `Send`, y por eso la copia es una decisión y no algo
+  que el compilador obligue.
 - **Free-threading.** Desde 0.28 los módulos declaran `gil_used = false` por defecto, pero **una wheel
   abi3 no carga en CPython free-threaded**, así que el GIL existe para este motor. El comentario
   «el lock nunca se disputa» de `lib.rs` depende de eso.
@@ -178,7 +185,7 @@ Fuente: Ross Bencina, «Real-time audio programming 101: time waits for nothing�
 - No es un callback de tiempo real duro: un hilo de Python llama a Rust una vez por bloque de 85 ms.
 - El núcleo cumple: no asigna después del primer bloque.
 - Lo que falta:
-  - el `Mutex` global de la lectura sinc está en el camino del bloque;
+  - el `Mutex` global de la lectura sinc está en el camino del bloque (resuelto en §B.4);
   - el puente asigna un arreglo numpy de salida por bloque.
 
 Los crates de tiempo real (`rtrb`, `basedrop`, `triple_buffer`) solo importan si Rust llega a tener
@@ -259,7 +266,15 @@ después lo que cada port futuro repetiría, y al final la documentación y los 
     `virtual_bass.rs`). Se mide antes de tocarlos: es probable que dominen `tanh`, `hypot` y los FFT.
 13. **Un arreglo numpy nuevo por salida y por bloque.** Un `out=` opcional lo quitaría.
 14. **El GIL tomado durante todo el bloque.** `Python::detach` pide copiar la entrada y un
-    experimento.
+    experimento. **Aplicado el 2026-10-09** (lo pidió el usuario): cada llamada por bloque
+    (`Reader.read`, los `process` de los FIR, el upmix, el extractor, los graves virtuales y el
+    limitador, y `LoudnessMeter.push`) copia su entrada a un `Vec` (`convert::owned`) y trabaja con
+    `py.detach`. Así ningún objeto de Python se toca sin el GIL, y otro hilo puede escribir el
+    arreglo numpy sin carrera. La salida es un `Vec` que numpy recibe sin copiar. El upmix dejó de
+    escribir directo en dos arreglos numpy por lo mismo. Lo comprueba `host/tests/test_engine_gil.py`:
+    otro hilo corre en medio de cada llamada, y el test falla si se quita el `detach`. Costo:
+    nada medible en `HP-O16`, y una llamada casi vacía cuesta 0,003 ms con o sin `detach`
+    (experimentos/20 §14, MEDIDO).
 15. **El perfil de release está incompleto**: solo `codegen-units=1`. → `lto`, y `panic="unwind"`
     explícito con su motivo.
 16. **Denormales** en los suavizados recursivos tras ~71 s de ceros exactos (aritmética INFERIDA).
@@ -318,7 +333,7 @@ El plan es `docs/superpowers/plans/2026-10-09-rust-idioms-and-decorrelation.md`.
   - §B.11, los buffers planos;
   - §B.12, los lazos sin índices;
   - §B.13, la salida `out=`;
-  - §B.14, `Python::detach`;
+  - ~~§B.14, `Python::detach`~~: aplicado el 2026-10-09, sin costo medible (experimentos/20 §14);
   - §B.16, los denormales;
   - `target-cpu=native`.
 

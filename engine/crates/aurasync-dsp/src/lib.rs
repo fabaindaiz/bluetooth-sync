@@ -1,7 +1,7 @@
 //! Pure-Rust DSP for aurasync: the band-limited fractional delay read ([`interpolation`]), the
 //! spatial upmix ([`spatial`]), the ambience extractor ([`ambience`]), the FIR filters by FFT
-//! convolution ([`fir`]), the virtual bass ([`virtual_bass`]) and the true-peak limiter
-//! ([`limiter`]).
+//! convolution ([`fir`]), the virtual bass ([`virtual_bass`]), the true-peak limiter
+//! ([`limiter`]) and the loudness meter's per-block work ([`loudness`]).
 //!
 //! Every stage is checked against the numpy original it replaces, within 1e-9, and keeps the
 //! order of numpy's arithmetic. A stage allocates nothing per block once it has warmed up.
@@ -22,6 +22,7 @@ mod fft;
 pub mod fir;
 pub mod interpolation;
 pub mod limiter;
+pub mod loudness;
 pub mod spatial;
 mod stft;
 pub mod virtual_bass;

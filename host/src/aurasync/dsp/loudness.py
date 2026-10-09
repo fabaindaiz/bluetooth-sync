@@ -36,6 +36,11 @@ Other sample rates use the analog prototype behind the tables (shelf 1681.97 Hz,
 Q 0.7072; high-pass 38.135 Hz, Q 0.5003), as libebur128 does (REPORTADO,
 https://github.com/jiixyj/libebur128); at 48 kHz it reproduces the tables within 1e-8.
 
+**The engine** (`dsp/backend.py`). `LoudnessMeter`'s per-block work (the step energies and the
+true peak) has a Rust port (`aurasync_engine.LoudnessMeter`), which the meter owns when the engine
+is Rust; the readings, `GatedIntegrator` (on its own thread, one step at a time) and the design
+stay numpy.
+
 **PSR** (REPORTADO, MeterPlugs / Ian Shepherd, research 11 §1.5): true peak minus
 short-term loudness, here the highest true peak of the last 3 s minus the short-term
 loudness. It is the number against "aplanada": if the output's PSR falls under the input's,
@@ -47,9 +52,13 @@ from __future__ import annotations
 import functools
 import itertools
 from collections import deque
+from typing import Any
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+
+from aurasync.dsp import backend
+from aurasync.dsp.eq import _RustOwned, _vector
 
 SHELF_48K = (
     (1.53512485958697, -2.69169618940638, 1.19839281085285),
@@ -163,7 +172,7 @@ def _db(x: float) -> float:
     return 20 * np.log10(x) if x > 0 else -np.inf
 
 
-class LoudnessMeter:
+class LoudnessMeter(_RustOwned):
     """BS.1770-5 momentary, short-term and integrated loudness, true peak and PSR, by blocks.
 
     `push(block)` takes (n, channels) samples (or (n,) for one channel). The K-weighted energy
@@ -171,6 +180,16 @@ class LoudnessMeter:
     one FFT of the step per channel, its power spectrum weighted by |K(f)|^2 (Parseval).
     Momentary, short-term and the gating blocks are sums of 4 or 30 steps, so the readings
     move at 10 Hz (EBU Tech 3341 asks for at least 10 Hz). They are computed when read.
+
+    **The engine** (`dsp/backend.py`). With `engine=rust` the meter owns one Rust `LoudnessMeter`,
+    built on its first block with the design computed here (the step, `_k_power`, the weights and
+    the kernels) and this meter's state (`_context` and `_pending`); each block is one call, which
+    gives the block's true peak and the energies of the steps it completed, and everything kept
+    from them (the steps, the peaks, the totals) stays here. The state moves at an engine switch
+    between blocks, so the readings are the same (within 1e-9, `tests/test_loudness_rust.py`).
+    A meter measures, it plays nothing: it never goes silent with the rest after a Rust failure.
+    It measures in numpy from the failing block on, from a context and a pending step of zeros
+    (the pending step keeps its length, so the steps stay aligned with the other meters').
     """
 
     def __init__(self, sr: int, channels: int, weights: list[float] | None = None, *, history: bool = True) -> None:
@@ -201,27 +220,51 @@ class LoudnessMeter:
         self._total = 0
         self._peak = 0.0
         self._recent_peaks: deque[tuple[int, float]] = deque()
+        if self._rust is not None:
+            self._rust_call(lambda rust: rust.set_state(self._numpy_state()))
 
     def push(self, block: np.ndarray) -> None:
-        x = np.asarray(block, dtype=float)
-        x = (x.reshape(-1, 1) if x.ndim == 1 else x).T  # (channels, n)
+        frames = np.asarray(block, dtype=float)
+        x = (frames.reshape(-1, 1) if frames.ndim == 1 else frames).T  # (channels, n)
         n = x.shape[1]
         if n == 0:
             return
-        peak = self._true_peak(x)
+        self._follow(rust=backend.rust_active())
+        measured = self._measure_rust(frames, x.shape[0]) if self._rust is not None else None
+        peak, new = self._measure_numpy(x) if measured is None else measured
         self._peak = max(self._peak, peak)
         self._total += n
         self._recent_peaks.append((self._total, peak))
         while self._recent_peaks and self._recent_peaks[0][0] <= self._total - self._short_steps * self._step_n:
             self._recent_peaks.popleft()
+        if new:
+            self._steps.extend(new)
+            self.steps_total += len(new)
+
+    def _measure_numpy(self, x: np.ndarray) -> tuple[float, list[float]]:
+        """The block's true peak and the energies of the steps it completes, oldest first."""
+        peak = self._true_peak(x)
         pending = np.concatenate([self._pending, x], axis=1)
         whole = pending.shape[1] // self._step_n
+        new: list[float] = []
         if whole:
             steps = pending[:, : whole * self._step_n].reshape(self.channels, whole, self._step_n)
             power = np.abs(np.fft.rfft(steps, axis=2)) ** 2 @ self._k_power  # (channels, whole)
-            self._steps.extend((self.weights @ power).tolist())
-            self.steps_total += whole
+            new = (self.weights @ power).tolist()
         self._pending = pending[:, whole * self._step_n :]
+        return peak, new
+
+    def _measure_rust(self, frames: np.ndarray, channels: int) -> tuple[float, list[float]] | None:
+        """`_measure_numpy` by the Rust meter; None when Rust failed (the meter is then numpy, from
+        a restarted state, and this block is measured there)."""
+        if channels != self.channels:
+            msg = f"a block of {channels} channels for a meter of {self.channels}"
+            raise ValueError(msg)
+        rust = self._rust
+        measured = backend.guarded(lambda: rust.push(_vector(frames).ravel()), self._broke)
+        if measured is None:
+            self._follow(rust=backend.rust_active())
+        return measured
 
     def _true_peak(self, x: np.ndarray) -> float:
         """The highest 4x-oversampled value of the positions that now have samples on both sides.
@@ -247,6 +290,33 @@ class LoudnessMeter:
         windows = sliding_window_view(seg, 2 * HALF_WIDTH, axis=1)[rows, cols + start - HALF_WIDTH + 1]
         between = windows @ self._kernels_ascending
         return max(sample_peak, float(np.abs(between).max()))
+
+    # -- the engine (dsp/backend.py) ---------------------------------------------------------
+
+    def _build_rust(self) -> Any:
+        rust = backend.module().LoudnessMeter(
+            kernels=_vector(self._kernels_ascending.T).ravel(),
+            half_width=HALF_WIDTH,
+            k_power=_vector(self._k_power),
+            weights=_vector(self.weights),
+            step_n=self._step_n,
+        )
+        rust.set_state(self._numpy_state())
+        return rust
+
+    def _numpy_state(self) -> dict[str, Any]:
+        return {"context": _vector(self._context), "pending": _vector(self._pending)}
+
+    def _load_state(self, state: dict[str, Any]) -> None:
+        self._context = np.array(state["context"])
+        self._pending = np.array(state["pending"])
+
+    def _restart(self) -> None:
+        """After a Rust failure: silence for context, and a pending step of zeros as long as the
+        one lost (`_total % _step_n`: the steps start at the stream's start), so the steps stay
+        on the same grid as the other meters' (`QualityMeter` sums them step by step)."""
+        self._context = np.zeros((self.channels, 2 * HALF_WIDTH))
+        self._pending = np.zeros((self.channels, self._total % self._step_n))
 
     def _mean(self, count: int) -> float:
         """Mean square of the last `count` steps (zeros before the start)."""

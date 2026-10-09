@@ -7,7 +7,7 @@ use numpy::PyArray1;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::convert::{float64_vector, item, samples, taps_of};
+use crate::convert::{item, owned, taps_of};
 use crate::error::{EngineError, guard};
 use crate::fir::{partitioned_dict, partitioned_state};
 use crate::planted::Planted;
@@ -59,10 +59,15 @@ impl VirtualBass {
     ) -> PyResult<(Bound<'py, PyArray1<f64>>, f64, f64)> {
         guard(|| {
             self.planted.check("VirtualBass", "process");
-            let x = float64_vector("x", x)?;
-            let x = samples(&x);
-            let mut out = vec![0.0; x.len()];
-            let energies = self.inner.process(&x, current, target, &mut out)?;
+            let x = owned("x", x)?;
+            let inner = &mut self.inner;
+            // Without the interpreter while it works (`convert::owned`): the input is a copy.
+            let (out, energies) = py.detach(|| {
+                let mut out = vec![0.0; x.len()];
+                inner
+                    .process(&x, current, target, &mut out)
+                    .map(|energies| (out, energies))
+            })?;
             Ok((PyArray1::from_vec(py, out), energies.bass, energies.made))
         })
     }

@@ -1,0 +1,11 @@
+extension: /tmp/claude-1000/-home-fadiaz-Desktop-Project-bluetooth-sync/d2684a5c-0f64-4611-8397-186d8e93e4d4/scratchpad/sin-detach/ext/aurasync_engine/__init__.py
+load1 antes: 10.75
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, python 3.12.12, numpy 2.5.3
+          caso    med ms    p95 ms
+         eq x8    0.3476    0.5497
+  limitador x8    1.0476    1.1028
+ medidores x10    0.5508    0.6069
+    lectura x8    4.2219    4.6755
+   fir de 1 x8    0.1739    0.1984
+      vacia x8    0.0231    0.0253
+load1 despues: 10.75

@@ -1,0 +1,27 @@
+/home/fadiaz/Desktop/Project/bluetooth-sync-rust/host/../probes/20-costo-sinc-rust/costo_medidores.py:157: RuntimeWarning: invalid value encountered in subtract
+  diferencia = np.abs(lecturas(backend.RUST, x) - lecturas(backend.NUMPY, x))
+uptime antes: 16:20:19 up  6:16,  1 user,  load average: 3,28, 3,18, 3,08
+load1 antes: 3.28
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, x86_64
+python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras = 85.3 ms; motores ['numpy', 'rust']
+       senal         caso    medidores        motor          med          p95
+       ruido          uno            1        numpy       0.1020       0.1244
+       ruido    calidad 4            6        numpy       0.6724       0.9538
+       ruido    calidad 8           10        numpy       1.1059       1.4112
+       ruido  monitor mix            2        numpy       0.2821       0.3397
+       ruido          uno            1         rust       0.0460       0.0561
+       ruido    calidad 4            6         rust       0.2956       0.3773
+       ruido    calidad 8           10         rust       0.4873       0.6340
+       ruido  monitor mix            2         rust       0.1951       0.2141
+      musica          uno            1        numpy       0.0983       0.1258
+      musica    calidad 4            6        numpy       0.6670       0.8825
+      musica    calidad 8           10        numpy       1.1233       1.5412
+      musica  monitor mix            2        numpy       0.2833       0.3669
+      musica          uno            1         rust       0.0649       0.0881
+      musica    calidad 4            6         rust       0.3100       0.4751
+      musica    calidad 8           10         rust       0.5084       0.6124
+      musica  monitor mix            2         rust       0.2031       0.2434
+mayor |rust - numpy| de las lecturas (musica, calidad 8): 5.54e-13
+uptime despues: 16:20:27 up  6:16,  1 user,  load average: 3,18, 3,16, 3,07
+load1 despues: 3.18

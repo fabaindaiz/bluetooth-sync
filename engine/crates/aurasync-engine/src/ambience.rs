@@ -6,7 +6,7 @@ use numpy::PyArray1;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::convert::{float64_vector, get_complex, samples, set_complex, vector};
+use crate::convert::{get_complex, owned, set_complex, vector};
 use crate::error::guard;
 use crate::planted::Planted;
 
@@ -77,11 +77,14 @@ impl AmbienceExtractor {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         guard(|| {
             self.planted.check("AmbienceExtractor", "process");
-            let left = float64_vector("left", left)?;
-            let right = float64_vector("right", right)?;
-            let (left, right) = (samples(&left), samples(&right));
-            let mut out = vec![0.0; left.len()];
-            self.inner.process(&left, &right, &mut out)?;
+            let left = owned("left", left)?;
+            let right = owned("right", right)?;
+            let inner = &mut self.inner;
+            // Without the interpreter while it works (`convert::owned`): the inputs are copies.
+            let out = py.detach(|| {
+                let mut out = vec![0.0; left.len()];
+                inner.process(&left, &right, &mut out).map(|()| out)
+            })?;
             Ok(PyArray1::from_vec(py, out))
         })
     }

@@ -7,8 +7,10 @@ input (2 channels, G = 1) and one on each output.
 
 **It runs on the engine thread**, where the telemetry is already recorded, because it is
 cheap: 0.28 ms per 4096-sample block for the input and 3 outputs (MEDIDO on the Mac,
-`probes/18-costo-de-la-cadena/costo.py`; the budget was 0.5 ms). The readings are computed
-when `summary()` is called, which the session does at most at `SUMMARY_HZ`.
+`probes/18-costo-de-la-cadena/costo.py`; the budget was 0.5 ms). On `HP-O16` it costs more:
+0.64-0.74 ms with 4 speakers in numpy, 0.30-0.31 ms with the meters' Rust port (MEDIDO,
+experimentos/20 §13). The readings are computed when `summary()` is called, which the session does
+at most at `SUMMARY_HZ`.
 
 **What the engine thread holds has a fixed length** (user, 2026-10-03: the stream is always
 processed over fixed-length data, the history apart and asynchronous). The meters keep only

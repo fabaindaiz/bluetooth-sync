@@ -5,7 +5,7 @@ use aurasync_dsp::interpolation;
 use numpy::PyArray1;
 use pyo3::prelude::*;
 
-use crate::convert::{float64_vector, samples};
+use crate::convert::owned;
 use crate::error::guard;
 use crate::planted::Planted;
 
@@ -46,21 +46,23 @@ impl Reader {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         guard(|| {
             self.planted.check("Reader", "read");
-            let data = float64_vector("data", data)?;
-            let position = float64_vector("position", position)?;
-            let data = samples(&data);
-            let position = samples(&position);
-            if position.len() > self.inner.max_block() {
-                self.inner = interpolation::Reader::new(
-                    position
-                        .len()
-                        .checked_next_power_of_two()
-                        .unwrap_or(position.len())
-                        .max(FIRST_MAX_BLOCK),
-                );
-            }
-            let mut out = vec![0.0; position.len()];
-            self.inner.read(&data, &position, &mut out)?;
+            let data = owned("data", data)?;
+            let position = owned("position", position)?;
+            let inner = &mut self.inner;
+            // Without the interpreter while it reads (`convert::owned`): the inputs are copies.
+            let out = py.detach(|| {
+                if position.len() > inner.max_block() {
+                    *inner = interpolation::Reader::new(
+                        position
+                            .len()
+                            .checked_next_power_of_two()
+                            .unwrap_or(position.len())
+                            .max(FIRST_MAX_BLOCK),
+                    );
+                }
+                let mut out = vec![0.0; position.len()];
+                inner.read(&data, &position, &mut out).map(|()| out)
+            })?;
             Ok(PyArray1::from_vec(py, out))
         })
     }

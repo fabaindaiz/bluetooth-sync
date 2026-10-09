@@ -10,8 +10,8 @@ d-7c8794-0d2a1e (`docs/decisions.md`).
 
 | Crate | Qué es |
 |---|---|
-| `crates/aurasync-dsp` | Rust puro (`#![forbid(unsafe_code)]`, sin Python). Hoy: `interpolation`, la lectura sinc del retardo (`Reader`), contra la fórmula de `dsp/interpolation.py`; `spatial`, el upmix espacial / frente intacto (`SpatialUpmix`, con su estado), contra `dsp/spatial.py`; `ambience`, el extractor de ambiente (`Extractor`, con su estado), contra `dsp/ambience.py`; y `fir`, los filtros por convolución FFT (`StreamingFir`, solapar y sumar con cola; `PartitionedFir`, particionado uniforme sin latencia), contra `StreamingFIR` y `PartitionedFIR` de `dsp/eq.py`, para que el código Rust que venga los use directo; y `virtual_bass`, el generador de armónicos de los graves virtuales (`VirtualBass`: banda, rectificador, banda de armónicos, calibración y rampa de la ganancia; posee dos `PartitionedFir` y se llama una vez por bloque), contra `VirtualBass` de `dsp/virtual_bass.py`; y `limiter`, el limitador de pico real (`TruePeakLimiter`: la necesidad sobre 4× sobremuestreo, la retención y el ataque de coseno elevado, la liberación en el dominio logarítmico y las métricas), contra `TruePeakLimiter` de `dsp/limiter.py`. FFT con `realfft` 3.5.0 sobre `rustfft` 6.4.1, fijadas exactas |
-| `crates/aurasync-engine` | La extensión de Python (PyO3 0.29.3, numpy 0.29.0, maturin 1.15.0), módulo `aurasync_engine`: las clases `Reader` (la lectura sinc: `Reader().read(data, position)`), `SpatialUpmix`, `AmbienceExtractor`, `StreamingFIR`, `PartitionedFIR`, `VirtualBass` y `TruePeakLimiter`, `capabilities()` y las excepciones `EngineError` y `EnginePanic`. Su contrato de tipos es `aurasync_engine.pyi`, que maturin instala junto al módulo y `host/tests/test_engine_stub.py` compara con lo compilado (nombres y firmas) |
+| `crates/aurasync-dsp` | Rust puro (`#![forbid(unsafe_code)]`, sin Python). Hoy: `interpolation`, la lectura sinc del retardo (`Reader`), contra la fórmula de `dsp/interpolation.py`; `spatial`, el upmix espacial / frente intacto (`SpatialUpmix`, con su estado), contra `dsp/spatial.py`; `ambience`, el extractor de ambiente (`Extractor`, con su estado), contra `dsp/ambience.py`; y `fir`, los filtros por convolución FFT (`StreamingFir`, solapar y sumar con cola; `PartitionedFir`, particionado uniforme sin latencia), contra `StreamingFIR` y `PartitionedFIR` de `dsp/eq.py`, para que el código Rust que venga los use directo; y `virtual_bass`, el generador de armónicos de los graves virtuales (`VirtualBass`: banda, rectificador, banda de armónicos, calibración y rampa de la ganancia; posee dos `PartitionedFir` y se llama una vez por bloque), contra `VirtualBass` de `dsp/virtual_bass.py`; y `limiter`, el limitador de pico real (`TruePeakLimiter`: la necesidad sobre 4× sobremuestreo, la retención y el ataque de coseno elevado, la liberación en el dominio logarítmico y las métricas), contra `TruePeakLimiter` de `dsp/limiter.py`; y `loudness`, el trabajo por bloque del medidor de sonoridad (`LoudnessMeter`: la energía K-ponderada de cada paso de 100 ms y el pico verdadero 4×; las lecturas siguen en Python), contra `LoudnessMeter` de `dsp/loudness.py`. FFT con `realfft` 3.5.0 sobre `rustfft` 6.4.1, fijadas exactas |
+| `crates/aurasync-engine` | La extensión de Python (PyO3 0.29.3, numpy 0.29.0, maturin 1.15.0), módulo `aurasync_engine`: las clases `Reader` (la lectura sinc: `Reader().read(data, position)`), `SpatialUpmix`, `AmbienceExtractor`, `StreamingFIR`, `PartitionedFIR`, `VirtualBass`, `TruePeakLimiter` y `LoudnessMeter`, `capabilities()` y las excepciones `EngineError` y `EnginePanic`. Su contrato de tipos es `aurasync_engine.pyi`, que maturin instala junto al módulo y `host/tests/test_engine_stub.py` compara con lo compilado (nombres y firmas) |
 
 **La lectura sinc es un objeto.** `Reader` tiene su tabla (unas 70 000 evaluaciones del núcleo,
 demasiado para cada bloque) y sus búferes: el host guarda uno (`backend._reader`), lo arma con
@@ -28,12 +28,21 @@ configuración o un estado rechazados siguen siendo `ValueError`, y un argumento
 `TypeError`. El host toma un `RuntimeError` como Rust fallando: ese bloque es silencio y numpy entra
 desde el siguiente corte.
 
-Hoy hay **seis** piezas portadas: la lectura sinc, el upmix espacial, el extractor de ambiente,
+Hoy hay **siete** piezas portadas: la lectura sinc, el upmix espacial, el extractor de ambiente,
 los filtros FIR (`StreamingFIR` y `PartitionedFIR`, debajo del EQ, el crossover, la protección de
 graves, la cola difusa y el decorrelador), el generador de armónicos (`VirtualBass`) y el limitador
 de pico real (`TruePeakLimiter`; el de pico de siempre, `PeakLimiter`, sigue en numpy porque es una
-forma cerrada que no cuesta casi nada); en el plan son las etapas 5, 6, 7, 9, 10 y 11 más la
-lectura. Una etapa con estado (el upmix, el extractor, los filtros FIR, el generador de armónicos,
+forma cerrada que no cuesta casi nada) y el trabajo por bloque del medidor de sonoridad
+(`LoudnessMeter`); en el plan son las etapas 5, 6, 7, 9, 10, 11 y 14 más la lectura. Las rampas
+(etapa 13) se midieron y no se portaron: cuestan 0,005 ms por bloque en reposo
+([experimentos/20](../docs/research/experimentos/20-costo-de-la-lectura-sinc-en-rust.md) §12). Un
+medidor que falla no da silencio: mide en numpy desde ese bloque, con su grilla de pasos intacta.
+
+**El GIL.** Cada llamada por bloque (`read`, los `process`, `push`) copia su entrada a un búfer de
+Rust y trabaja sin el intérprete (`Python::detach`), así que los demás hilos de Python del servicio
+(el servidor HTTP, los eventos del panel) siguen mientras el motor procesa;
+`host/tests/test_engine_gil.py` lo comprueba con un hilo que corre en medio de cada llamada. La
+construcción, el estado y la configuración siguen con el GIL tomado: no son por bloque. Una etapa con estado (el upmix, el extractor, los filtros FIR, el generador de armónicos,
 el limitador) es de su objeto numpy: cuando el motor es Rust, el objeto numpy tiene el de Rust y le
 pasa su estado entero al cambiar de motor en el fondo de un corte, en las dos direcciones, exacto; si Rust
 falla, la etapa vuelve a empezar en numpy (el upmix con latencia y entrada suave, como un render
@@ -97,7 +106,9 @@ ninguna (los coeficientes y la partición llegan como parámetros). Limitador de
 (la anticipación, el ataque, la retención y los núcleos de interpolación) llega como parámetro, y
 sus dos constantes propias (`MARGIN_DB` 0,01 y `NEAR_CEILING` 0,25) son las de numpy: van en
 `capabilities()["limiter"]` (`margin_db`, `near_ceiling`) junto con su versión, como las del upmix y
-el extractor. Las claves `"fir"`, `"virtual_bass"` y `"limiter"` llevan una `"version"` (en
+el extractor. Medidor de sonoridad: su diseño (el paso, `k_power`, los pesos y los núcleos) llega
+como parámetro, y su constante propia (`NEAR_PEAK` 0,5) va en `capabilities()["loudness"]`
+(`near_peak`) con su versión. Las claves `"fir"`, `"virtual_bass"` y `"limiter"` llevan una `"version"` (en
 `capabilities.rs` y en `dsp/backend.py`) y dicen que la extensión trae los filtros, el generador de
 armónicos y el limitador; la versión se sube cada vez que cambia el comportamiento en Rust de esa
 etapa, y una compilada antes se rechaza al cargarla (hay que volver a correr `hatch run

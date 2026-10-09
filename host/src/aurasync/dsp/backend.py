@@ -1,14 +1,14 @@
 """Which engine runs the DSP stages that have a Rust port: numpy or Rust (spec rust-engine §2).
 
 The numpy code stays and is the oracle; `aurasync_engine` (engine/crates/aurasync-engine, PyO3)
-is an optional extension. Six stages have a port: the band-limited read of the delay line
+is an optional extension. Seven stages have a port: the band-limited read of the delay line
 (`interpolation.read`, which dispatches through `read` here), the spatial / front upmix
 (`spatial.SpatialUpmix`), the ambience extractor (`ambience.Extractor`), the FIR filters by FFT
 convolution (`eq.StreamingFIR`, `eq.PartitionedFIR`, under the EQ, the crossover, the bass stage,
 the virtual bass, the diffuse tail and the decorrelator), the virtual bass's harmonic generator
-(`virtual_bass.VirtualBass`, which owns two Rust FIRs directly) and the true-peak limiter
-(`limiter.TruePeakLimiter`); each of the last five owns its Rust object and registers for the
-switch.
+(`virtual_bass.VirtualBass`, which owns two Rust FIRs directly), the true-peak limiter
+(`limiter.TruePeakLimiter`) and the loudness meter's per-block work (`loudness.LoudnessMeter`);
+each of the last six owns its Rust object and registers for the switch.
 
 **Choosing** (d-7c8794-196e0c). `"engine"` in `service.json` (`numpy` by default), overridden by
 `AURASYNC_ENGINE` for the tests and the CLI (`wanted`). `resolve` turns the wish into what can
@@ -115,7 +115,7 @@ _loaded = False
 
 def _expected() -> dict[str, dict[str, Any]]:
     """The constants each ported stage must have been built with: numpy's own."""
-    from aurasync.dsp import ambience, limiter, spatial  # noqa: PLC0415 - they import this module
+    from aurasync.dsp import ambience, limiter, loudness, spatial  # noqa: PLC0415 - they import this module
 
     curve = ambience.Parametros()
     return {
@@ -149,6 +149,9 @@ def _expected() -> dict[str, dict[str, Any]]:
         # Likewise the true-peak limiter: its design values come from numpy per call; its two own
         # constants are numpy's, checked here like the other stages' constants.
         "limiter": {"version": 1, "margin_db": limiter.MARGIN_DB, "near_ceiling": limiter.NEAR_CEILING},
+        # Likewise the loudness meter's per-block work: its design comes from numpy per call; its
+        # one own constant is numpy's.
+        "loudness": {"version": 1, "near_peak": loudness.NEAR_PEAK},
         # The binding's own Python-visible shape: bumped, here and in the Rust `capabilities`, when
         # it changes. Version 2: the exceptions `EngineError` and `EnginePanic`, the `Reader` class
         # in place of the module's `read`, keyword-only `set_params`, and no `_panic` function. A host
