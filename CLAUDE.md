@@ -20,9 +20,11 @@ virtuales y monitor de audífonos (fases 1 y 2), y un motor en Rust por etapas. 
 las SuperMini sirven como controlador de 4 BIS (`experimentos/21`, E1 = sí), con cristal de 32 kHz,
 pero su cristal de 32 MHz corre rápido (+64/+79 ppm); falta E2–E4 con los JBL. **Los emisores Bluetooth
 están en pausa desde el 2026-10-08** (el roadmap dice cómo retomarlos). **Transiciones sin corte
-(2026-10-09):** las etapas 1, 2 y 4 están construidas; la 3 (el render) tiene plan y falta. **Lo próximo**
-(la lista está arriba en `docs/roadmap.md`): integrar Rust 13–14 desde la rama `rust-ramps-loudness`, la
-etapa 3, la revisión final de la rama y el A/B final, en `HP-O16`. El emisor Auracast entra al servicio solo si E4 sale bien. **El motor en Rust (2026-10-09)** quedó idiomático, con la API 2 del puente (d-7c8794-ef6117).
+(2026-10-10):** las cuatro etapas están construidas (la 3, el render, el 2026-10-10); faltan las escuchas de
+la 3 y la 4. **Rust 13–14 está integrado** (rama `claude/pending-work-today-j193ci`, que contiene
+`seamless-transitions`), y el GIL se suelta solo en llamadas largas por el efecto convoy (experimentos/20
+§15). **Lo próximo** (la lista está arriba en `docs/roadmap.md`): las escuchas, medir `switchinterval` con el
+servicio, la revisión final de la rama y el A/B final, en `HP-O16`. El emisor Auracast entra al servicio solo si E4 sale bien. **El motor en Rust (2026-10-09)** quedó idiomático, con la API 2 del puente (d-7c8794-ef6117).
 Ya tiene portados el decorrelador y el limitador true peak. Al cambiar de rama o de equipo, hay que correr
 `hatch run engine-build`. El plan anterior sigue en
 `docs/roadmap.md`, "Plan desde el 2026-10-02".
@@ -101,6 +103,9 @@ cd host && hatch run aurasync --version
   si no, PyO3 toma un Python 3.11 y no compila.
 - **En el Mac, la suite del host tiene 4 fallas propias de macOS** (i-7c8794-437907), así que `check.sh`
   no pasa entero allí: se corre por partes.
+- **En un contenedor de la nube**, `maturin` puede tomar otro rustc que el fijado en
+  `engine/rust-toolchain.toml` (se corre con `RUSTUP_TOOLCHAIN=1.99.0`), y sin Playwright `hatch test` se
+  corre como `hatch test -- tests` (registro, 2026-10-10).
 - A `hatch test` no se le pasa `-p …`: hatch lo toma como su propia opción de paralelismo y no corre ningún test.
 - El host se maneja con **hatch**, no con uv directo (d-7c8794-c23c20). **No se
   activan los lockfiles de hatch**: con hatch 1.18.1 desinstalan el propio proyecto
