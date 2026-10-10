@@ -20,9 +20,10 @@ render with the monitor's unit (`loudness_match.LoudnessMatch`):
   0 dB and back to the render's own when it ends;
 - a render **never measured** starts at 0 dB and is corrected faster (`FIRST_VISIT_RATE_PER_S`)
   until it locks once, so the first visit converges within 10 s; after that each switch starts at
-  the remembered makeup, applied at the cut's bottom (`Motor.on_render_switch`), and never jumps;
-- what the meter holds right after a cut (the fade, the old render still in the delay lines) is
-  not measured: the window starts `SETTLE_S` after the cut ends and grows to the meter's 3 s;
+  the remembered makeup, applied at the cut's bottom or glided over a render crossfade
+  (`Motor.on_render_switch`, stage 3), and never jumps through the music;
+- what the meter holds right after a cut or a crossfade (`en_corte`: the fade, the old render
+  still in the delay lines) is not measured: the window starts `SETTLE_S` after the cut ends and grows to the meter's 3 s;
 - the volume, the makeup and the A/B's compensation are taken back out of the measurement by what
   each block was really made with (`Motor.volumen_del_bloque_db`, `Motor.render_makeup_block_db`,
   `Motor.comparison_block_db`), averaged over the window, so a volume change while `direct` plays

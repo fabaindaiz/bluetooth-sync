@@ -214,7 +214,7 @@ def test_a_planted_panic_is_one_silent_block_then_numpy_from_the_cut():
     name = "R"
     m._decorreladores[name]._rust._panic_next()  # noqa: SLF001
     block = np.random.default_rng(3).standard_normal(BLOCK)
-    assert not np.any(m._convolucionar(name, block))  # noqa: SLF001
+    assert not np.any(m._convolucionar(m._decorreladores, name, block))  # noqa: SLF001
     assert "panicked" in backend.failure()
     assert backend.active() == backend.NUMPY
     # From the next block on: a fresh numpy filter (the Rust state may be torn).
@@ -222,7 +222,7 @@ def test_a_planted_panic_is_one_silent_block_then_numpy_from_the_cut():
     backend.reset()
     backend.use(backend.NUMPY)
     nxt = np.random.default_rng(4).standard_normal(BLOCK)
-    got = m._convolucionar(name, nxt)  # noqa: SLF001
+    got = m._convolucionar(m._decorreladores, name, nxt)  # noqa: SLF001
     assert m._decorreladores[name]._rust is None  # noqa: SLF001
     assert np.array_equal(got, fresh.process(nxt))
 

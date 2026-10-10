@@ -68,6 +68,16 @@ and its API is `request/begin/take_starting/advance/cancel` (`dsp/transition.py`
   `equal_gain` whatever `shape` says (the two limiters see the same input; `equal_power` broke the ceiling by
   3 dB, MEASURED in review), as delay crossfades always use `equal_power`. A decorrelator crossfade (two banks,
   or dry vs decorrelated: nearly uncorrelated) always uses `equal_power` (`equal_gain` dipped 2.4–3.0 dB, MEASURED).
+- **Stage 3 as built (2026-10-10):** a render switch in crossfade mode builds a whole new branch
+  (`render_branch.RenderBranch`: the upmix, the decorrelators, the diffuse tail, the bass stage, the delay
+  lines and the EQ), after every starting action (so it takes the curves, delays and bank they leave), warms
+  it in the shadow (the sum of its stages' memories, capped at 1 s) and mixes the two branches per speaker
+  before the gain; the extractor, the gain, the probe and the limiter stay shared. **Deviation from the
+  plan:** the delay lines are per branch, not shared: a line has one input, and the two renders feed it
+  different signals. **The shape is per pair, whatever `shape` says** (`motor.forma_render`): `equal_gain`
+  between `spatial` and `front` (the same upmix: `equal_power` rose 2.0 dB mid-fade), `equal_power` for
+  every other pair (`equal_gain` dipped up to 3.0 dB; `equal_power` ≤ 0.41 dB down, ≤ 0.20 dB up),
+  MEASURED in `tests/test_motor_render_crossfade.py` (partly correlated noise, every effect on).
 - **WARM** lasts the longest warm-up asked by the pieces that changed (`need_warm(samples)`, max 1 s;
   0 when only ramps and delays change).
 - **Requests in a row collapse** (user, review 2026-10-08). A request during WARM joins the
@@ -178,10 +188,11 @@ own spec.
    presets that differ in pan, gain, delay or ambience has no hole.
 2. **Stateful stages through `Crossfaded`:** EQ, limiter, diffuse, bass, decorrelator, extractor.
    After this, every `cut`-class chain knob is seamless.
-   **Status: built 2026-10-09** (see "Stage 2 as built" in §3); a limiter change of latency and the render
-   still cut (the render is stage 3, deferred).
+   **Status: built 2026-10-09** (see "Stage 2 as built" in §3); a limiter change of latency still cuts
+   (the render, stage 3, was built on 2026-10-10).
 3. **The render switch**, including `direct` and the makeup (`on_render_switch` called at the
    request; `render_match` already holds while `en_corte`).
+   **Status: built 2026-10-10** (see "Stage 3 as built" in §3); to listen to (experimento 23 §9).
 4. **The cushion by stretching** (§4b), for the speakers' shared cushion and the monitor's.
 
 ## 6. Cuts that stay, and the way out of each (explored)

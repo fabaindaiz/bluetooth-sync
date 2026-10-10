@@ -76,7 +76,7 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
 | `set` | `speaker` (optional), `changes` | Per speaker: `pan` [-1, 1], `ambience` [0, 1], `gain_db` [-40, 6]. Global: `rear_delay_ms` [0, 50], `volume_db` [-60, 0], `extract_ambience`, `decorrelate` (bool). Works with the session stopped |
 | `presets` | — | Every saved preset (`presets`), and each one's sparse chain part (`chain`, by preset name; a preset saved before the chain has no entry) |
 | `preset_save` | `name` | Saves the artistic fields (no `delay_ms`, no `volume_db`) |
-| `preset_load` | `name` | Applies a preset; while playing, always as a transition by the chain's `transition` mode (an 80 + 80 ms fade with `cut`; with `crossfade`, everything glides in `fade_ms`, and a stateful chain change in the preset crossfades too, except a limiter change of latency or a render change, which request their own cut) |
+| `preset_load` | `name` | Applies a preset; while playing, always as a transition by the chain's `transition` mode (an 80 + 80 ms fade with `cut`; with `crossfade`, everything glides in `fade_ms`, and a stateful chain change in the preset crossfades too, the render included (since stage 3), except a limiter change of latency, which requests its own cut) |
 | `preset_delete` | `name` | Removes it |
 | `preset_rename` | `name`, `new_name` | Renames it, and its chain part with it (`not_found` if `name` is missing; `conflict` if `new_name` exists or a blind A/B uses `name`; the same name is a no-op). The loaded preset keeps being the loaded one |
 | `save` | — | Writes the installation file, including the loop's `delay_ms` |
@@ -89,7 +89,7 @@ each further failure blocks the address for 1, 2, 4 … up to 300 s: 429 `rate_l
   delay would take more than 2 s to ramp (more than 1 ms of change), the change goes
   through a transition instead: by default a crossfade between the old and the new delay, no
   hole (with the chain's `transition` at `cut`, a short dip to silence).
-- `decorrelate` always goes through the fade. `preset_load`, the A/B (`ab_play`), `calibration_apply` and `sync_apply` are a transition, by the chain's `transition` mode (the fade with `cut`, a crossfade otherwise); a preset that changes a stage with state crossfades it (since stage 2); only a limiter change of latency or a render change still cuts. The A/B always requests one, and decides once for its pair: if either preset needs a cut, every play cuts, so its blindness holds.
+- `decorrelate` always goes through the fade. `preset_load`, the A/B (`ab_play`), `calibration_apply` and `sync_apply` are a transition, by the chain's `transition` mode (the fade with `cut`, a crossfade otherwise); a preset that changes a stage with state crossfades it (since stage 2), and one that changes the render crossfades the whole per-speaker path (since stage 3: the new render warms up to 1 s in the shadow, then the two are mixed); only a limiter change of latency still cuts. The A/B always requests one, and decides once for its pair: if either preset needs a cut, every play cuts, so its blindness holds.
 - `extract_ambience` off keeps the extractor running and mixes it out, so the latency does
   not change.
 
@@ -403,7 +403,7 @@ version 1.
 | `op` | Fields | Effect |
 |---|---|---|
 | `chain` | — | Every stage in processing order, with its algorithms, their knobs and the current values |
-| `chain_set` | `stage`, `algorithm` (optional), `params` (optional object), `speaker` (only with per-speaker params) | Checked completely before anything changes. Returns `{"sequence", "stage", "value", "apply"}`; `apply` says how it was applied now: `live`, `crossfade` (a stateful stage - diffuse, bass, a limiter of equal latency, EQ, decorrelator, extractor - changed through the transition, with `transition` = `crossfade`), `cut` (the 80 + 80 ms fade: a limiter change of latency, the render, or `transition` = `cut`), or `none` (no session, or a stage not run yet) |
+| `chain_set` | `stage`, `algorithm` (optional), `params` (optional object), `speaker` (only with per-speaker params) | Checked completely before anything changes. Returns `{"sequence", "stage", "value", "apply"}`; `apply` says how it was applied now: `live`, `crossfade` (a stateful stage - diffuse, bass, a limiter of equal latency, EQ, decorrelator, extractor, the render - changed through the transition, with `transition` = `crossfade`), `cut` (the 80 + 80 ms fade: a limiter change of latency, or `transition` = `cut`), or `none` (no session, or a stage not run yet) |
 | `chain_reset` | `stage`, `param` (optional), `speaker` (optional, with a per-speaker `param`) | Back to the default. A whole stage clears the chain's own choices; the knobs kept in the installation (`pan`, `ambience`, `gain_db`, `rear_delay_ms`) and the session (`volume_db`, `muted`) are reset one by one, to their default value |
 
 ```json
@@ -510,7 +510,7 @@ loaded.
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain"}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "limiter", "params": {"release_ms": 400}}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "ambience", "speaker": "JBL Go 4 Red", "params": {"pan": -0.5}}'
-# Pure aligned stereo (no effects, at classic's loudness: `quality.render_match`), through the cut.
+# Pure aligned stereo (no effects, at classic's loudness: `quality.render_match`), through the transition.
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_set", "stage": "spatial", "algorithm": "direct"}'
 curl -s -H "$H" $U/command -d '{"v": 1, "op": "chain_reset", "stage": "limiter"}'
 ```

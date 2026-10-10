@@ -52,6 +52,7 @@ pero **no converge** en el parlante de `ambiente` alto. Sigue apagado por defect
 | `dsp/eq.py` · `dsp/response.py` | ecualización por parlante desde la respuesta medida en la calibración | experimentos/10 §6 |
 | `chain.py` | la cadena como datos: cada etapa, sus algoritmos y sus perillas, con sus valores por defecto (el sonido de siempre, bit a bit) y lo que se guarda | spec 2026-10-02 §4 |
 | `chain_stages.py` | las etapas nuevas enchufadas al motor: difusión, graves (`protect`, `crossover`) y el limitador de pico real | spec 2026-10-02 §5 |
+| `render_branch.py` | la rama del render: lo que cambia por parlante con el render, que un fundido del render corre dos veces y mezcla | spec 2026-10-08 seamless-transitions §4, etapa 3 |
 | `dsp/crossover.py` · `dsp/virtual_bass.py` · `dsp/diffuse.py` · `dsp/limiter.py` | Linkwitz-Riley, graves psicoacústicos (NLD), cola difusa por parlante, limitadores de pico y de pico real | [11](../docs/research/11-procesamiento-calidad-canales-y-panel.md) R1-R6 |
 | `dsp/loudness.py` · `quality.py` | sonoridad BS.1770 (M/S/I), pico real ×4 y PSR; en vivo, entrada contra salidas, ganancia neta y si la cadena aplana | [11](../docs/research/11-procesamiento-calidad-canales-y-panel.md) §1, spec 2026-10-02 §6 |
 | `bt_volume.py` | `volume.avrcp`: el volumen en los parlantes (`pactl`), **leído de vuelta**, sin saltos de nivel al cambiar de modo | experimentos/10 §5.4, spec 2026-10-02 §5 |

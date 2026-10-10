@@ -41,14 +41,19 @@ effective delays differ — `fundir_a`), the gains, the probe and the limiter (o
 
 ---
 
+**As built (2026-10-10), deviations:** the delay lines are per branch (a shared line cannot hold two
+different inputs; the new branch's lines warm in the shadow); the branch is built after all the starting
+actions and takes the pending bank and EQ (`_cruzar_render`); the mix shape is per pair (`forma_render`:
+`equal_gain` for `spatial`↔`front`, `equal_power` otherwise, both MEASURED). Spec §3 "Stage 3 as built".
+
 ### Task 1: the branch refactor (no behaviour change)
 
-- [ ] Extract the render-dependent per-speaker work of `procesar` into a branch object/function, with the cut
+- [x] Extract the render-dependent per-speaker work of `procesar` into a branch object/function, with the cut
   path and every existing test unchanged (golden ≤ 1e-9 untouched). Full suite green before Task 2.
 
 ### Task 2: crossfade the render
 
-- [ ] In crossfade mode a render change builds the new branch, warms it, mixes per speaker, glides the makeup and
+- [x] In crossfade mode a render change builds the new branch, warms it, mixes per speaker, glides the makeup and
   delays, resolves at the end and at a cut's bottom. Tests: for each pair among the four renders (at least
   classic↔front, front↔spatial, classic↔direct, direct↔spatial): no hole (two steady reference runs, as stage 2),
   lands like a cut after warm + fade + memory (≤ 1e-9), cut mode still cuts, an engine switch mid-fade changes
@@ -56,6 +61,6 @@ effective delays differ — `fundir_a`), the gains, the probe and the limiter (o
 
 ### Task 3: service, presets, A/B, docs
 
-- [ ] `preset_load`/`ab_play` with a render difference crossfade (the A/B pair rule still decides once for the
+- [x] `preset_load`/`ab_play` with a render difference crossfade (the A/B pair rule still decides once for the
   pair); control-api (`apply: "crossfade"` for a render change), roadmap stage 3 → A medias (built, to listen),
   experimentos/23 pending listening item for render changes.

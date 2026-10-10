@@ -61,10 +61,18 @@ def test_spatial_output_differs_and_is_finite():
         assert not np.allclose(x, classic[name])
 
 
-def test_render_switch_goes_through_the_cut():
-    m = Motor(_installation(), SR, semilla=1)
-    assert m.aplicar_cadena(_chain()) == "cut"
+def test_render_switch_goes_through_the_cut_in_cut_mode():
+    cut = ChainValues().with_algorithm("transition", "cut")
+    m = Motor(_installation(), SR, semilla=1, chain=cut)
+    assert m.aplicar_cadena(_chain().with_algorithm("transition", "cut")) == "cut"
     assert m.en_corte
+
+
+def test_render_switch_crossfades_in_crossfade_mode():
+    m = Motor(_installation(), SR, semilla=1)
+    assert m.aplicar_cadena(_chain()) == "crossfade"
+    assert m.en_corte
+    assert not m.cortando
 
 
 def test_manual_off_uses_character():

@@ -80,9 +80,10 @@ Pico como puente (research/13). La app nativa de Android, al final de todo.
 1. ~~Integrar Rust 13–14 y el GIL desde la rama `rust-ramps-loudness`~~: **hecho el 2026-10-10**, con el
    convoy del GIL medido y mitigado (experimentos/20 §15). Queda medir `sys.setswitchinterval` en `HP-O16`
    (i-7c8794-46d296).
-2. Etapa 3 de transiciones, el render (i-7c8794-da4172), con su plan escrito.
+2. ~~Etapa 3 de transiciones, el render (i-7c8794-da4172)~~: **construida el 2026-10-10**; falta escucharla
+   (experimentos/23 §9.2).
 3. La revisión final de toda la rama `seamless-transitions` y `check.sh` entero.
-4. El A/B final con el protocolo de experimentos/23 §6.5, más la escucha de la etapa 4 (§8.2).
+4. El A/B final con el protocolo de experimentos/23 §6.5, más las escuchas de las etapas 4 (§8.2) y 3 (§9.2).
 
 ## Dónde estamos
 
@@ -1992,9 +1993,12 @@ su par. Spec §5. Costo: correr dos copias durante el traspaso.
 - el comentario de `service.py` ~916 sobre el EQ en el fondo del corte quedó viejo.
 
 ### Transiciones sin corte, etapa 3: el render · i-7c8794-da4172
-**Estado: Planificado; el plan está escrito (`docs/superpowers/plans/2026-10-09-seamless-transitions-stage-3.md`) y
-el usuario dejó su ejecución para la próxima sesión.** Cambiar de render (clásico, espacial, direct) con fundido
-en vez de corte. Spec §5.
+**Estado: A medias (construida el 2026-10-10; falta escucharla).** Cambiar de render (clásico, espacial, front,
+direct) con fundido en vez de corte: una rama entera nueva (`render_branch.py`) se calienta a la sombra hasta
+1 s y se mezcla por parlante con la que se va. La forma va por par (`equal_gain` entre `spatial` y `front`,
+`equal_power` en el resto; experimentos/23 §9.1, MEDIDO fuera de línea). Desvío del plan: las líneas de retardo
+van por rama, no compartidas. **Falta:** la escucha de experimentos/23 §9.2 en `HP-O16`. **Choca con:** que el
+render nuevo puede tardar hasta 1 s en oírse (el calentamiento).
 
 ### Transiciones sin corte, etapa 4: el colchón por estiramiento · i-7c8794-1b74ad
 **Estado: A medias (construida el 2026-10-09; falta escucharla).** El colchón de los parlantes y el del monitor

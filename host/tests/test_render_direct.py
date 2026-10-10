@@ -45,13 +45,15 @@ def _installation() -> Instalacion:
     )
 
 
-def _everything_on(render: str = "direct") -> ChainValues:
-    """Every effect switched on, so `direct` has to step around each of them."""
+def _everything_on(render: str = "direct", transition: str = "cut") -> ChainValues:
+    """Every effect switched on, so `direct` has to step around each of them. A render switch here
+    goes through the cut (`transition=cut`); the crossfade is tests/test_motor_render_crossfade.py."""
     return ChainValues.from_json(
         {
             "spatial": {"algorithm": render},
             "diffuse": {"algorithm": "noise_tail"},
             "bass": {"algorithm": "protect"},
+            "transition": {"algorithm": transition},
         }
     )
 

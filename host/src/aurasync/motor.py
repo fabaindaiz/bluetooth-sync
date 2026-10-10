@@ -56,8 +56,10 @@ flujo continuo. `procesar` devuelve exactamente tantas muestras como recibió.
   la sombra con la misma entrada (WARM, hasta 1 s; las rampas y las líneas esperan), se mezcla con
   la vieja en `fade_ms` según `shape`, y queda sola. El limitador se mezcla siempre a igual ganancia
   y el decorrelador a igual potencia. Prender o apagar el decorrelador mezcla la señal seca con la
-  decorrelada, que el motor ya calcula, y la bandera cambia al terminar. Lo demás que tiene estado
-  (el render, un limitador de otra latencia) sigue pasando por el corte.
+  decorrelada, que el motor ya calcula, y la bandera cambia al terminar. Etapa 3: el render arma
+  una rama entera nueva (`render_branch.py`: upmix, decorrelador, difusión, graves, líneas y
+  ecualización), que se calienta a la sombra y se mezcla por parlante con la que se va antes de la
+  ganancia (`forma_render`). Solo un limitador de otra latencia sigue pasando por el corte.
 
 **La cadena** (`chain.py`, spec 2026-10-02 §4). Los parámetros de cada etapa —los del
 extractor, el decorrelador, la ecualización, el limitador y las velocidades— salen de un
@@ -80,14 +82,15 @@ upmix. It keeps the alignment delay, the speaker's gain, mute, the volume and th
 fixed latencies of the extractor and of the EQ (which plays a flat filter). It does skip the
 decorrelator's group delay (`decorrelate.mean_ms`, ~2.5 ms): a switch moves every speaker by that,
 equally and through the cut, and `chain.latency_ms` reports it. `render` is the render playing; it
-changes at a cut's bottom, like the other renders of the `spatial` stage. The stages `direct` does
-not feed (the diffuse tail, the bass filters) are rebuilt for the switch and swapped at the bottom,
-so leaving `direct` never replays what played before it.
+changes at a cut's bottom or, with the crossfade, when the transition starts (the old render's
+branch keeps playing until the fade ends). The stages `direct` does not feed (the diffuse tail, the
+bass filters) are rebuilt for the switch, so leaving `direct` never replays what played before it.
 
 **The render's makeup** (`render_makeup_db`): one more ramped output gain, the same path as the
 A/B's, that keeps every render at `classic`'s loudness. Whoever keeps the makeups
 (`render_match.RenderMatch`) moves it slowly while a render plays and answers `on_render_switch`
-at a cut's bottom, where it jumps with the output at zero. At 0 dB it multiplies by an exact 1.
+at a cut's bottom, where it jumps with the output at zero, or when a crossfade starts, and then it
+glides over the fade with the two renders. At 0 dB it multiplies by an exact 1.
 `render_makeup_block_db` and `comparison_block_db` say what each block was made with, so the
 match takes both gains back out of what it measures.
 """
@@ -96,7 +99,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
@@ -108,6 +111,7 @@ from aurasync.dsp.ramps import DecibelRamp, FadeGate, Smoothed
 from aurasync.dsp.retardo import LineaDeRetardo
 from aurasync.dsp.spatial import SPATIAL_RENDERS, SpatialParams, SpatialUpmix, from_character
 from aurasync.dsp.transition import Crossfaded, Transition
+from aurasync.render_branch import RenderBranch, warm_samples
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -138,6 +142,26 @@ ETAPAS_CRUZABLES = ("_difusion", "_graves", "_extractor")
 """Los atributos del motor que un fundido puede tener cruzados (un `Crossfaded`, etapa 2 de la spec)."""
 DICCIONARIOS_CRUZABLES = ("_limitadores", "_ecualizador", "_decorreladores")
 """Lo mismo, por parlante: cada valor del diccionario puede ser un `Crossfaded`."""
+
+
+def forma_render(viejo: str, nuevo: str) -> str:
+    """La forma del fundido entre dos renders (etapa 3), diga lo que diga `shape`. Por parlante, dos
+    renders de la misma música se parecen poco (otro pan, el decorrelador, el Haas): a igual ganancia
+    el medio bajaba hasta 3,0 dB, a igual potencia ≤ 0,41 dB. Pero `spatial` y `front` son el mismo
+    upmix (cambia `front_intact`) y salen casi iguales: a igual potencia el medio subía 2,0 dB, a igual
+    ganancia nada (MEDIDO 2026-10-10, ruido parcialmente correlado, todos los efectos prendidos;
+    `tests/test_motor_render_crossfade.py`)."""
+    return "equal_gain" if {viejo, nuevo} <= set(SPATIAL_RENDERS) else "equal_power"
+
+
+class _RamaPreparada(NamedTuple):
+    """Lo que una rama calcula una vez por bloque, para todos sus parlantes."""
+
+    rama: RenderBranch
+    directo_puro: bool
+    alimentar: bool
+    difundir: bool
+    espacial: dict | None
 
 
 class Motor:
@@ -201,10 +225,11 @@ class Motor:
         """Si se aplica la ecualización de cada parlante. Cambia en el fondo de un corte, o al empezar un
         fundido, con los filtros nuevos (los viejos siguen con sus coeficientes hasta que terminan)."""
         self.render: str = c.algorithm("spatial")
-        """The render playing (`classic`, `spatial`, `front` or `direct`): it changes at a cut's bottom."""
+        """The render playing (`classic`, `spatial`, `front` or `direct`): it changes at a cut's bottom or
+        when a render crossfade starts (`_cruzar_render`)."""
         self.on_render_switch: Callable[[str], float] | None = None
-        """Asked at the cut's bottom where the render changes: the makeup (dB) the new render starts
-        at (`render_match.RenderMatch.select`). None: the makeup stays where it is."""
+        """Asked where the render changes (a cut's bottom, or a crossfade's start): the makeup (dB) the
+        new render starts at, or glides to (`render_match.RenderMatch.select`). None: the makeup stays."""
         # Arranca ya en su valor: antes de sonar no hay nada que una rampa tenga que disimular.
         self._volumen = DecibelRamp(volumen_db, c.param("volume", "volume_speed_db_s"), sr)
         self.volumen_del_bloque_db: float | np.ndarray = float(volumen_db)
@@ -365,12 +390,12 @@ class Motor:
         return clases
 
     def _clases_sin_corte(self, clases: set[str], anterior: ChainValues, nuevo: ChainValues) -> set[str]:
-        """De `clases`, las que el fundido cruzado pasa sin corte (spec 2026-10-08 §4, etapa 2): la
-        difusión, los graves, la ecualización, el decorrelador (su banco y prenderlo o apagarlo), el
-        extractor y el limitador si su latencia no cambia. Con `transition=cut`, ninguna."""
+        """De `clases`, las que el fundido cruzado pasa sin corte (spec 2026-10-08 §4, etapas 2 y 3):
+        la difusión, los graves, la ecualización, el decorrelador (su banco y prenderlo o apagarlo), el
+        extractor, el render y el limitador si su latencia no cambia. Con `transition=cut`, ninguna."""
         if nuevo.algorithm("transition") == "cut":
             return set()
-        sin_corte = {"difusion", "graves", "eq", "banco", "decorrelacion", "ambiente"}
+        sin_corte = {"difusion", "graves", "eq", "banco", "decorrelacion", "ambiente", "espacial"}
         if chain_stages.limiter_latency(anterior, self.sr) == chain_stages.limiter_latency(nuevo, self.sr):
             sin_corte.add("limitador")
         return clases & sin_corte
@@ -480,7 +505,13 @@ class Motor:
                 if DIRECT in {self.render, anterior.algorithm("spatial"), render}
                 else None
             )
-            al_corte.append(lambda: self._switch_render(render, espacial, fresh))
+            if fundir:
+                # Etapa 3: la rama nueva siempre arranca con su difusión y sus graves (corren a la
+                # vez que los de la rama que se va), armados acá, fuera del bloque.
+                fresh = fresh or (self._nueva_difusion(), self._nuevos_graves())
+                al_fundido.append(lambda: self._pedir_render(render, espacial, fresh))
+            else:
+                al_corte.append(lambda: self._switch_render(render, espacial, fresh))
         if "limitador" in clases and fundir:
             limitadores = {p.nombre: self._nuevo_limitador() for p in self.instalacion.parlantes}
             al_fundido.append(lambda: self._cruzar_limitadores(limitadores))
@@ -794,21 +825,11 @@ class Motor:
             self.decorrelacion_activa, self._decorrelacion_destino = self._decorrelacion_destino, None
         # Cola de la convolución: la parte del bloque anterior que todavía no salió.
         self._decorreladores = self._nuevos_decorreladores()
-        # Una línea de retardo **variable** por parlante. Se arranca con `saltar_a`, que no
-        # usa rampa: antes de que empiece a sonar no hay nada que pueda producir un clic.
-        efectivos = self.retardos_efectivos_ms()
-        self._lineas = {}
-        for parlante in self.instalacion.parlantes:
-            linea = LineaDeRetardo(
-                self.sr,
-                maximo_ms=max(250.0, 2 * max(efectivos.values(), default=0.0)),
-                velocidad_ms_s=self.velocidad_retardo_ms_s,
-                # De banda limitada: la lineal le quitaba hasta 3,5 dB a 12,7 kHz, distinto a
-                # cada parlante según su retardo (`dsp/interpolation.py`).
-                sinc=True,
-            )
-            linea.saltar_a(efectivos[parlante.nombre])
-            self._lineas[parlante.nombre] = linea
+        self._lineas = self._nuevas_lineas()
+        self._rama_vieja: RenderBranch | None = None
+        """Durante un fundido del render, la rama que se va (etapa 3); None si no."""
+        self._render_pendiente: tuple | None = None
+        """El render (y lo armado para él) que una acción del inicio de un fundido pidió (`_pedir_render`)."""
         # Ganancia lineal, que arranca ya en su objetivo por el mismo motivo.
         self._ganancia = {parlante.nombre: 10 ** (parlante.ganancia_db / 20) for parlante in self.instalacion.parlantes}
         if self._extractor is not None:
@@ -945,6 +966,110 @@ class Motor:
         if self.on_render_switch is not None:
             self._makeup.target_db = self.on_render_switch(render)
 
+    def _pedir_render(
+        self,
+        render: str,
+        espacial: SpatialUpmix | None,
+        fresh: tuple[chain_stages.DiffuseStage, chain_stages.BassStage],
+    ) -> None:
+        """Una acción del inicio de un fundido: el render nuevo. Como la ecualización, la rama se arma
+        una sola vez después de todas las acciones del inicio (`_cruzar_render`), y un render
+        arrastrado deja el último. En el fondo de un corte (el fundido ya se canceló), el cambio de
+        siempre (`_switch_render`)."""
+        if not self._transicion.busy:
+            self._switch_render(render, espacial, fresh)
+            return
+        self._render_pendiente = (render, espacial, fresh)
+
+    def _rama(self) -> RenderBranch:
+        """La rama que suena (o, durante un fundido del render, la que entra)."""
+        return RenderBranch(
+            self.render,
+            self.espacial,
+            self._decorreladores,
+            self._difusion,
+            self._graves,
+            self._lineas,
+            self._ecualizador,
+        )
+
+    def _cruzar_render(
+        self,
+        render: str,
+        espacial: SpatialUpmix | None,
+        fresh: tuple[chain_stages.DiffuseStage, chain_stages.BassStage],
+    ) -> None:
+        """Al empezar un fundido, después de las acciones: la rama del render nuevo, entera y nueva
+        (spec 2026-10-08 §4, etapa 3). La que suena queda en `_rama_vieja`; las dos corren con la
+        misma entrada y se mezclan por parlante antes de la ganancia (`procesar`). La nueva se
+        calienta a la sombra (WARM) lo que tarda en olvidar que empezó vacía, y el makeup del render
+        nuevo se desliza con el fundido.
+
+        Lo que una acción de este mismo inicio cruzó (la difusión, los graves) queda en la rama vieja
+        con su instancia vieja, y la nueva la toma para sí; el banco y la ecualización pendientes los
+        toma la rama nueva al armarse, sin cruce aparte."""
+        if render == self.render:
+            return  # arrastrado de vuelta dentro del mismo lote: el render no cambia
+        difusion, graves = fresh
+        vieja_difusion, vieja_graves = self._difusion, self._graves
+        if isinstance(vieja_difusion, Crossfaded):
+            vieja_difusion, difusion = vieja_difusion.old, vieja_difusion.new
+        if isinstance(vieja_graves, Crossfaded):
+            vieja_graves, graves = vieja_graves.old, vieja_graves.new
+        if self._banco_pendiente is not None:
+            (banco, aviso), self._banco_pendiente = self._banco_pendiente, None
+            orden = self._asignacion(banco)
+            self._banco_actual, self._orden, self._orden_pendiente, self._aviso = banco, orden, None, aviso
+            self._filtros = self._filtros_en_orden(banco, orden)
+        self._taps_pendientes = False
+        self._rama_vieja = RenderBranch(
+            self.render,
+            self.espacial,
+            self._decorreladores,
+            vieja_difusion,
+            vieja_graves,
+            self._lineas,
+            self._ecualizador,
+        )
+        self.render, self.espacial = render, espacial
+        # El upmix se armó al pedirse; un preset que cambia los pan en este mismo inicio (otra acción)
+        # mueve la disposición después: la rama nueva la toma ya.
+        self._actualizar_espacial()
+        difusion.set_level(self._cadena.param("diffuse", "level_db"))
+        graves.set_harmonics(self._cadena.param("bass", "harmonics_db"))
+        self._difusion, self._graves = difusion, graves
+        self._decorreladores = self._nuevos_decorreladores()
+        self._lineas = self._nuevas_lineas()
+        if self.ecualizar:
+            self._ecualizador = {p.nombre: eq.StreamingFIR(self._taps_de(p)) for p in self.instalacion.parlantes}
+        if self.on_render_switch is not None:
+            self._makeup.target_db = self.on_render_switch(render)
+        self._memorias["_rama"] = warm_samples(
+            self._rama(),
+            sr=self.sr,
+            delays_ms=list(self.retardos_efectivos_ms().values()),
+            bass_delay=self._atraso_graves(decorrelando=self._decorrelacion_objetivo()),
+            filters=[len(h) for h in self._filtros.values() if h is not None],
+        )
+
+    def _nuevas_lineas(self) -> dict[str, LineaDeRetardo]:
+        """Una línea de retardo **variable** por parlante, ya en su retardo efectivo. Arranca con
+        `saltar_a`, que no usa rampa: antes de que suene no hay nada que pueda producir un clic."""
+        efectivos = self.retardos_efectivos_ms()
+        lineas = {}
+        for parlante in self.instalacion.parlantes:
+            linea = LineaDeRetardo(
+                self.sr,
+                maximo_ms=max(250.0, 2 * max(efectivos.values(), default=0.0)),
+                velocidad_ms_s=self.velocidad_retardo_ms_s,
+                # De banda limitada: la lineal le quitaba hasta 3,5 dB a 12,7 kHz, distinto a
+                # cada parlante según su retardo (`dsp/interpolation.py`).
+                sinc=True,
+            )
+            linea.saltar_a(efectivos[parlante.nombre])
+            lineas[parlante.nombre] = linea
+        return lineas
+
     @property
     def extraer_ambiente_activo(self) -> bool:
         return self._extractor is not None and self._mezcla_ambiente.target > 0
@@ -1012,6 +1137,11 @@ class Motor:
         self._memorias.clear()
         for accion in transicion.take_starting():
             accion()
+        if self._render_pendiente is not None:
+            # Primero el render: su rama nueva se arma con la ecualización y el banco que dejaron
+            # las acciones, y los toma (no se cruzan aparte dentro de ella).
+            pendiente, self._render_pendiente = self._render_pendiente, None
+            self._cruzar_render(*pendiente)
         if self._taps_pendientes:
             self._taps_pendientes = False
             self._cruzar_ecualizador()
@@ -1160,6 +1290,8 @@ class Motor:
                     etapas[nombre] = None if nueva is _PASO else nueva
         if self._decorrelacion_destino is not None:
             self.decorrelacion_activa, self._decorrelacion_destino = self._decorrelacion_destino, None
+        # La rama del render que se fue deja de sonar (etapa 3).
+        self._rama_vieja = None
 
     def _atraso_graves(self, *, decorrelando: bool | None = None) -> int:
         """Lo que se atrasa la alimentación de graves: el retardo medio del decorrelador si está activo
@@ -1167,16 +1299,91 @@ class Motor:
         activo = self.decorrelacion_activa if decorrelando is None else decorrelando
         return round(self._cadena.param("decorrelate", "mean_ms") * self.sr / 1000) if activo else 0
 
-    def _alimentar_graves(self, izq: np.ndarray, der: np.ndarray) -> None:
+    def _alimentar_graves(self, graves: object, izq: np.ndarray, der: np.ndarray, *, entrante: bool = True) -> None:
         """La alimentación de graves, una vez por bloque. Mientras un fundido prende o apaga el
         decorrelador, cada etapa cruzada con su atraso: la vieja con el de ahora y la nueva con el que
-        va a quedar, así ninguna lo cambia sonando (`_cruzar_decorrelacion`)."""
-        graves = self._graves
+        va a quedar, así ninguna lo cambia sonando (`_cruzar_decorrelacion`). Durante un fundido del
+        render (etapa 3), la rama que se va con el de ahora y la que entra con el que va a quedar."""
         if isinstance(graves, Crossfaded) and self._decorrelacion_destino is not None:
             graves.old.feed(izq, der, self._atraso_graves())
             graves.new.feed(izq, der, self._atraso_graves(decorrelando=self._decorrelacion_destino))
+        elif entrante and self._rama_vieja is not None:
+            graves.feed(izq, der, self._atraso_graves(decorrelando=self._decorrelacion_objetivo()))
         else:
             graves.feed(izq, der, self._atraso_graves())
+
+    def _preparar_rama(
+        self,
+        rama: RenderBranch,
+        izq: np.ndarray,
+        der: np.ndarray,
+        izq_d: np.ndarray,
+        der_d: np.ndarray,
+        canales: dict | None,
+        *,
+        entrante: bool,
+    ) -> _RamaPreparada:
+        """Lo de una rama que va una vez por bloque: la alimentación de graves y el upmix espacial."""
+        directo_puro = rama.render == DIRECT and canales is None
+        # El cruce de graves: lo bajo del centro para el parlante de graves, atrasado como su
+        # propia señal por el decorrelador (`chain_stages.py`). Cada etapa guarda lo suyo y
+        # `before_delay` lo suma: dos etapas cruzadas suman cada una su propia alimentación.
+        alimentar = canales is None and not directo_puro
+        if alimentar:
+            self._alimentar_graves(rama.bass, izq_d, der_d, entrante=entrante)
+        # La difusión sigue sonando si la vieja o la nueva tiene cola (prenderla o apagarla funde).
+        difundir = alimentar and any(d.active for d in _instancias(rama.diffuse))
+        espacial = rama.spatial.process(izq, der) if rama.spatial is not None and canales is None else None
+        return _RamaPreparada(rama, directo_puro, alimentar, difundir, espacial)
+
+    def _camino(
+        self,
+        preparada: _RamaPreparada,
+        nombre: str,
+        n: int,
+        pan: float | np.ndarray,
+        ambiente: float | np.ndarray,
+        izq_d: np.ndarray,
+        der_d: np.ndarray,
+        amb: np.ndarray,
+        canales: dict | None,
+    ) -> np.ndarray:
+        """El camino de un parlante por una rama: del render a la etapa de graves, antes de la ganancia."""
+        rama = preparada.rama
+        if canales is not None:
+            given = canales.get(nombre)
+            x = np.zeros(n) if given is None or len(given) != n else np.asarray(given, dtype=float)
+            mezcla_propia = x
+        elif preparada.directo_puro:
+            # Pure aligned stereo: the constant-power pan of L/R and nothing else of the chain.
+            angulo = (pan + 1) * (np.pi / 4)
+            x = np.cos(angulo) * izq_d + np.sin(angulo) * der_d
+            mezcla_propia = x
+        elif preparada.espacial is not None:
+            # Spatial: the direct part placed and left alone; only the ambience is decorrelated
+            # (spec 2026-10-04 §3). The decorrelator's tail is the ambience's.
+            directo_e, ambiente_e = preparada.espacial[nombre]
+            mezcla_propia = directo_e + ambiente_e
+            decorrelado = self._convolucionar(rama.decorrelators, nombre, ambiente_e)
+            x = directo_e + self._decorrelado_o_seco(ambiente_e, decorrelado)
+        else:
+            directo = (1 - pan) / 2 * izq_d + (1 + pan) / 2 * der_d
+            x = (1 - ambiente) * directo + ambiente * amb
+            # El decorrelador convoluciona aunque esté desviado, para que su cola esté lista
+            # cuando vuelva.
+            mezcla_propia = x
+            decorrelado = self._convolucionar(rama.decorrelators, nombre, x)
+            x = self._decorrelado_o_seco(x, decorrelado)
+        if preparada.difundir:
+            x = rama.diffuse.process(nombre, x, mezcla_propia)
+        if preparada.alimentar:
+            x = rama.bass.before_delay(nombre, x)
+        x = rama.lines[nombre].procesar(x)
+        if self.ecualizar:
+            x = rama.eq[nombre].process(x)
+        if not preparada.directo_puro:
+            x = rama.bass.process(nombre, x)
+        return x
 
     def _saltar(self) -> None:
         """Con la salida en cero: aplica lo pendiente y lleva cada parámetro a su objetivo.
@@ -1318,6 +1525,7 @@ class Motor:
         # Mientras la etapa nueva se calienta (WARM) las rampas no avanzan: empiezan con la mezcla.
         calentando = self._transicion.state == Transition.WARM
         self._pesos_bloque = self._pesos_bloque_limitador = self._pesos_bloque_decorrelador = None
+        pesos_render = None
         if fundiendo:
             forma = self._cadena.param("transition", "shape")
             self._pesos_bloque = self._transicion.block_weights(n, forma)
@@ -1327,6 +1535,8 @@ class Motor:
             self._pesos_bloque_decorrelador = (
                 self._pesos_bloque if forma == "equal_power" else self._transicion.block_weights(n, "equal_power")
             )
+            if self._rama_vieja is not None:
+                pesos_render = self._transicion.block_weights(n, forma_render(self._rama_vieja.render, self.render))
 
         if self._extractor is not None:
             amb = self._extractor.procesar(izq, der)
@@ -1351,20 +1561,14 @@ class Motor:
         self.render_makeup_block_db = self._makeup.current_db if calentando else self._makeup.block_db(n)
         if not (isinstance(self.render_makeup_block_db, float) and self.render_makeup_block_db == 0.0):
             salida_global = salida_global * 10 ** (self.render_makeup_block_db / 20)
-        directo_puro = self.render == DIRECT and canales is None
-        # El cruce de graves: lo bajo del centro para el parlante de graves, atrasado como su
-        # propia señal por el decorrelador (`chain_stages.py`). Cada etapa guarda lo suyo y
-        # `before_delay` lo suma: dos etapas cruzadas suman cada una su propia alimentación.
-        alimentar = canales is None and not directo_puro
-        if alimentar:
-            self._alimentar_graves(izq_d, der_d)
-        # La difusión sigue sonando si la vieja o la nueva tiene cola (prenderla o apagarla funde).
-        difundir = alimentar and any(d.active for d in _instancias(self._difusion))
+        # Durante un fundido del render (etapa 3) corren dos ramas con la misma entrada: la que entra
+        # (la del motor) y la que se va (`_rama_vieja`), y se mezclan por parlante antes de la ganancia.
+        ramas = [self._preparar_rama(self._rama(), izq, der, izq_d, der_d, canales, entrante=True)]
+        if self._rama_vieja is not None:
+            ramas.append(self._preparar_rama(self._rama_vieja, izq, der, izq_d, der_d, canales, entrante=False))
         sonda = self.sonda if self.sonda is not None and self.sonda.active else None
         if sonda is not None:
             sonda.begin(n)
-
-        espacial = self.espacial.process(izq, der) if self.espacial is not None and canales is None else None
 
         salida = {}
         for p in self.instalacion.parlantes:
@@ -1374,39 +1578,12 @@ class Motor:
             suave_pan.target, suave_amb.target = p.pan, p.ambiente
             pan = suave_pan.current if calentando else suave_pan.block(n)
             ambiente = (suave_amb.current if calentando else suave_amb.block(n)) * mezcla
-            if canales is not None:
-                given = canales.get(p.nombre)
-                x = np.zeros(n) if given is None or len(given) != n else np.asarray(given, dtype=float)
-                mezcla_propia = x
-            elif directo_puro:
-                # Pure aligned stereo: the constant-power pan of L/R and nothing else of the chain.
-                angulo = (pan + 1) * (np.pi / 4)
-                x = np.cos(angulo) * izq_d + np.sin(angulo) * der_d
-                mezcla_propia = x
-            elif espacial is not None:
-                # Spatial: the direct part placed and left alone; only the ambience is decorrelated
-                # (spec 2026-10-04 §3). The decorrelator's tail is the ambience's.
-                directo_e, ambiente_e = espacial[p.nombre]
-                mezcla_propia = directo_e + ambiente_e
-                decorrelado = self._convolucionar(p.nombre, ambiente_e)
-                x = directo_e + self._decorrelado_o_seco(ambiente_e, decorrelado)
-            else:
-                directo = (1 - pan) / 2 * izq_d + (1 + pan) / 2 * der_d
-                x = (1 - ambiente) * directo + ambiente * amb
-                # El decorrelador convoluciona aunque esté desviado, para que su cola esté lista
-                # cuando vuelva.
-                mezcla_propia = x
-                decorrelado = self._convolucionar(p.nombre, x)
-                x = self._decorrelado_o_seco(x, decorrelado)
-            if difundir:
-                x = self._difusion.process(p.nombre, x, mezcla_propia)
-            if alimentar:
-                x = self._graves.before_delay(p.nombre, x)
-            x = self._lineas[p.nombre].procesar(x)
-            if self.ecualizar:
-                x = self._ecualizador[p.nombre].process(x)
-            if not directo_puro:
-                x = self._graves.process(p.nombre, x)
+            x = self._camino(ramas[0], p.nombre, n, pan, ambiente, izq_d, der_d, amb, canales)
+            if len(ramas) > 1:
+                vieja = self._camino(ramas[1], p.nombre, n, pan, ambiente, izq_d, der_d, amb, canales)
+                peso_viejo, peso_nuevo = pesos_render
+                # Calentando, solo suena la que se va.
+                x = vieja if np.ndim(peso_nuevo) == 0 and peso_nuevo == 0 else vieja * peso_viejo + x * peso_nuevo
             activo = self._activo[p.nombre]
             activo.target = 0.0 if p.nombre in self.silenciados else 1.0
             ganancia = self._ganancia[p.nombre] if calentando else self._rampa_de_ganancia(p.nombre, p.ganancia_db, n)
@@ -1507,10 +1684,11 @@ class Motor:
         self._cola_directo_der = ext_der[n:]
         return ext_izq[:n], ext_der[:n]
 
-    def _convolucionar(self, nombre: str, x: np.ndarray) -> np.ndarray:
+    @staticmethod
+    def _convolucionar(decorreladores: dict, nombre: str, x: np.ndarray) -> np.ndarray:
         """Overlap-add exacto (`eq.StreamingFIR`, en Rust si el motor es Rust): el resultado es
         idéntico a convolucionar todo de una vez."""
-        filtro = self._decorreladores[nombre]
+        filtro = decorreladores[nombre]
         return x if filtro is None else filtro.process(x)
 
 

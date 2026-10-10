@@ -363,7 +363,12 @@ class Rig:
             self.taken = self.taken[-200:]
 
     def switch(self, render: str) -> None:
-        assert self.motor.aplicar_cadena(_render(render)) == "cut"
+        """A render switch by the default crossfade (stage 3): it counts from when the new render
+        plays alone, after its warm-up (up to 1 s) and the fade, as a cut counted from its bottom."""
+        assert self.motor.aplicar_cadena(_render(render)) == "crossfade"
+        while self.motor.en_corte:
+            self.play(SECONDS)
+        assert self.motor.render == render
 
     def net_lu(self, seconds: float) -> float:
         """The speakers' summed loudness minus the input's over the last `seconds`, measured apart
@@ -489,7 +494,7 @@ def test_the_service_binds_the_match_and_reports_it(simulated):
     assert svc.motor.on_render_switch == svc.render_match.select
     reply = svc.handle({"v": 1, "op": "chain_set", "stage": "spatial", "algorithm": "direct"})
     assert reply["ok"], reply
-    assert reply["result"]["apply"] == "cut"
+    assert reply["result"]["apply"] == "crossfade"
     _until(lambda: svc.motor.render == "direct")
     view = _until(lambda: (svc.quality or {}).get("render_match", {}).get("render") == "direct" and svc.quality)
     assert view["render_match"]["status"] in {"measuring", "unmeasured", "frozen", "locked"}

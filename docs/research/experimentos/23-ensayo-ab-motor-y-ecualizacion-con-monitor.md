@@ -608,3 +608,44 @@ pide más en la sesión. Con la misma tubería que miente, el estirador ya no ar
    se nota.
 
 Veredicto pendiente: hasta esta escucha, la etapa 4 queda "A medias" en el roadmap (i-7c8794-1b74ad).
+
+## 9. Etapa 3 de transiciones sin corte: el render (2026-10-10)
+
+Construida el 2026-10-10 en un contenedor (spec `2026-10-08-seamless-transitions-design.md`, "Stage 3 as
+built"; roadmap i-7c8794-da4172). Cambiar de render con `transition = crossfade` arma una rama entera nueva
+(upmix, decorrelador, difusión, graves, líneas de retardo y ecualización), la calienta a la sombra hasta 1 s
+y la mezcla por parlante con la que se va, antes de la ganancia.
+
+### 9.1 La forma del fundido, fuera de línea (MEDIDO, 2026-10-10, contenedor)
+
+**Entorno:** contenedor de la nube (Linux 6.18.44 x86_64, python 3.12.3, numpy 2.5.3), motor numpy, sin
+audio en vivo. **Método:** los tests de `host/tests/test_motor_render_crossfade.py`, con 3 parlantes
+(uno trasero con ambiente 0,9 y Haas de 15 ms), todos los efectos prendidos (cola difusa, graves
+`protect`, ecualización con curva) y ruido parcialmente correlado entre L y R. Por ventana de 10 ms, cuánto
+baja el fundido bajo el nivel estable más bajo de los dos renders, y cuánto sube sobre el más alto; el
+peor parlante de cada par (dB):
+
+| par | `equal_gain` baja | `equal_power` baja | `equal_gain` sube | `equal_power` sube |
+|---|---|---|---|---|
+| classic ↔ front | 1,93 / 2,03 | 0,00 / 0,02 | 0 | 0,09 / 0,17 |
+| front ↔ spatial | 0,00 | 0,00 | 0 | **2,02 / 2,03** |
+| classic ↔ direct | 2,99 / 2,92 | 0,24 / 0,29 | 0 | 0,06 / 0,09 |
+| direct ↔ spatial | 2,95 / 2,99 | 0,40 / 0,41 | 0 | 0,15 / 0,20 |
+
+**Qué dice:** por parlante, dos renders se parecen poco (otro pan, el decorrelador, el Haas), y a igual
+ganancia el medio del fundido baja hasta 3 dB; `spatial` y `front` son el mismo upmix y salen casi iguales,
+y a igual potencia el medio sube 2 dB. Por eso la forma va por par (`motor.forma_render`): `equal_gain` entre
+`spatial` y `front`, `equal_power` en el resto. Con esa regla, ningún par baja más de 0,41 dB ni sube más de
+0,20 dB. Es una señal de prueba, no música: la escucha decide.
+
+### 9.2 Escucha (pendiente, protocolo escrito antes de escuchar)
+
+**Pendiente, en `HP-O16` y con permiso del usuario.** Con el monitor en modo `mix`, música elegida por el
+usuario, `fade_ms` en 80 y después en 200:
+1. classic → front → spatial → direct → classic, un cambio cada 15 s, anotando la hora de cada uno. Se pregunta
+   si se oye un hueco, un salto de volumen o un "doble" (las dos versiones a la vez) en algún cambio.
+2. El mismo recorrido con `transition = cut`, para comparar.
+3. Cuánto tarda en oírse el render nuevo: el calentamiento puede llegar a 1 s.
+
+Veredicto pendiente: hasta esta escucha, la etapa 3 queda "A medias" en el roadmap (i-7c8794-da4172).
+
