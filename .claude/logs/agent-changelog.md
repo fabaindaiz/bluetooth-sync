@@ -78,6 +78,22 @@ etapa 3.
 - **Suite:** 2239 bien, y las 3 de tiempo que pasan aparte.
 - **Rust:** 67 tests de `cargo`, `clippy` sin avisos.
 
+**Continuación (la misma sesión, 2026-10-10, después de reanudarse el contenedor).**
+- **El push funcionó** al reanudar: la rama `claude/pending-work-today-j193ci` está en `origin`.
+- **La suite de navegador en el contenedor**, solo con Chromium:
+  - no hay Firefox;
+  - se usó el Chromium 1194 de `/opt/pw-browsers`, enlazado desde el scratchpad con el nombre que espera
+    Playwright 1.60, sin instalar nada;
+  - dio 127 bien y 2 fallas, las dos también presentes en `41bc396`:
+    1. el test de la etapa agregada esperaba «Limitador» al final, y desde el 2026-10-08 la última es
+       «Transiciones»: se arregló el test;
+    2. el costo de navegación en teléfono: en 390 px «Borrar» bajaba a otra línea (+1,4). El usuario eligió
+       pasar «Renombrar» y «Borrar» dentro de la ficha «Ver» (research/10 §7.5).
+  - Después: 128 bien, y solo queda el costo en teléfono, 33,1 contra 33,0. `main` da lo mismo en este
+    contenedor: es una décima del entorno (fuentes y Chromium distintos de los de `HP-O16`), y el tope no se
+    tocó.
+- **No verificado:** el panel en Firefox y en un teléfono real; el costo de navegación medido en `HP-O16`.
+
 ---
 
 ## 2026-10-09 · s-7c8794-474a38 — HP-O16: escucha de la etapa 1, prioridad del motor, presets, monitor, transiciones etapas 2 y 4
