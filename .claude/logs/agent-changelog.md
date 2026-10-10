@@ -103,6 +103,20 @@ etapa 3.
   - d-7c8794-9b538b, la forma del fundido entre renders, provisional hasta la escucha;
   - d-7c8794-8f0644, las acciones de presets dentro de «Ver».
 
+**Historial reescrito (2026-10-10, pedido del usuario).** Se quitaron de los mensajes de todos los commits
+las líneas `Co-Authored-By` y los enlaces de sesión: 19 commits antiguos y los 8 de hoy. El usuario ratificó
+que los commits van sin atribución, y la regla está ahora en `CLAUDE.md` § Commits.
+- Las ramas reescritas, con force-push: `main`, `seamless-transitions`, `rust-ramps-loudness`,
+  `worktree-microcortes-pipeline`, `gh-pages` y `claude/pending-work-today-j193ci`.
+- **Solo cambiaron los mensajes:** cada rama tiene el mismo árbol y la misma cantidad de commits que antes.
+- **Los hashes cambiaron desde septiembre.** En `HP-O16`, `PC-Ryzen5` y el Mac hay que hacer
+  `git fetch && git reset --hard origin/<rama>` en cada rama, después de rescatar lo que no estuviera subido.
+  Los hashes citados en documentos viejos ya no existen en `origin`; los ids `d-`/`i-`/`s-` no cambian.
+- El respaldo quedó solo en el contenedor (un `git bundle`) y se pierde con él. No se subió a GitHub, porque
+  volvería a publicar las líneas.
+- No se tocó el contenido de los archivos: rutas personales, direcciones Bluetooth ni nombres de los equipos.
+  El usuario no eligió ninguna de esas opciones.
+
 **Aprendizajes para el harvest** (sin los nombres de este repositorio; los escribe como propuestas
 `prompt-harvest.md`, que no se corrió):
 1. *knowledge, nuevo.* Soltar el lock global del intérprete en cada llamada nativa corta de un lazo de tiempo
