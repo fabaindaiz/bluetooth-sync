@@ -7,6 +7,79 @@ mal y lo que quedó pendiente.
 
 ---
 
+## 2026-10-10 · s-7c8794-efca4c — Contenedor de la nube: merge de Rust, el convoy del GIL medido y mitigado, y la etapa 3 (el render con fundido)
+**Qué.**
+- **Merge de `rust-ramps-loudness` en `seamless-transitions`**, en la rama `claude/pending-work-today-j193ci`.
+  Lo único que chocó fue la adyacencia en experimentos/20 (queda §11 y después §12–§14).
+- **El efecto convoy del GIL, medido y mitigado** (la condición de la revisión del 2026-10-09):
+  - nueva sonda `probes/20-costo-sinc-rust/convoy_gil.py`, que corre el `Motor` real con tres umbrales y
+    tres acompañantes (experimentos/20 §15);
+  - `gil.rs`: el GIL se suelta solo en llamadas de 65536 muestras o más. `set_detach_min_samples` lo
+    cambia y `capabilities()["gil"]` lo informa; las llamadas del motor por bloque lo conservan;
+  - queda propuesto `sys.setswitchinterval` corto (i-7c8794-46d296).
+- **Etapa 3 de transiciones, el render** (i-7c8794-da4172, plan `2026-10-09-seamless-transitions-stage-3`):
+  - `render_branch.py`;
+  - `motor.py`: `_pedir_render`, `_cruzar_render`, `_preparar_rama`, `_camino` y `forma_render`;
+  - `tests/test_motor_render_crossfade.py` (38 tests);
+  - los tests del render por corte quedan con `transition=cut`, y el `Rig` de `render_match` cuenta el
+    cambio desde que termina el fundido;
+  - control-api, spec ("Stage 3 as built"), plan, roadmap y experimentos/23 §9.
+**Archivos.**
+- `engine/crates/aurasync-engine/src/` (`gil.rs` nuevo, y cada clase), `.pyi`, `engine/README.md`.
+- `host/src/aurasync/{motor.py,render_branch.py,render_match.py}`.
+- `host/tests/{test_engine_gil,test_engine_rust,test_motor_render_crossfade,test_motor_spatial,test_render_direct,test_render_match,test_decorrelate_rust}.py`.
+- `host/docs/control-api.md`, `host/README.md`.
+- `docs/research/experimentos/{20,23}-…md` y `datos/20/contenedor-convoy-gil-*.txt`, `docs/research/15-…md`,
+  `docs/roadmap.md`, la spec y el plan de la etapa 3.
+**Por qué.** El usuario pidió seguir con lo pendiente del 2026-10-09: el merge y el desarrollo de Rust, y la
+etapa 3.
+**Arquitectura.** ✅ Cumple:
+- el modo corte queda igual (golden);
+- el motor sigue con un solo escritor;
+- el núcleo no se ata a A2DP.
+⚠️ Desvío del plan de la etapa 3: las líneas de retardo van por rama, no compartidas (abajo).
+**Qué salió mal en el camino.**
+1. **`maturin develop` compiló con rustc 1.97** (el `stable` del contenedor) y no con el 1.99 de
+   `engine/rust-toolchain.toml`: con `-m ../engine/...` desde `host/`, rustup no ve el archivo. Se corrió con
+   `RUSTUP_TOOLCHAIN=1.99.0`. En los tres equipos no pasa si la toolchain por defecto es la fijada.
+2. **`hatch test` sin rutas junta `tests_browser/`**, y en el contenedor no hay Playwright. Se corrió `hatch test
+   -- tests`.
+3. **Se editó el `.pyi` con la suite corriendo**: 3 fallas del stub contra la extensión ya compilada. Al
+   recompilar pasaron.
+4. **El push a GitHub dio 403** (la app de Claude sin acceso de escritura al repositorio): los commits
+   quedaron locales al cerrar esta entrada.
+5. **La corrida con `-n 4` dio 3 fallas de tiempo** en tests de sincronía (0,70 s contra un límite de 0,5 s)
+   en 4 CPU. Pasan aparte, y no son código tocado.
+**Qué quedó pendiente.**
+1. **Subir la rama** cuando el acceso esté arreglado.
+2. **Escuchar la etapa 3** (experimentos/23 §9.2) y la 4 (§8.2), en `HP-O16`.
+3. **Medir `sys.setswitchinterval`** en `HP-O16`, con el servicio (i-7c8794-46d296).
+4. **La revisión final de toda la rama**, ahora con la etapa 3, con el modelo más capaz.
+5. **El A/B final** (experimentos/23 §6.5).
+6. **El test de navegador** `tests_browser/` y `check.sh` entero en un equipo con Playwright.
+**Desvío del plan.**
+- **Las líneas de retardo van por rama.** El plan las dejaba compartidas, con dos lecturas, y la ecualización y
+  los graves por rama, después de la línea. Pero una línea tiene una sola entrada, y los dos renders le dan
+  señales distintas. Lo detectó el mutante "líneas compartidas": 16 de 38 tests fallan.
+- **La forma va por par y no según `shape`** (experimentos/23 §9.1).
+- **La rama se arma después de todas las acciones del inicio**, como la ecualización y el banco de la etapa
+  2, y los toma.
+**No verificado.**
+- Nada se escuchó.
+- Nada se midió con los JBL ni en los tres equipos: todo lo medido es del contenedor (anotado así).
+- El test de navegador no se corrió.
+**Medido.**
+- **Convoy** (contenedor, `Motor` real, un hilo Python ocupado al lado): soltar siempre da 490–503 ms por
+  bloque; el umbral, 176–181 ms; no soltar nunca, 176–181 ms. Con `switchinterval` de 0,5 ms baja a 16,5 ms
+  (una corrida). Con ráfagas cortas, 5,1–5,6 ms en todas las variantes.
+- **Etapa 3:** con `forma_render`, ningún par baja más de 0,41 dB ni sube más de 0,20 dB (ventanas de 10 ms).
+  Con `equal_gain` en todos los pares bajaba hasta 3,0 dB; con `equal_power` en todos, `front`↔`spatial`
+  subía 2,0 dB.
+- **Suite:** 2239 bien, y las 3 de tiempo que pasan aparte.
+- **Rust:** 67 tests de `cargo`, `clippy` sin avisos.
+
+---
+
 ## 2026-10-09 · s-7c8794-474a38 — HP-O16: escucha de la etapa 1, prioridad del motor, presets, monitor, transiciones etapas 2 y 4
 **Qué.** Se retomó en `HP-O16` el trabajo del Mac (s-7c8794-816f05) y se hizo esto:
 - **Chequeo en Linux** de lo que llegó del Mac: `check.sh` pasa entero (1997 tests). El test de navegador del
