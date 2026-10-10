@@ -94,6 +94,33 @@ etapa 3.
     tocó.
 - **No verificado:** el panel en Firefox y en un teléfono real; el costo de navegación medido en `HP-O16`.
 
+**Cierre (paso 8 de `.agents/method/prompt-bootstrap.md`).**
+- **A. Lo que invalidó:**
+  - experimentos/20 §14 decía que soltar el GIL no costaba nada; §15 lo acota (sin otro hilo ocupado);
+  - el estado de `CLAUDE.md` decía que la etapa 3 y Rust 13–14 faltaban: está al día.
+- **Decisiones nuevas:**
+  - d-7c8794-9b3891, el umbral del GIL;
+  - d-7c8794-9b538b, la forma del fundido entre renders, provisional hasta la escucha;
+  - d-7c8794-8f0644, las acciones de presets dentro de «Ver».
+
+**Aprendizajes para el harvest** (sin los nombres de este repositorio; los escribe como propuestas
+`prompt-harvest.md`, que no se corrió):
+1. *knowledge, nuevo.* Soltar el lock global del intérprete en cada llamada nativa corta de un lazo de tiempo
+   real multiplica la espera cuando otro hilo del intérprete está ocupado: retomarlo cuesta hasta un
+   intervalo de cambio por llamada. Medido: ×2,7 sobre no soltarlo. La medición de costo previa se hizo sin
+   un hilo ocupado y dio «gratis». La condición que muestra el costo es la que hay que medir. Regla: soltarlo
+   solo en llamadas más largas que el intervalo de cambio.
+2. *knowledge, nuevo.* Al fundir dos versiones de una señal, la ley de ganancia depende de cuánto se parecen:
+   igual ganancia para las casi iguales, igual potencia para las poco correladas. Un test que solo mira el
+   hueco aprueba la ley equivocada en el par correlado: hay que probar también que no sube.
+3. *knowledge, extiende `ratchet-in-a-pinned-environment`.* Un tope de costo de maquetación medido con una
+   versión de navegador y un juego de fuentes falló por una décima en otro entorno, sin ningún cambio. Comparar
+   la rama contra la línea base en el mismo entorno separó el entorno (+0,1) del cambio (+1,4). Es otra
+   ocurrencia de «fijar las herramientas que producen la cuenta».
+4. *method, extiende `coverage-measures-execution`.* Una suite nueva que pasa entera a la primera no dice si
+   distingue. Plantar un mutante por cada decisión de diseño que debe proteger (aquí, dos: 9 y 16 fallas) lo
+   comprueba en minutos.
+
 ---
 
 ## 2026-10-09 · s-7c8794-474a38 — HP-O16: escucha de la etapa 1, prioridad del motor, presets, monitor, transiciones etapas 2 y 4
