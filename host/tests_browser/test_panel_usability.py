@@ -125,10 +125,19 @@ def test_clearing_the_eq_is_done_at_once_and_undo_writes_the_curves_back(page: P
     assert state["global"]["eq_active"] is True
 
 
+def _delete_button(page: Page, name: str):
+    """A preset's «Borrar», which lives in the card «Ver» opens (2026-10-10)."""
+    row = page.locator("#presets li", has_text=name)
+    toggle = row.locator("button[aria-expanded]")
+    if toggle.get_attribute("aria-expanded") == "false":
+        toggle.click()
+    return row.get_by_role("button", name="Borrar")
+
+
 def test_deleting_a_preset_waits_for_the_notice_and_undo_keeps_it(page: Page, svc: Running):
     svc.command("preset_save", name="cine")
     expect(page.locator("#presets li", has_text="cine")).to_have_count(1)
-    page.locator("#presets li", has_text="cine").get_by_role("button", name="Borrar").click()
+    _delete_button(page, "cine").click()
     page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
     expect(page.locator("#presets li", has_text="cine")).to_have_count(0)
     assert "cine" in svc.state()["presets"]
@@ -137,7 +146,7 @@ def test_deleting_a_preset_waits_for_the_notice_and_undo_keeps_it(page: Page, sv
     page.wait_for_timeout(500)
     assert "cine" in svc.state()["presets"]
     page.evaluate("window.aurasync.undo.setDuration(800)")
-    page.locator("#presets li", has_text="cine").get_by_role("button", name="Borrar").click()
+    _delete_button(page, "cine").click()
     page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
     expect(page.locator("#undo")).to_be_hidden(timeout=5000)
     page.wait_for_timeout(500)

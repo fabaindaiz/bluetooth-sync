@@ -1887,6 +1887,10 @@ mejorar, y después de aplicarla se mide si mejoró); la sonoridad igualada al c
 - confirmar antes de borrar (el foco empieza en «Cancelar»), sin quitar el «Deshacer»;
 - la ficha «Ver/Ocultar» con la configuración.
 
+**Ajuste del 2026-10-10:** en el teléfono los cuatro botones partían cada fila en dos y subían el costo de
+navegación 1,4. Por decisión del usuario, «Renombrar» y «Borrar» pasaron dentro de la ficha que abre «Ver»
+(research/10 §7.5).
+
 Pruebas: 139 tests de servicio y 12 de navegador. Quedan dos menores:
 - Escape todavía cierra el diálogo mientras el renombre está en curso;
 - si `api.raw` lanza un error, los botones quedan deshabilitados.

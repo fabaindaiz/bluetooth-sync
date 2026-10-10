@@ -1,4 +1,7 @@
-"""The presets card: rename, confirmed deletion and the expandable summary (roadmap i-7c8794-dcbd24)."""
+"""The presets card: rename, confirmed deletion and the expandable summary (roadmap i-7c8794-dcbd24).
+
+A row is the name, «Ver» and «Cargar»; «Renombrar» and «Borrar» live in the card «Ver» opens (on a
+phone the four buttons did not fit one line, 2026-10-10)."""
 
 from __future__ import annotations
 
@@ -14,11 +17,28 @@ def row(page: Page, name: str):
     return page.locator("#presets li", has=page.locator(".preset-name", has_text=name))
 
 
+def action(page: Page, name: str, label: str):
+    """The row's «Renombrar» or «Borrar», opening its card first when it is closed."""
+    toggle = row(page, name).locator("button[aria-expanded]")
+    if toggle.get_attribute("aria-expanded") == "false":
+        toggle.click()
+    return row(page, name).get_by_role("button", name=label)
+
+
+def test_a_closed_row_shows_only_ver_and_cargar(page: Page, svc: Running):
+    svc.command("preset_save", name="cine")
+    expect(page.locator("#presets li")).to_have_count(1)
+    visible = row(page, "cine").get_by_role("button")
+    expect(visible).to_have_count(2)
+    expect(visible.nth(0)).to_have_text("Ver")
+    expect(visible.nth(1)).to_have_text("Cargar")
+
+
 def test_renaming_a_preset(page: Page, svc: Running):
     svc.command("preset_save", name="cine")
     svc.command("preset_save", name="musica")
     expect(page.locator("#presets li")).to_have_count(2)
-    row(page, "cine").get_by_role("button", name="Renombrar").click()
+    action(page, "cine", "Renombrar").click()
     dialog = page.get_by_role("dialog")
     field = dialog.get_by_label("Nuevo nombre del preset")
     expect(field).to_be_focused()
@@ -42,7 +62,7 @@ def test_renaming_a_preset(page: Page, svc: Running):
 def test_cancelling_a_rename_changes_nothing(page: Page, svc: Running):
     svc.command("preset_save", name="cine")
     expect(page.locator("#presets li")).to_have_count(1)
-    row(page, "cine").get_by_role("button", name="Renombrar").click()
+    action(page, "cine", "Renombrar").click()
     page.get_by_role("dialog").get_by_role("button", name="Cancelar").click()
     expect(page.get_by_role("dialog")).to_be_hidden()
     assert svc.state()["presets"] == ["cine"]
@@ -51,7 +71,7 @@ def test_cancelling_a_rename_changes_nothing(page: Page, svc: Running):
 def test_deleting_a_preset_asks_first(page: Page, svc: Running):
     svc.command("preset_save", name="cine")
     expect(page.locator("#presets li")).to_have_count(1)
-    row(page, "cine").get_by_role("button", name="Borrar").click()
+    action(page, "cine", "Borrar").click()
     dialog = page.get_by_role("dialog")
     expect(dialog).to_contain_text("¿Borrar el preset «cine»?")
     expect(dialog.get_by_role("button", name="Cancelar")).to_be_focused()
@@ -61,7 +81,7 @@ def test_deleting_a_preset_asks_first(page: Page, svc: Running):
     assert page.locator("#undo").is_hidden()
     assert svc.state()["presets"] == ["cine"]
     page.evaluate("window.aurasync.undo.setDuration(800)")
-    row(page, "cine").get_by_role("button", name="Borrar").click()
+    action(page, "cine", "Borrar").click()
     page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
     expect(row(page, "cine")).to_have_count(0)
     # With no row left, the focus goes to the name field.
@@ -106,11 +126,11 @@ def svc_speaker_name(svc: Running) -> str:
 def test_escape_closes_the_dialogs_without_changes(page: Page, svc: Running):
     svc.command("preset_save", name="cine")
     expect(page.locator("#presets li")).to_have_count(1)
-    row(page, "cine").get_by_role("button", name="Renombrar").click()
+    action(page, "cine", "Renombrar").click()
     expect(page.get_by_role("dialog")).to_be_visible()
     page.keyboard.press("Escape")
     expect(page.get_by_role("dialog")).to_be_hidden()
-    row(page, "cine").get_by_role("button", name="Borrar").click()
+    action(page, "cine", "Borrar").click()
     expect(page.get_by_role("dialog")).to_be_visible()
     page.keyboard.press("Escape")
     expect(page.get_by_role("dialog")).to_be_hidden()
@@ -123,11 +143,12 @@ def test_deleting_a_preset_moves_the_focus_to_a_neighbour(page: Page, svc: Runni
     for name in ("uno", "dos", "tres"):
         svc.command("preset_save", name=name)
     expect(page.locator("#presets li")).to_have_count(3)
-    row(page, "dos").get_by_role("button", name="Borrar").click()
+    action(page, "dos", "Borrar").click()
     page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
     expect(row(page, "dos")).to_have_count(0)
-    expect(row(page, "tres").get_by_role("button", name="Borrar")).to_be_focused()
+    # Its card is closed: the focus goes to its «Ver», which opens the actions.
+    expect(row(page, "tres").locator("button[aria-expanded]")).to_be_focused()
     # The last row hands the focus to the previous one.
-    row(page, "tres").get_by_role("button", name="Borrar").click()
+    action(page, "tres", "Borrar").click()
     page.get_by_role("dialog").get_by_role("button", name="Borrar").click()
-    expect(row(page, "uno").get_by_role("button", name="Borrar")).to_be_focused()
+    expect(row(page, "uno").locator("button[aria-expanded]")).to_be_focused()

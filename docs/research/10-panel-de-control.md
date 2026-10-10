@@ -390,6 +390,31 @@ se apaga para que la sesión arranque (experimentos/16 §2). Nada se desborda en
 390×844 ni en 1366×900 (test `test_eight_speakers_fit_every_screen`). **Sin probar en un teléfono
 real.**
 
+### 7.5 Las filas de presets en el teléfono (MEDIDO, 2026-10-10, contenedor)
+
+**Qué pasó.** Las acciones de presets del 2026-10-09 (roadmap i-7c8794-dcbd24) dejaron cuatro botones por
+fila: Ver, Cargar, Renombrar y Borrar. En 390 px no entran: «Borrar» bajaba a una segunda línea, y cada fila
+pasaba de 53 a 109 px. El test `test_the_navigation_cost_of_the_tabs_does_not_grow` lo detectó.
+
+**Medición.** Se midió con `medir.py` (`pestanas`, 3 parlantes, 2 presets) en un contenedor de la nube, con
+Linux y el Chromium 1194 que trae, y fuentes distintas a las de `HP-O16`. Se compararon `main` y la rama en
+el mismo entorno:
+
+| | teléfono, 7 escenarios | teléfono, 6 | PC |
+|---|---|---|---|
+| `main` | 33,1 | 27,8 | 14,1 |
+| la rama, con 4 botones | **34,5** | **29,2** | 14,1 |
+| la rama, con las acciones dentro de «Ver» | 33,1 | 27,8 | 14,1 |
+
+El aumento era «Ajustar el ambiente» (2,05 → 2,23 pantallas, con peso 6) y «Comparar A/B» (4,39 → 4,75).
+**MEDIDO.**
+
+**Decisión del usuario (2026-10-10).** La fila queda con el nombre, «Ver» y «Cargar». «Renombrar» y «Borrar»
+pasan a la ficha que abre «Ver», arriba del detalle. Así, además, borrar queda un gesto más lejos. Después de
+borrar, el foco va al «Borrar» del vecino si su ficha está abierta, y si no, a su «Ver».
+
+**Lo que sigue sin cerrar.** En este contenedor, `main` ya da 33,1 contra el tope de Linux (33,0, medido en
+`HP-O16`). Esa décima es del entorno, no del panel, y el tope no se tocó.
 
 ## 8. Pruebas de usabilidad por flujos (2026-10-04, `PC-Ryzen5`)
 

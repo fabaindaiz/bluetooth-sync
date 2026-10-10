@@ -155,13 +155,16 @@ SHIMMER = chain.Stage(
 
 
 def test_a_stage_added_in_python_appears_without_touching_the_front(page: Page, svc: Running, monkeypatch):
+    # It goes last, after whatever stage is last today (`Transiciones` since 2026-10-08).
+    last = chain.CHAIN[-1].title
     monkeypatch.setattr(chain, "CHAIN", (*chain.CHAIN, SHIMMER))
     monkeypatch.setitem(chain.STAGES, SHIMMER.id, SHIMMER)
     go(page, "Cadena")
     card = stage(page, "shimmer")
     expect(card).to_be_visible()
     expect(card).to_contain_text("Brillo de prueba")
-    expect(page.locator(".stage-flow")).to_contain_text(re.compile(r"Limitador\s*→\s*Brillo de prueba\s*→\s*Parlantes"))
+    flow = re.compile(rf"{re.escape(last)}\s*→\s*Brillo de prueba\s*→\s*Parlantes")
+    expect(page.locator(".stage-flow")).to_contain_text(flow)
     card.locator('[data-algorithm="sparkle"]').click()
     wait_for(svc, lambda s: s.stage("shimmer")["value"]["algorithm"] == "sparkle", page)
     expect(card).to_contain_text("elegido, todavía no corre")

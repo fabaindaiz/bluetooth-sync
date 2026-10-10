@@ -2332,9 +2332,12 @@ async function renamePreset(name) {
 
 function focusAfterDelete(neighbour) {
   if ($("preset-dialog").open) return;
-  const target = neighbour
-    ? $("presets").querySelector(`[data-delete="${CSS.escape(neighbour)}"]`)
-    : $("preset-name");
+  // Its «Borrar» if its card is open; if not, its «Ver», which opens it (the actions live there).
+  const shown = (node) => node && !node.closest("[hidden]");
+  const remove = neighbour && $("presets").querySelector(`[data-delete="${CSS.escape(neighbour)}"]`);
+  const target = !neighbour ? $("preset-name")
+    : shown(remove) ? remove
+    : $("presets").querySelector(`[data-preset-toggle="${CSS.escape(neighbour)}"]`);
   if (target && document.activeElement !== target) target.focus();
 }
 
@@ -2405,12 +2408,12 @@ async function fillPresetDetail(name, box) {
   if (!api) return;
   const [list, chain] = await Promise.all([api.raw({ op: "presets" }), api.raw({ op: "chain" })]);
   if (!list || !list.ok || !chain || !chain.ok || !list.result.presets[name]) {
-    box.replaceChildren(el("p", { class: "muted small", text: "No se pudo leer el preset." }));
+    box.querySelector("[data-preset-lines]").replaceChildren(el("p", { class: "muted small", text: "No se pudo leer el preset." }));
     return;
   }
   const part = (list.result.chain || {})[name] || null;
   const lines = [...presetChainLines(chain.result.stages, part), ...presetSpeakerLines(list.result.presets[name])];
-  box.replaceChildren(el("div", { class: "small", role: "list" }, ...lines.map((line) => el("p", { text: line, role: "listitem", style: "margin:0" }))));
+  box.querySelector("[data-preset-lines]").replaceChildren(el("div", { class: "small", role: "list" }, ...lines.map((line) => el("p", { text: line, role: "listitem", style: "margin:0" }))));
 }
 
 function renderPresets(s) {
@@ -2434,10 +2437,15 @@ function renderPresets(s) {
       del.addEventListener("click", () => deletePreset(name));
       const detailId = `preset-detail-${++presetSeq}`;
       const open = openPresets.has(name);
-      const toggle = el("button", { type: "button", class: "ghost small-btn", text: open ? "Ocultar" : "Ver", "aria-expanded": String(open), "aria-controls": detailId });
+      const toggle = el("button", { type: "button", class: "ghost small-btn", text: open ? "Ocultar" : "Ver", "aria-expanded": String(open), "aria-controls": detailId, "data-preset-toggle": name });
       const toggleLabel = (isOpen) => `${isOpen ? "Ocultar" : "Ver"} el detalle del preset ${name}`;
       toggle.setAttribute("aria-label", toggleLabel(open));
-      const box = el("div", { id: detailId, class: "muted", style: "flex-basis:100%", "data-preset-detail": name });
+      // Renombrar y Borrar van dentro de la ficha que abre «Ver»: en un teléfono los cuatro botones no
+      // entraban en la fila, «Borrar» bajaba a otra línea y cada fila pasaba de 53 a 109 px (usuario,
+      // 2026-10-10). Así Borrar, además, queda un gesto más lejos (research/10 §9).
+      const box = el("div", { id: detailId, class: "muted", style: "flex-basis:100%", "data-preset-detail": name },
+        el("div", { class: "row mt-1", style: "gap:.25rem" }, rename, del),
+        el("div", { "data-preset-lines": "" }));
       box.hidden = !open;
       if (open) fillPresetDetail(name, box);
       toggle.addEventListener("click", () => {
@@ -2449,7 +2457,7 @@ function renderPresets(s) {
         if (now) { openPresets.add(name); fillPresetDetail(name, box); } else openPresets.delete(name);
       });
       const item = el("li", { class: name === s.preset ? "current" : "", style: "flex-wrap:wrap" },
-        el("span", { class: "preset-name", text: name + (name === s.preset ? " · actual" : "") }), toggle, load, rename, del, box);
+        el("span", { class: "preset-name", text: name + (name === s.preset ? " · actual" : "") }), toggle, load, box);
       return item;
     }));
     if (presets.length === 0) list.append(el("li", { class: "muted small", text: "Sin presets guardados." }));
