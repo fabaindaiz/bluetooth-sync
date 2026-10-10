@@ -57,6 +57,9 @@ rápido** que numpy en `QualityMeter` (8 parlantes, de 1,11–1,19 a 0,49–0,55
 veces en el monitor; lecturas ≤ 5,54e-13 de numpy. **Las rampas y el corte (§12, MEDIDO): no se
 portaron**: en reposo cuestan 0,003–0,005 ms por bloque; solo mientras todas se mueven, 0,17–0,31 ms
 con 8 parlantes. **Soltar el GIL en cada llamada por bloque (§14, MEDIDO)** no cuesta nada medible.
+**Pero con otro hilo de Python ocupado (§15, MEDIDO, 2026-10-10, contenedor) soltarlo en cada llamada
+multiplica el efecto convoy por 2,7** (490–503 ms por bloque frente a 176–181 ms): desde el 2026-10-10
+solo sueltan el GIL las llamadas de 65536 muestras o más, y las del motor por bloque lo conservan.
 
 ## Entorno (MEDIDO)
 
@@ -1176,4 +1179,93 @@ nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sin
 # sin detach: el árbol anterior de engine/crates/aurasync-engine/src (git show HEAD:…) en una copia de engine/,
 # `maturin build --release`, la rueda descomprimida delante en PYTHONPATH
 PYTHONPATH=<rueda sin detach> nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_soltar_gil.py
+```
+
+## 15 · El efecto convoy del GIL en el `Motor` real, y el umbral para soltarlo (MEDIDO, 2026-10-10)
+
+La revisión del 2026-10-09 puso una condición para integrar §14: medir o mitigar el **efecto convoy**.
+Soltar el GIL es gratis mientras ningún otro hilo de Python lo quiere (§14), pero retomarlo no: si otro
+hilo está ocupado corriendo Python, el hilo del motor le pide que lo suelte y espera hasta
+`sys.getswitchinterval()` (5 ms) **en cada llamada**, y un bloque hace decenas de llamadas cortas. La
+revisión lo midió en el banco (mediana de 312 ms por bloque contra un hilo Python ocupado, 1,6 ms sin
+`detach`; solo quedó en el registro de la sesión, sin datos crudos).
+
+**Qué se construyó** (`engine/crates/aurasync-engine/src/gil.rs`): una llamada suelta el GIL solo si
+su entrada tiene al menos `detach_min_samples` muestras, por defecto **65536** (16 bloques de 4096).
+Los renders largos y los análisis siguen liberando a los otros hilos; las llamadas por bloque del
+motor (4096 muestras, 8192 un medidor estéreo) lo conservan, como antes del 2026-10-09.
+`aurasync_engine.set_detach_min_samples(n)` lo cambia en todo el proceso (0: soltar siempre, como en
+§14; un valor enorme: nunca) y `capabilities()["gil"]` lo informa. `host/tests/test_engine_gil.py`
+comprueba las dos direcciones: una llamada larga suelta el GIL por defecto, y la misma llamada con el
+umbral por encima de su largo lo conserva. Que el test distingue se comprobó: con `run` soltando
+siempre, las 3 pruebas de "conserva el GIL" fallan.
+
+**Entorno (MEDIDO):** un contenedor de la nube, no uno de los tres equipos: Linux 6.18.44 x86_64, 4
+CPU, python 3.12.3, numpy 2.5.3, Rust 1.99.0, carga de 1 minuto 0,9–1,2, sin `nice`. Sin PipeWire ni
+servicio. **Método:** sonda `probes/20-costo-sinc-rust/convoy_gil.py`. El `Motor` real de la sonda 25
+(4 parlantes, la cadena de `HP-O16`: front, diffuse noise_tail, bass protect, true_peak y EQ) con el
+motor Rust, bloques de 4096 seguidos, con tres umbrales en la misma compilación (`siempre` = 0, el
+código de §14; `defecto` = 65536; `nunca` = 2⁶²) contra tres acompañantes: ninguno, un hilo que nunca
+deja de correr Python (`ocupado`) y uno que cada 20 ms corre una ráfaga de Python (`rafagas`, como las
+peticiones del panel) y anota cuánto tarde despertó. 60 bloques por par y ronda, 5 rondas.
+
+| umbral | otro hilo | trabajo por bloque, med (corrida 1 / 2) | p99 (1 / 2) | despertar del otro, p99 |
+|---|---|---|---|---|
+| siempre | ninguno | 4,88 / 4,91 ms | 6,91 / 7,37 ms | – |
+| siempre | ocupado | **490,8 / 502,5 ms** | 590 / 601 ms | – |
+| siempre | ráfagas de 2 ms | 5,09 / 5,28 ms | 9,55 / 9,25 ms | 0,32 / 0,33 ms |
+| defecto | ninguno | 4,90 / 4,87 ms | 6,17 / 6,13 ms | – |
+| defecto | ocupado | **181,0 / 181,2 ms** | 265 / 271 ms | – |
+| defecto | ráfagas de 2 ms | 5,57 / 5,54 ms | 9,63 / 9,45 ms | 3,38 / 3,27 ms |
+| nunca | ninguno | 4,88 / 4,87 ms | 6,90 / 8,40 ms | – |
+| nunca | ocupado | **176,5 / 181,1 ms** | 272 / 262 ms | – |
+| nunca | ráfagas de 2 ms | 5,26 / 5,30 ms | 10,05 / 9,47 ms | 2,62 / 2,93 ms |
+
+Dos variaciones, una corrida cada una (datos crudos en `datos/20/contenedor-convoy-gil-*.txt`):
+
+| variación | umbral | ocupado, med / p99 | ráfagas, med / p99 | despertar p99 |
+|---|---|---|---|---|
+| `sys.setswitchinterval(0,0005)` | siempre | 35,8 / 42,6 ms | 5,21 / 8,22 ms | 0,80 ms |
+| | defecto | **16,6 / 22,7 ms** | 5,15 / 8,65 ms | 1,82 ms |
+| | nunca | 16,4 / 23,0 ms | 5,29 / 8,69 ms | 2,01 ms |
+| ráfagas de 8 ms (40 % del tiempo) | siempre | 493,5 / 587 ms | 5,86 / 15,6 ms | 0,33 ms |
+| | defecto | 176,4 / 276 ms | 6,61 / 16,1 ms (máx 156,6) | 29,6 ms |
+| | nunca | 176,0 / 265 ms | 6,66 / 15,5 ms | 3,78 ms |
+
+**Qué dice:**
+- **El convoy existe, y soltar el GIL en cada llamada lo multiplica por 2,7.** Con un hilo Python
+  ocupado al lado, el bloque pasa de 4,9 ms a 490–503 ms soltando siempre, contra 176–181 ms sin
+  soltarlo; se repite en las dos corridas y en la variación de ráfagas. El plazo de un bloque es 85,3 ms.
+  **MEDIDO.**
+- **El umbral devuelve el motor a lo de antes del 2026-10-09:** `defecto` y `nunca` corren el mismo
+  código para las llamadas por bloque, y sus números quedan dentro de lo que varían entre sí. Por eso
+  mismo, la diferencia entre ellos da el ruido de la medición: el máximo de 156,6 ms y el despertar de
+  29,6 ms de `defecto` con ráfagas de 8 ms son un solo episodio de esa corrida, no un efecto del
+  umbral. **MEDIDO.**
+- **Pero un hilo Python ocupado rompe el plazo también sin `detach`** (176–181 ms > 85,3 ms): el motor
+  es Python con numpy, y numpy suelta el GIL en sus operaciones largas, así que cada una le cuesta un
+  intervalo de cambio. El riesgo no lo creó §14; §14 lo triplicaba. **MEDIDO.**
+- **Bajar el intervalo de cambio a 0,5 ms sí lo resuelve:** el bloque con un hilo ocupado baja a
+  16,4–16,6 ms (p99 23 ms), bajo el plazo con margen, y el otro hilo pierde un 15 % de su avance (831
+  frente a 972 ráfagas de 1 ms por segundo). Medido una sola vez y en este contenedor: falta repetirlo,
+  y medirlo en `HP-O16`, antes de decidir. **MEDIDO (una corrida).**
+- **Con ráfagas cortas, como las del panel, nada importa:** 5,1–5,6 ms por bloque en todas las
+  variantes. Lo que se paga por conservar el GIL lo paga el otro hilo: despierta hasta 3,4 ms tarde (p99)
+  en vez de 0,3 ms, lo que para una petición HTTP no se nota. **MEDIDO.**
+- Qué hilos del servicio corren Python de forma sostenida, y por cuánto, no se midió: el monitor, el
+  estimador de sincronía, la historia de sonoridad y el hilo que prepara un cambio de salida son
+  candidatos. Si alguno lo hace, el motor numpy ya sufría el convoy antes de Rust. **INFERIDO.**
+
+**Decisión que queda abierta:** el umbral se aplica (no cambia nada medible para el motor ni para el
+panel, y quita la multiplicación). `sys.setswitchinterval` más corto en el servicio es un cambio de
+todo el proceso: queda propuesto en el roadmap hasta medirlo en `HP-O16` con el servicio.
+
+### 15.1 Cómo reproducirlo
+
+```bash
+cd host && hatch test -- tests/test_engine_gil.py
+PY=$(hatch env find hatch-test.py3.12)/bin/python
+$PY ../probes/20-costo-sinc-rust/convoy_gil.py                  # corridas 1 y 2
+$PY ../probes/20-costo-sinc-rust/convoy_gil.py --switch-ms 0.5
+$PY ../probes/20-costo-sinc-rust/convoy_gil.py --burst-ms 8
 ```

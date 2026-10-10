@@ -1,0 +1,15 @@
+extension: /root/.local/share/hatch/env/virtual/aurasync/EYr9UeEh/hatch-test.py3.12/lib/python3.12/site-packages/aurasync_engine/__init__.py, umbral al cargar: 65536
+equipo vm, Linux-6.18.44-fc-v114-x86_64-with-glibc2.39, python 3.12.3, numpy 2.5.3, 4 CPU, switchinterval 0.5 ms
+load1 antes: 1.01
+bloques por par: 60 x 5 rondas, rafagas de 2.0 ms cada 20 ms
+  umbral otro hilo   med ms   p95 ms   p99 ms   max ms   otro/s  despertar p99 ms
+ siempre   ninguno     4.91     6.71     6.92     8.77        0                 -
+ siempre   ocupado    35.77    40.66    42.61    44.44     1009                 -
+ siempre   rafagas     5.21     7.52     8.22     8.91       59              0.80
+ defecto   ninguno     4.89     6.78     8.15     9.31        0                 -
+ defecto   ocupado    16.63    21.35    22.68    25.54      831                 -
+ defecto   rafagas     5.15     7.71     8.65     9.42       59              1.82
+   nunca   ninguno     4.88     5.54     6.96     7.24        0                 -
+   nunca   ocupado    16.44    20.87    23.02    34.01      830                 -
+   nunca   rafagas     5.29     7.73     8.69     9.24       59              2.01
+load1 despues: 0.93

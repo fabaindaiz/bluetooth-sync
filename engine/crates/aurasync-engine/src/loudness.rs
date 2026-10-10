@@ -8,6 +8,7 @@ use pyo3::types::PyDict;
 
 use crate::convert::{float64_rows, float64_vector, item, matrix, owned, samples, taps_of};
 use crate::error::{EngineError, guard};
+use crate::gil;
 use crate::planted::Planted;
 
 /// `aurasync.dsp.loudness.LoudnessMeter`'s per-block work: the numpy meter owns one when the engine
@@ -70,8 +71,8 @@ impl LoudnessMeter {
             self.planted.check("LoudnessMeter", "push");
             let frames = owned("frames", frames)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it measures (`convert::owned`): the input is a copy.
-            let (peak, steps) = py.detach(|| {
+            // Without the interpreter while it measures, when the call is long (`gil::run`): the input is a copy.
+            let (peak, steps) = gil::run(py, frames.len(), || {
                 inner
                     .push(&frames)
                     .map(|peak| (peak, inner.new_steps().to_vec()))

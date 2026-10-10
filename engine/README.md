@@ -39,10 +39,14 @@ forma cerrada que no cuesta casi nada) y el trabajo por bloque del medidor de so
 medidor que falla no da silencio: mide en numpy desde ese bloque, con su grilla de pasos intacta.
 
 **El GIL.** Cada llamada por bloque (`read`, los `process`, `push`) copia su entrada a un búfer de
-Rust y trabaja sin el intérprete (`Python::detach`), así que los demás hilos de Python del servicio
-(el servidor HTTP, los eventos del panel) siguen mientras el motor procesa;
-`host/tests/test_engine_gil.py` lo comprueba con un hilo que corre en medio de cada llamada. La
-construcción, el estado y la configuración siguen con el GIL tomado: no son por bloque. Una etapa con estado (el upmix, el extractor, los filtros FIR, el generador de armónicos,
+Rust, y si es larga (65536 muestras o más) trabaja sin el intérprete (`Python::detach`), así que los
+demás hilos de Python del servicio (el servidor HTTP, los eventos del panel) siguen mientras tanto. Las
+llamadas por bloque del motor son cortas y conservan el GIL: retomarlo cuesta hasta un intervalo de
+cambio (5 ms) cada vez que otro hilo corre Python, y soltarlo en todas multiplicaba ese efecto convoy
+por 2,7 ([experimentos/20](../docs/research/experimentos/20-costo-de-la-lectura-sinc-en-rust.md) §15).
+`aurasync_engine.set_detach_min_samples(n)` cambia el umbral (`src/gil.rs`);
+`host/tests/test_engine_gil.py` comprueba las dos direcciones con un hilo que corre, o no, en medio
+de la llamada. La construcción, el estado y la configuración siguen con el GIL tomado: no son por bloque. Una etapa con estado (el upmix, el extractor, los filtros FIR, el generador de armónicos,
 el limitador) es de su objeto numpy: cuando el motor es Rust, el objeto numpy tiene el de Rust y le
 pasa su estado entero al cambiar de motor en el fondo de un corte, en las dos direcciones, exacto; si Rust
 falla, la etapa vuelve a empezar en numpy (el upmix con latencia y entrada suave, como un render

@@ -274,7 +274,10 @@ después lo que cada port futuro repetiría, y al final la documentación y los 
     escribir directo en dos arreglos numpy por lo mismo. Lo comprueba `host/tests/test_engine_gil.py`:
     otro hilo corre en medio de cada llamada, y el test falla si se quita el `detach`. Costo:
     nada medible en `HP-O16`, y una llamada casi vacía cuesta 0,003 ms con o sin `detach`
-    (experimentos/20 §14, MEDIDO).
+    (experimentos/20 §14, MEDIDO). **Corregido el 2026-10-10:** con otro hilo de Python ocupado, retomar el GIL
+    en cada llamada multiplicaba el efecto convoy por 2,7 (experimentos/20 §15, MEDIDO). Ahora solo
+    sueltan el GIL las llamadas de 65536 muestras o más (`gil.rs`); las del motor por bloque lo
+    conservan, y la regla de «varios milisegundos» de arriba se cumple.
 15. **El perfil de release está incompleto**: solo `codegen-units=1`. → `lto`, y `panic="unwind"`
     explícito con su motivo.
 16. **Denormales** en los suavizados recursivos tras ~71 s de ceros exactos (aritmética INFERIDA).
@@ -333,7 +336,8 @@ El plan es `docs/superpowers/plans/2026-10-09-rust-idioms-and-decorrelation.md`.
   - §B.11, los buffers planos;
   - §B.12, los lazos sin índices;
   - §B.13, la salida `out=`;
-  - ~~§B.14, `Python::detach`~~: aplicado el 2026-10-09, sin costo medible (experimentos/20 §14);
+  - ~~§B.14, `Python::detach`~~: aplicado el 2026-10-09, sin costo medible solo (experimentos/20 §14);
+    desde el 2026-10-10 solo en llamadas largas, por el efecto convoy (§15);
   - §B.16, los denormales;
   - `target-cpu=native`.
 

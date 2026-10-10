@@ -77,9 +77,9 @@ con el servicio simulado; la app nativa queda para el final.
 Pico como puente (research/13). La app nativa de Android, al final de todo.
 
 **Para la próxima sesión (escrito al cerrar el 2026-10-09, s-7c8794-474a38):**
-1. Integrar Rust 13–14 y el GIL desde la rama `rust-ramps-loudness`.
-   - Antes, medir o mitigar el efecto convoy del GIL; la condición de la revisión está en el registro de la
-     sesión.
+1. ~~Integrar Rust 13–14 y el GIL desde la rama `rust-ramps-loudness`~~: **hecho el 2026-10-10**, con el
+   convoy del GIL medido y mitigado (experimentos/20 §15). Queda medir `sys.setswitchinterval` en `HP-O16`
+   (i-7c8794-46d296).
 2. Etapa 3 de transiciones, el render (i-7c8794-da4172), con su plan escrito.
 3. La revisión final de toda la rama `seamless-transitions` y `check.sh` entero.
 4. El A/B final con el protocolo de experimentos/23 §6.5, más la escucha de la etapa 4 (§8.2).
@@ -1573,6 +1573,10 @@ convolución de la 12 ya corre en Rust a través de los FIR).
   entrada y trabaja con `Python::detach`, así que el servidor HTTP y el panel no esperan al motor
   (`host/tests/test_engine_gil.py`; costo en experimentos/20 §14, research/15 §B.14). Era §B.14 de
   research/15, que queda aplicado; los otros experimentos de i-7c8794-b4b8b1 siguen.
+- **Solo en llamadas largas desde el 2026-10-10:** con otro hilo de Python ocupado, retomar el GIL en cada
+  llamada multiplicaba el efecto convoy por 2,7 (490–503 ms por bloque frente a 176–181 ms;
+  experimentos/20 §15, MEDIDO en un contenedor). Ahora suelta el GIL una llamada de 65536 muestras o más
+  (`gil.rs`, `set_detach_min_samples`), y las del motor por bloque lo conservan, como antes.
 - **Sigue** la 15 (`RustMotor`, con su propio plan).
 - **Falta cerrar esta tanda:**
   - la re-revisión de los arreglos de la revisión final;
@@ -2001,6 +2005,15 @@ frecuencia exacta (experimentos/23 §8.1). **Falta:** la escucha de experimentos
 permiso del usuario. **Choca con:** nada; seguir el reloj de forma continua (un lazo como `ClockLoop`) es el
 paso siguiente, en su propio spec.
 
+### Un intervalo de cambio del GIL más corto en el servicio · i-7c8794-46d296
+**Estado: Propuesto (2026-10-10).** Con un hilo de Python ocupado al lado, el `Motor` tarda 176–181 ms por
+bloque aunque ninguna llamada a Rust suelte el GIL (el plazo es 85,3 ms): numpy lo suelta en sus
+operaciones largas y cada una paga un intervalo de cambio (5 ms). Con `sys.setswitchinterval(0,0005)` baja a
+16,4–16,6 ms, y el otro hilo pierde un 15 % de su avance (experimentos/20 §15, una corrida en un contenedor).
+**Falta:** repetirlo, saber qué hilos del servicio corren Python de forma sostenida, y medirlo en `HP-O16`
+con el servicio; después, decidir si va como opción de `service.json`. **Choca con:** que es un cambio de
+todo el proceso.
+
 ### `test_a_signal_restores_it` se cuelga con la suite desacoplada de la terminal · i-7c8794-d5c5d6
 **Estado: Planificado.** `tests/test_radio_service.py::test_a_signal_restores_it` se queda esperando cuando
 pytest o `scripts/check.sh` corren en segundo plano (sin terminal), y pasa en primer plano. Mientras tanto
@@ -2062,7 +2075,8 @@ el servicio suena):
 - lazos con iteradores en vez de índices en ambiente y espacial;
 - una salida `out=` que evite el arreglo numpy nuevo por bloque;
 - ~~`Python::detach` durante el bloque, para no retener el GIL~~: **hecho el 2026-10-09** (pedido por el
-  usuario; copia la entrada; costo medido en experimentos/20 §14, entrada del motor Rust arriba);
+  usuario; copia la entrada; costo medido en experimentos/20 §14, entrada del motor Rust arriba), y desde
+  el 2026-10-10 solo en llamadas largas, por el efecto convoy (§15);
 - los denormales en los suavizados recursivos tras un silencio largo; un arreglo iría en numpy y en
   Rust a la vez;
 - `target-cpu=native` en `engine-build`.

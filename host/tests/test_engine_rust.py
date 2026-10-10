@@ -197,6 +197,7 @@ def test_capabilities_match_python_constants():
         "limiter",
         "loudness",
         "api",
+        "gil",
     }
 
 

@@ -43,6 +43,9 @@
 //!   out (`state`, `set_state`) at a switch.
 //! - `capabilities()`: the constants each stage was built with, for the host to check against its
 //!   own.
+//! - `set_detach_min_samples(samples)`: from how many input samples a per-block call lets go of
+//!   the interpreter while it works (`gil`); by default 65536, so the engine's per-block calls
+//!   keep the GIL and long calls free the other Python threads.
 //!
 //! A panic never reaches Python as `PyO3`'s `PanicException`, which derives from `BaseException`
 //! and that the service's loop would not catch: the whole body of every exported function (the
@@ -54,8 +57,8 @@
 //! that block is silence and numpy reads from the next cut.
 //!
 //! The source is one file per concern: `error` (the error type and the exceptions), `convert`
-//! (Python values to Rust ones), `planted` (the `test-panic` switch), `reader` (`Reader`),
-//! `capabilities`, and one file per class (`spatial`, `ambience`, `fir`, `virtual_bass`,
+//! (Python values to Rust ones), `planted` (the `test-panic` switch), `gil` (when a call lets go of the
+//! interpreter), `reader` (`Reader`), `capabilities`, and one file per class (`spatial`, `ambience`, `fir`, `virtual_bass`,
 //! `limiter`, `loudness`). The
 //! module itself is declared below, and `aurasync_engine.pyi` is its type stub.
 #![forbid(unsafe_code)]
@@ -65,6 +68,7 @@ mod capabilities;
 mod convert;
 mod error;
 mod fir;
+mod gil;
 mod limiter;
 mod loudness;
 mod planted;
@@ -83,6 +87,8 @@ mod aurasync_engine {
     use super::error::exceptions::{EngineError, EnginePanic};
     #[pymodule_export]
     use super::fir::{PartitionedFir, StreamingFir};
+    #[pymodule_export]
+    use super::gil::set_detach_min_samples;
     #[pymodule_export]
     use super::limiter::TruePeakLimiter;
     #[pymodule_export]

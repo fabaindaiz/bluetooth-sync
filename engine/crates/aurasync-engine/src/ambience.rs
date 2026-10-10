@@ -8,6 +8,7 @@ use pyo3::types::PyDict;
 
 use crate::convert::{get_complex, owned, set_complex, vector};
 use crate::error::guard;
+use crate::gil;
 use crate::planted::Planted;
 
 /// `aurasync.dsp.ambience.Extractor`'s work: the numpy extractor owns one when the engine is
@@ -80,8 +81,8 @@ impl AmbienceExtractor {
             let left = owned("left", left)?;
             let right = owned("right", right)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it works (`convert::owned`): the inputs are copies.
-            let out = py.detach(|| {
+            // Without the interpreter while it works, when the call is long (`gil::run`): the inputs are copies.
+            let out = gil::run(py, left.len(), || {
                 let mut out = vec![0.0; left.len()];
                 inner.process(&left, &right, &mut out).map(|()| out)
             })?;

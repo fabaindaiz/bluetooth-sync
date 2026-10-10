@@ -8,6 +8,7 @@ use pyo3::types::PyDict;
 
 use crate::convert::{float64_rows, get_complex, item, matrix, owned, set_complex, vector};
 use crate::error::guard;
+use crate::gil;
 use crate::planted::Planted;
 
 /// The direct and the ambience blocks of every speaker, `(speakers, block)` each.
@@ -102,9 +103,9 @@ impl SpatialUpmix {
             let n = left.len();
             let shape = [self.inner.speakers(), n];
             let inner = &mut self.inner;
-            // Without the interpreter while it works (`convert::owned`): the inputs are copies and
+            // Without the interpreter while it works, when the call is long (`gil::run`): the inputs are copies and
             // the outputs Rust's own buffers, handed to numpy afterwards without a copy.
-            let (direct, ambience) = py.detach(|| {
+            let (direct, ambience) = gil::run(py, n, || {
                 let mut direct = vec![0.0; shape[0] * n];
                 let mut ambience = vec![0.0; shape[0] * n];
                 inner

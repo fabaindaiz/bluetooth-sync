@@ -5,16 +5,18 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::error::guard;
+use crate::gil;
 
 /// The constants each stage was built with: `{"interpolation": {"half": 16, "beta": 8.0,
 /// "steps": 2048}, "spatial": {...}, "ambience": {"floor": 1e-8}, "fir": {"version": 2},
 /// "virtual_bass": {"version": 1}, "limiter": {"version": 1, "margin_db": 0.01,
-/// "near_ceiling": 0.25}, "loudness": {"version": 1, "near_peak": 0.5}, "api": {"version": 2}}`. The FIR filters, the virtual bass and the
+/// "near_ceiling": 0.25}, "loudness": {"version": 1, "near_peak": 0.5}, "api": {"version": 2}, "gil": {"detach_min_samples": 65536}}`. The FIR filters, the virtual bass and the
 /// binding's own API share no constant with numpy; their `version` says this build has them, so
 /// the host refuses an older build at load instead of failing on the first filter. The limiter
 /// gets its design values from numpy per call; its two own constants (`MARGIN_DB`,
 /// `NEAR_CEILING`) are numpy's and are listed so a build with others is refused at load; the
-/// loudness meter likewise, with its one constant (`NEAR_PEAK`).
+/// loudness meter likewise, with its one constant (`NEAR_PEAK`). `gil` is the current threshold
+/// from which a call lets go of the interpreter (`set_detach_min_samples`), for the probes to note.
 #[pyfunction]
 pub fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     guard(|| {
@@ -62,6 +64,9 @@ pub fn capabilities(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
         all.set_item("limiter", peak)?;
         all.set_item("loudness", meter)?;
         all.set_item("api", api)?;
+        let threshold = PyDict::new(py);
+        threshold.set_item("detach_min_samples", gil::min_samples())?;
+        all.set_item("gil", threshold)?;
         Ok(all)
     })
 }

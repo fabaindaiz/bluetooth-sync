@@ -7,6 +7,7 @@ use pyo3::prelude::*;
 
 use crate::convert::owned;
 use crate::error::guard;
+use crate::gil;
 use crate::planted::Planted;
 
 /// The block a reader is built for by default: twice the service's 4096 samples. A larger block
@@ -49,8 +50,8 @@ impl Reader {
             let data = owned("data", data)?;
             let position = owned("position", position)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it reads (`convert::owned`): the inputs are copies.
-            let out = py.detach(|| {
+            // Without the interpreter while it reads, when the call is long (`gil::run`): the inputs are copies.
+            let out = gil::run(py, position.len(), || {
                 if position.len() > inner.max_block() {
                     *inner = interpolation::Reader::new(
                         position

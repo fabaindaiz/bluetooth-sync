@@ -10,6 +10,7 @@ use pyo3::types::PyDict;
 use crate::convert::{item, owned, taps_of};
 use crate::error::{EngineError, guard};
 use crate::fir::{partitioned_dict, partitioned_state};
+use crate::gil;
 use crate::planted::Planted;
 
 /// `aurasync.dsp.virtual_bass.VirtualBass`'s per-block work: the numpy stage owns one when the
@@ -61,8 +62,8 @@ impl VirtualBass {
             self.planted.check("VirtualBass", "process");
             let x = owned("x", x)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it works (`convert::owned`): the input is a copy.
-            let (out, energies) = py.detach(|| {
+            // Without the interpreter while it works, when the call is long (`gil::run`): the input is a copy.
+            let (out, energies) = gil::run(py, x.len(), || {
                 let mut out = vec![0.0; x.len()];
                 inner
                     .process(&x, current, target, &mut out)

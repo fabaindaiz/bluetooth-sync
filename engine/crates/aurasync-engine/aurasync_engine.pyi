@@ -38,9 +38,15 @@ class Reader:
 def capabilities() -> dict[str, dict[str, float | int]]:
     """The constants each stage was built with, for the host to check against its own:
     `interpolation`, `spatial`, `ambience`, `limiter` (its `margin_db` and `near_ceiling`),
-    `loudness` (its `near_peak`), and the `version` of `fir`, `virtual_bass`, `limiter`,
-    `loudness` and `api`.
+    `loudness` (its `near_peak`), the `version` of `fir`, `virtual_bass`, `limiter`,
+    `loudness` and `api`, and `gil` (its current `detach_min_samples`).
     """
+
+def set_detach_min_samples(samples: int) -> int:
+    """From how many input samples a per-block call lets go of the interpreter while it works,
+    for the whole process; gives the previous value. By default 65536: the engine's per-block
+    calls keep the GIL (letting go and taking it back costs up to a switch interval each time
+    another Python thread is busy), long calls free the other threads. 0 always lets go."""
 
 class SpatialUpmix:
     """`aurasync.dsp.spatial.SpatialUpmix`'s work. Speakers are indices, in the numpy stage's

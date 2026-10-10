@@ -8,6 +8,7 @@ use pyo3::types::PyDict;
 
 use crate::convert::{item, owned, taps_of, vector};
 use crate::error::guard;
+use crate::gil;
 use crate::planted::Planted;
 
 /// `aurasync.dsp.limiter.TruePeakLimiter`'s per-block work: the numpy limiter owns one when the
@@ -79,8 +80,8 @@ impl TruePeakLimiter {
             self.planted.check("TruePeakLimiter", "process");
             let x = owned("x", x)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it works (`convert::owned`): the input is a copy.
-            let out = py.detach(|| {
+            // Without the interpreter while it works, when the call is long (`gil::run`): the input is a copy.
+            let out = gil::run(py, x.len(), || {
                 let mut out = vec![0.0; x.len()];
                 inner.process(&x, &mut out).map(|()| out)
             })?;

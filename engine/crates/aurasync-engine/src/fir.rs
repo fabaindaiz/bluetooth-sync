@@ -9,6 +9,7 @@ use pyo3::types::PyDict;
 
 use crate::convert::{float64_rows, float64_vector, item, matrix, owned, samples, taps_of, vector};
 use crate::error::{EngineError, guard};
+use crate::gil;
 use crate::planted::Planted;
 
 /// A [`fir::PartitionedState`] as numpy's `PartitionedFIR` keeps it: `history` (1-D), `fdl_re`
@@ -117,8 +118,8 @@ impl StreamingFir {
             self.planted.check("StreamingFIR", "process");
             let x = owned("x", x)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it filters (`convert::owned`): the input is a copy.
-            let out = py.detach(|| {
+            // Without the interpreter while it filters, when the call is long (`gil::run`): the input is a copy.
+            let out = gil::run(py, x.len(), || {
                 let mut out = vec![0.0; x.len()];
                 inner.process(&x, &mut out).map(|()| out)
             })?;
@@ -191,8 +192,8 @@ impl PartitionedFir {
             self.planted.check("PartitionedFIR", "process");
             let x = owned("x", x)?;
             let inner = &mut self.inner;
-            // Without the interpreter while it filters (`convert::owned`): the input is a copy.
-            let out = py.detach(|| {
+            // Without the interpreter while it filters, when the call is long (`gil::run`): the input is a copy.
+            let out = gil::run(py, x.len(), || {
                 let mut out = vec![0.0; x.len()];
                 inner.process(&x, &mut out).map(|()| out)
             })?;

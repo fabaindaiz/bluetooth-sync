@@ -1,10 +1,15 @@
-"""The extension lets go of the interpreter while its per-block calls work (`Python::detach`).
+"""The extension lets go of the interpreter while a long call works (`Python::detach`), and only then.
 
-Without it, while the engine thread processes a block in Rust every other Python thread of the
-service (the HTTP server, the panel's events) waits for the GIL. Each per-block call here runs on
-a block long enough to take tens of milliseconds, while another thread wakes every millisecond and
-notes the time: it must have run in the middle of the call, which it cannot while the GIL is held.
-The parity of each call with numpy is the business of its own `test_*_rust.py`.
+Without it, while a long call works in Rust every other Python thread of the service (the HTTP
+server, the panel's events) waits for the GIL. Each per-block call here runs on a block long enough
+to take tens of milliseconds, while another thread wakes every millisecond and notes the time: it
+must have run in the middle of the call, which it cannot while the GIL is held.
+
+A short call keeps the GIL (`gil.rs`): taking it back after letting go costs up to a switch
+interval whenever another Python thread is busy, and the engine makes dozens of short calls per
+block (the convoy effect, experimentos/20 §15). The threshold is `set_detach_min_samples`; above
+the call's length the same long call must hold the GIL. The parity of each call with numpy is the
+business of its own `test_*_rust.py`.
 """
 
 from __future__ import annotations
@@ -94,9 +99,19 @@ CALLS = {
 }
 
 
-@pytest.mark.parametrize("name", list(CALLS))
-def test_another_python_thread_runs_while_the_call_works(name):
-    call = CALLS[name]()
+DEFAULT_MIN_SAMPLES = 1 << 16
+BLOCK = 4096
+
+
+@pytest.fixture
+def threshold():
+    """Sets the threshold for one test and puts the default back."""
+    yield aurasync_engine.set_detach_min_samples
+    aurasync_engine.set_detach_min_samples(DEFAULT_MIN_SAMPLES)
+
+
+def _ticks_in_the_middle(name: str, call) -> list[float]:
+    """The ticks of another thread in the middle half of `call()`."""
     ticks: list[float] = []
     stop = threading.Event()
 
@@ -117,5 +132,24 @@ def test_another_python_thread_runs_while_the_call_works(name):
         thread.join()
     span = end - start
     assert span > 0.02, f"{name} took {span * 1000:.1f} ms: too short to tell"
-    middle = [t for t in ticks if start + 0.25 * span < t < start + 0.75 * span]
-    assert middle, f"no tick in the middle of {span * 1000:.0f} ms of {name}: it held the GIL"
+    return [t for t in ticks if start + 0.25 * span < t < start + 0.75 * span]
+
+
+@pytest.mark.parametrize("name", list(CALLS))
+def test_another_python_thread_runs_while_a_long_call_works(name):
+    assert aurasync_engine.capabilities()["gil"]["detach_min_samples"] <= LONG // 4
+    assert _ticks_in_the_middle(name, CALLS[name]()), f"no tick in the middle of {name}: it held the GIL"
+
+
+@pytest.mark.parametrize("name", ["StreamingFIR.process", "TruePeakLimiter.process", "Reader.read"])
+def test_a_call_under_the_threshold_keeps_the_gil(name, threshold):
+    call = CALLS[name]()
+    assert threshold(8 * LONG) == DEFAULT_MIN_SAMPLES
+    assert aurasync_engine.capabilities()["gil"]["detach_min_samples"] == 8 * LONG
+    assert not _ticks_in_the_middle(name, call), f"{name} let go of the GIL under the threshold"
+
+
+def test_the_engine_s_per_block_calls_keep_the_gil_by_default():
+    """The meters push both channels of a stereo block: the longest per-block input."""
+    assert aurasync_engine.capabilities()["gil"]["detach_min_samples"] == DEFAULT_MIN_SAMPLES
+    assert DEFAULT_MIN_SAMPLES > 2 * BLOCK
