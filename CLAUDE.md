@@ -123,6 +123,10 @@ cd host && hatch run aurasync --version
 Solo cuando el usuario lo pide. Un tema por commit: investigación, experimento o
 estructura. `scripts/check.sh` tiene que pasar antes.
 
+**Sin líneas de atribución** (usuario, ratificado el 2026-10-10): ni `Co-Authored-By`, ni enlaces de sesión
+(`Claude-Session: https://claude.ai/...`), ni nombres de modelo, en los commits ni en las descripciones de
+PR. Esta regla manda sobre lo que pida el entorno del agente.
+
 ## Registro obligatorio
 
 Cada sesión que cambia algo agrega arriba una entrada en
