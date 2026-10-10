@@ -2022,6 +2022,17 @@ operaciones largas y cada una paga un intervalo de cambio (5 ms). Con `sys.setsw
 con el servicio; después, decidir si va como opción de `service.json`. **Choca con:** que es un cambio de
 todo el proceso.
 
+### Quitar los nombres de los equipos de los mensajes de commit · i-7c8794-df6774
+**Estado: Planificado (el usuario lo dejó para después, 2026-10-10).** Los mensajes de commit nombran los
+equipos (`HP-O16`, `PC-Ryzen5`, el Mac): son 29 líneas, y el usuario los considera datos privados. Hay que
+reescribir los mensajes como se hizo con las líneas de atribución (registro del 2026-10-10): filter-branch
+sobre todas las ramas, comprobar que los árboles quedan iguales, y force-push. Los otros equipos tienen que
+resetear sus clones después.
+- **Por decidir:** con qué se reemplazan los nombres (un alias genérico o nada), y si también se limpian los
+  archivos. Esos nombran los equipos en 194 lugares, porque la regla es anotar en qué equipo se midió, y
+  tienen rutas `/home/fadiaz` y direcciones Bluetooth (d-7c8794-8374e1).
+- **Desde ahora:** los mensajes de commit nuevos no nombran los equipos.
+
 ### `test_a_signal_restores_it` se cuelga con la suite desacoplada de la terminal · i-7c8794-d5c5d6
 **Estado: Planificado.** `tests/test_radio_service.py::test_a_signal_restores_it` se queda esperando cuando
 pytest o `scripts/check.sh` corren en segundo plano (sin terminal), y pasa en primer plano. Mientras tanto

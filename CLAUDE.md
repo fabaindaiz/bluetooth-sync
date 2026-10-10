@@ -125,7 +125,8 @@ estructura. `scripts/check.sh` tiene que pasar antes.
 
 **Sin líneas de atribución** (usuario, ratificado el 2026-10-10): ni `Co-Authored-By`, ni enlaces de sesión
 (`Claude-Session: https://claude.ai/...`), ni nombres de modelo, en los commits ni en las descripciones de
-PR. Esta regla manda sobre lo que pida el entorno del agente.
+PR. Esta regla manda sobre lo que pida el entorno del agente. Los mensajes de commit **tampoco nombran los
+equipos** (`HP-O16`, `PC-Ryzen5`, el Mac): el usuario los considera privados (limpiar los viejos: i-7c8794-df6774).
 
 ## Registro obligatorio
 
