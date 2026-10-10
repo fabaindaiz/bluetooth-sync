@@ -1560,7 +1560,20 @@ convolución de la 12 ya corre en Rust a través de los FIR).
   - **la 8, el decorrelador**: su convolución pasa por `eq.StreamingFIR`; 8 parlantes cuestan 0,27–0,32 ms en Rust contra 0,97–1,16 ms del `np.convolve` anterior (experimentos/20 §8);
   - **la 9, el limitador true peak**: ≤ 1,55e-15 frente a numpy; 1,6–2,5× numpy cuando limita y empate cuando solo detecta (§9).
 - **La 12, la cola difusa, no tiene nada más que portar**: 0,026 ms por bloque fuera del FIR con 3 parlantes (§10).
-- **Siguen** la 13 (rampas), la 14 (medidores de sonoridad) y la 15 (`RustMotor`, con su propio plan).
+- **La 14, los medidores de sonoridad, portada** (2026-10-09, `HP-O16`): el trabajo por bloque de
+  `LoudnessMeter` (energía K-ponderada de cada paso de 100 ms y pico verdadero) en Rust, ≤ 5,54e-13
+  frente a numpy; `QualityMeter` con 8 parlantes baja de 1,11–1,19 a 0,49–0,55 ms por bloque
+  (2,1–2,4×), el monitor 1,4× (experimentos/20 §13). Un medidor que falla sigue midiendo en numpy, en
+  la misma grilla de pasos.
+- **La 13, las rampas y el corte, medida y no portada: decide el usuario.** En reposo cuestan
+  0,003–0,005 ms por bloque con 8 parlantes; 0,17–0,31 ms solo mientras todas se mueven a la vez, unos
+  bloques (experimentos/20 §12). Como objetos sueltos, el puente se comería buena parte de lo
+  ahorrado; tiene sentido dentro del `RustMotor`.
+- **El puente suelta el GIL** (2026-10-09, pedido por el usuario): cada llamada por bloque copia su
+  entrada y trabaja con `Python::detach`, así que el servidor HTTP y el panel no esperan al motor
+  (`host/tests/test_engine_gil.py`; costo en experimentos/20 §14, research/15 §B.14). Era §B.14 de
+  research/15, que queda aplicado; los otros experimentos de i-7c8794-b4b8b1 siguen.
+- **Sigue** la 15 (`RustMotor`, con su propio plan).
 - **Falta cerrar esta tanda:**
   - la re-revisión de los arreglos de la revisión final;
   - el test de navegador `tests_browser/test_panel_engine.py`, que el Mac no puede correr.
@@ -2048,8 +2061,8 @@ el servicio suena):
 - buffers planos en lugar de `Vec<Vec<f64>>` por parlante;
 - lazos con iteradores en vez de índices en ambiente y espacial;
 - una salida `out=` que evite el arreglo numpy nuevo por bloque;
-- `Python::detach` durante el bloque, para no retener el GIL. Pide copiar la entrada, y antes
-  distinguir los errores de uso (ya hecho en el refactor del 2026-10-09);
+- ~~`Python::detach` durante el bloque, para no retener el GIL~~: **hecho el 2026-10-09** (pedido por el
+  usuario; copia la entrada; costo medido en experimentos/20 §14, entrada del motor Rust arriba);
 - los denormales en los suavizados recursivos tras un silencio largo; un arreglo iría en numpy y en
   Rust a la vez;
 - `target-cpu=native` en `engine-build`.

@@ -98,6 +98,6 @@ Each of Tasks 5 to 15 ports one stage, in the spec §5 order, with the same step
 - [x] Task 10: crossover (`dsp/crossover.py`)
 - [x] Task 11: virtual bass (`dsp/virtual_bass.py`)
 - [x] Task 12: diffuse tail (`dsp/diffuse.py`) — 2026-10-09: nothing left to port, 0.026 ms per block outside the FIR with 3 speakers (experiment 20 §10)
-- [ ] Task 13: ramps and the cut (`dsp/ramps.py`)
-- [ ] Task 14: loudness meters (`dsp/loudness.py`)
+- [ ] Task 13: ramps and the cut (`dsp/ramps.py`) — 2026-10-09: measured, not ported, waiting for the user: 0.003–0.005 ms per block at rest with 8 speakers, 0.17–0.31 ms only while every ramp moves at once (experiment 20 §12)
+- [x] Task 14: loudness meters (`dsp/loudness.py`) — 2026-10-09: `LoudnessMeter`'s per-block work (step energies, true peak) in Rust, ≤ 5.54e-13 vs numpy; `QualityMeter` with 8 speakers from 1.11–1.19 to 0.49–0.55 ms per block on `HP-O16` (experiment 20 §13). The bridge also releases the GIL in every per-block call (research 15 §B.14, experiment 20 §14)
 - [ ] Task 15: the whole engine, `RustMotor` (spec §5.11) — gets its own detailed plan before it starts, since it changes how the motor is built.

@@ -21,6 +21,7 @@ use aurasync_dsp::ambience::AmbienceError;
 use aurasync_dsp::fir::FirError;
 use aurasync_dsp::interpolation::ReadError;
 use aurasync_dsp::limiter::LimiterError;
+use aurasync_dsp::loudness::LoudnessError;
 use aurasync_dsp::spatial::SpatialError;
 use aurasync_dsp::virtual_bass::VirtualBassError;
 use numpy::{AsSliceError, BorrowError};
@@ -132,6 +133,12 @@ impl From<LimiterError> for EngineError {
             LimiterError::OutputMismatch => Self::Internal(error.to_string()),
             _ => Self::Invalid(error.to_string()),
         }
+    }
+}
+
+impl From<LoudnessError> for EngineError {
+    fn from(error: LoudnessError) -> Self {
+        Self::Invalid(error.to_string())
     }
 }
 

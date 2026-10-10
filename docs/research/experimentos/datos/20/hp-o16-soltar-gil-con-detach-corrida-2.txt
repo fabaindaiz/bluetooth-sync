@@ -1,0 +1,11 @@
+extension: /home/fadiaz/.local/share/hatch/env/virtual/aurasync/VAxgdoO0/hatch-test.py3.12/lib/python3.12/site-packages/aurasync_engine/__init__.py
+load1 antes: 10.29
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, python 3.12.12, numpy 2.5.3
+          caso    med ms    p95 ms
+         eq x8    0.3394    0.3688
+  limitador x8    1.0200    1.1148
+ medidores x10    0.5463    0.6797
+    lectura x8    4.2110    4.5871
+   fir de 1 x8    0.1698    0.1899
+      vacia x8    0.0244    0.0248
+load1 despues: 10.75

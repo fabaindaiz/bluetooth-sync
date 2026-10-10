@@ -41,8 +41,16 @@ pub fn samples<'a>(array: &'a PyReadonlyArray1<'_, f64>) -> Cow<'a, [f64]> {
 
 /// `taps` as a 1-D float64 numpy array's samples, owned.
 pub fn taps_of(taps: &Bound<'_, PyAny>) -> Result<Vec<f64>, EngineError> {
-    let taps = float64_vector("taps", taps)?;
-    Ok(samples(&taps).into_owned())
+    owned("taps", taps)
+}
+
+/// `value` as a 1-D float64 numpy array's samples, copied into a Rust buffer (as
+/// [`float64_vector`] checks it). What a per-block call works on while it has let go of the
+/// interpreter (`Python::detach`): another Python thread may then run and could write to the
+/// numpy array, so the work never reads it in place. The copy of a 4096-sample block is 32 KiB.
+pub fn owned(name: &str, value: &Bound<'_, PyAny>) -> Result<Vec<f64>, EngineError> {
+    let array = float64_vector(name, value)?;
+    Ok(samples(&array).into_owned())
 }
 
 /// `value` as a 2-D float64 numpy array's rows, or a `TypeError` (as [`float64_vector`]).

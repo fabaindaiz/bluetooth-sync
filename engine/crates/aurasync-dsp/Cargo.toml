@@ -1,7 +1,7 @@
 [package]
 name = "aurasync-dsp"
 version = "0.1.0"
-description = "Pure-Rust DSP for aurasync: the band-limited fractional delay read, the spatial upmix, the ambience extractor, the FIR filters by FFT convolution, the virtual bass and the true-peak limiter."
+description = "Pure-Rust DSP for aurasync: the band-limited fractional delay read, the spatial upmix, the ambience extractor, the FIR filters by FFT convolution, the virtual bass, the true-peak limiter and the loudness meter's per-block work."
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true

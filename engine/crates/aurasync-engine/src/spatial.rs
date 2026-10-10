@@ -6,9 +6,7 @@ use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::convert::{
-    float64_rows, float64_vector, get_complex, item, matrix, samples, set_complex, vector,
-};
+use crate::convert::{float64_rows, get_complex, item, matrix, owned, set_complex, vector};
 use crate::error::guard;
 use crate::planted::Planted;
 
@@ -99,22 +97,24 @@ impl SpatialUpmix {
     ) -> PyResult<Blocks<'py>> {
         guard(|| {
             self.planted.check("SpatialUpmix", "process");
-            let left = float64_vector("left", left)?;
-            let right = float64_vector("right", right)?;
-            let (left, right) = (samples(&left), samples(&right));
+            let left = owned("left", left)?;
+            let right = owned("right", right)?;
             let n = left.len();
             let shape = [self.inner.speakers(), n];
-            let direct = PyArray2::<f64>::zeros(py, shape, false);
-            let ambience = PyArray2::<f64>::zeros(py, shape, false);
-            {
-                let mut direct_out = direct.try_readwrite()?;
-                let mut ambience_out = ambience.try_readwrite()?;
-                let direct_out = direct_out.as_slice_mut()?;
-                let ambience_out = ambience_out.as_slice_mut()?;
-                self.inner
-                    .process(&left, &right, direct_out, ambience_out)?;
-            }
-            Ok((direct, ambience))
+            let inner = &mut self.inner;
+            // Without the interpreter while it works (`convert::owned`): the inputs are copies and
+            // the outputs Rust's own buffers, handed to numpy afterwards without a copy.
+            let (direct, ambience) = py.detach(|| {
+                let mut direct = vec![0.0; shape[0] * n];
+                let mut ambience = vec![0.0; shape[0] * n];
+                inner
+                    .process(&left, &right, &mut direct, &mut ambience)
+                    .map(|()| (direct, ambience))
+            })?;
+            Ok((
+                PyArray1::from_vec(py, direct).reshape(shape)?,
+                PyArray1::from_vec(py, ambience).reshape(shape)?,
+            ))
         })
     }
 

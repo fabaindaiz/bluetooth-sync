@@ -195,6 +195,7 @@ def test_capabilities_match_python_constants():
         "fir",
         "virtual_bass",
         "limiter",
+        "loudness",
         "api",
     }
 

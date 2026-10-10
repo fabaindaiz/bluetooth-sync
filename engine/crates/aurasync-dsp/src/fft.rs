@@ -32,6 +32,11 @@ pub(crate) fn plans(size: usize) -> (Forward, Inverse) {
     })
 }
 
+/// The forward plan of length `size`, from this thread's planner.
+pub(crate) fn forward(size: usize) -> Forward {
+    PLANNER.with_borrow_mut(|planner| planner.plan_fft_forward(size))
+}
+
 /// The unscaled inverse of `spectrum` into `time` (`len(time)` points): numpy's `irfft` ignores
 /// the edge bins' imaginary parts, `realfft` wants them zero, so they are zeroed first.
 ///

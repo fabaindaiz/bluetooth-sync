@@ -37,8 +37,9 @@ class Reader:
 
 def capabilities() -> dict[str, dict[str, float | int]]:
     """The constants each stage was built with, for the host to check against its own:
-    `interpolation`, `spatial`, `ambience`, `limiter` (its `margin_db` and `near_ceiling`), and the
-    `version` of `fir`, `virtual_bass`, `limiter` and `api`.
+    `interpolation`, `spatial`, `ambience`, `limiter` (its `margin_db` and `near_ceiling`),
+    `loudness` (its `near_peak`), and the `version` of `fir`, `virtual_bass`, `limiter`,
+    `loudness` and `api`.
     """
 
 class SpatialUpmix:
@@ -216,4 +217,35 @@ class TruePeakLimiter:
 
     def set_state(self, state: dict[str, _Vector | float]) -> None:
         """Takes a state from numpy's limiter (the keys of `state()`); a `ValueError` changes
+        nothing."""
+
+class LoudnessMeter:
+    """`aurasync.dsp.loudness.LoudnessMeter`'s per-block work (the K-weighted energy of every 100 ms
+    step and the 4x true peak). The numpy meter keeps the design and the readings and passes the
+    design here."""
+
+    def __init__(
+        self,
+        *,
+        kernels: _Vector,
+        half_width: int,
+        k_power: _Vector,
+        weights: _Vector,
+        step_n: int,
+    ) -> None:
+        """The meter numpy's `LoudnessMeter` builds, at rest: `kernels` three rows of
+        `2 * half_width` taps (numpy's `_kernels_ascending.T` flattened), `k_power` numpy's
+        `_k_power` (`step_n // 2 + 1` bins), one weight per channel and the step's samples."""
+
+    def push(self, frames: _Vector) -> tuple[float, list[float]]:
+        """One block, its frames interleaved (numpy's `(n, channels)` block flattened):
+        `(true_peak, steps)`, the block's linear true peak and the energies of the steps it
+        completed, oldest first."""
+
+    def state(self) -> dict[str, _Matrix]:
+        """The whole state, as numpy's meter keeps it: `{"context": ..., "pending": ...}`, two
+        `(channels, k)` arrays."""
+
+    def set_state(self, state: dict[str, _Matrix]) -> None:
+        """Takes a state from numpy's meter (the keys of `state()`); a `ValueError` changes
         nothing."""

@@ -52,6 +52,12 @@ métricas ≤ 1,8e-15 (1,55e-15 y 1,78e-15, MEDIDO en dos corridas). **La cola
 difusa (§10, MEDIDO): no queda nada que portar**: fuera de su convolución (ya en Rust) gasta
 0,025–0,026 ms por bloque con 3 parlantes.
 
+**Los medidores de sonoridad (§13, MEDIDO, 2026-10-09, `HP-O16`): Rust es 2,1 a 2,4 veces más
+rápido** que numpy en `QualityMeter` (8 parlantes, de 1,11–1,19 a 0,49–0,55 ms por bloque) y 1,4
+veces en el monitor; lecturas ≤ 5,54e-13 de numpy. **Las rampas y el corte (§12, MEDIDO): no se
+portaron**: en reposo cuestan 0,003–0,005 ms por bloque; solo mientras todas se mueven, 0,17–0,31 ms
+con 8 parlantes. **Soltar el GIL en cada llamada por bloque (§14, MEDIDO)** no cuesta nada medible.
+
 ## Entorno (MEDIDO)
 
 - Equipo `HP-O16` (i5-11400H, 12 hilos), CachyOS, kernel 7.2.8-1-cachyos; python 3.12.12, numpy
@@ -956,3 +962,218 @@ s-7c8794-816f05 dejó pendiente repetirlos en Linux.
      x86_64) queda **INFERIDA**.
    - §9.3 se corrigió: el SHA que tiene que repetirse es el de cada equipo.
 
+## 12 · Las rampas y el corte (`dsp/ramps.py`): no se portaron, por decidir (MEDIDO, 2026-10-09)
+
+La tarea 13 del port eran las rampas (`Smoothed`, con su `glide`, y `DecibelRamp`) y el corte
+(`FadeGate`). Dan, en cada bloque, los valores por muestra del pan, el ambiente, la mezcla del
+ambiente, el silencio de cada parlante, el volumen, la compensación del A/B, el makeup del render y
+la envolvente del corte. El brief pedía medir antes de portar y, si costaban menos de 0,05 ms por
+bloque, no portarlas sin preguntar.
+
+**Entorno y método (MEDIDO):** `HP-O16`, Linux 7.2.9-1-cachyos (x86_64, 12 CPU), python 3.12.12,
+numpy 2.5.3, bajo `nice -n 19` y con una sesión de audio sonando en el mismo equipo; carga de 1
+minuto 2,1–2,9 (el perfil de energía no se anotó). Sonda:
+`probes/20-costo-sinc-rust/costo_rampas.py`. Hace, con 4 y 8 parlantes y los valores por defecto de
+la cadena (`move_speed` 2/s, `volume_speed_db_s` 30 dB/s, `mute_fade_ms` 50 ms, el corte de 80 ms),
+las mismas llamadas que `motor.procesar` en un bloque de 4096: la mezcla, el corte y los tres
+`block_db` una vez, y pan, ambiente y silencio por parlante (5 + 3 × parlantes llamadas). No cuenta
+lo que el motor hace con el resultado (`10 ** (dB / 20)` y los productos), que no cambia con el
+port. Tres escenarios: **reposo** (todo en su objetivo: cada rampa devuelve un escalar, el caso de
+casi todo el tiempo), **moviendo** (todas a la vez y el corte bajando o subiendo, sin parar: el peor
+caso) y **deslizando** (un `glide` de 4096 muestras en cada rampa, como `motor._empezar_transicion`,
+repetido). 50 bloques de calentamiento y 500 medidos, mediana y p95; el tiempo es el de todas
+juntas.
+
+| escenario | parlantes | llamadas | numpy med | numpy p95 |
+|---|---|---|---|---|
+| reposo | 4 | 17 | 0,0027 / 0,0051 | 0,0033 / 0,0053 |
+| reposo | 8 | 29 | 0,0046 / 0,0046 | 0,0048 / 0,0050 |
+| moviendo | 4 | 17 | 0,175 / 0,174 | 0,193 / 0,198 |
+| moviendo | 8 | 29 | 0,300 / 0,313 | 0,331 / 0,421 |
+| deslizando | 4 | 17 | 0,105 / 0,109 | 0,118 / 0,164 |
+| deslizando | 8 | 29 | 0,180 / 0,193 | 0,200 / 0,336 |
+
+(ms por bloque; corrida 1 / corrida 2. Datos crudos:
+[datos/20/hp-o16-rampas-corrida-1.txt](datos/20/hp-o16-rampas-corrida-1.txt) y
+[datos/20/hp-o16-rampas-corrida-2.txt](datos/20/hp-o16-rampas-corrida-2.txt).)
+
+**Qué dice:**
+- **En reposo las rampas cuestan 0,003–0,005 ms por bloque con 8 parlantes**, en las dos corridas:
+  diez veces menos que el umbral de 0,05 ms. Es lo que cuestan casi siempre, porque un control solo
+  se mueve cuando alguien lo toca.
+- **Moviéndose todas a la vez cuestan 0,17–0,31 ms** (0,2–0,4 % del bloque de 85,3 ms), y
+  deslizando 0,10–0,19 ms. Ese costo dura lo que dura una rampa: el corte, dos bloques (80 ms de
+  bajada y 80 de subida); un fundido de transición, su largo; el pan de un extremo al otro a 2/s,
+  medio segundo (6 bloques).
+- **No se portaron. Queda para el usuario decidir si portarlas.** Lo que Rust ahorraría en el peor
+  caso es, a lo sumo, esos 0,17–0,31 ms durante unos bloques. Ni siquiera eso entero: cada una de las
+  17 a 29 llamadas pagaría el puente, y una llamada casi vacía (`Reader.read` de una posición)
+  cuesta 0,003 ms en `HP-O16` (§14). Con 29 llamadas son unos 0,09 ms antes de calcular nada, más un
+  arreglo numpy de salida por llamada (INFERIDO: la cuenta suma el costo de una llamada medido en
+  otra clase). Para que valiera,
+  las rampas tendrían que ir dentro de un objeto Rust más grande, que es lo que hará el `RustMotor`
+  (la etapa 15), y no como objetos sueltos llamados desde Python.
+
+**Cómo reproducirlo:**
+
+```bash
+cd host && nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_rampas.py
+```
+
+## 13 · Los medidores de sonoridad (`dsp/loudness.py`, `LoudnessMeter`) en Rust (MEDIDO, 2026-10-09)
+
+La tarea 14 del port eran los medidores BS.1770 (`dsp/loudness.py`) que el hilo del motor alimenta en
+cada bloque: los de `quality.QualityMeter` (uno mono por canal de la entrada y uno por parlante,
+todos sin historia) y, con el monitor de audífonos prendido, los dos de `monitor.py`.
+
+**Primero se midió en numpy (MEDIDO):** el mismo entorno que §12 (carga 2,1–2,9). Sonda:
+`probes/20-costo-sinc-rust/costo_medidores.py`. `QualityMeter.push` con 4 y 8 parlantes cuesta
+**0,64–0,74 ms y 1,06–1,11 ms por bloque**, y un medidor mono solo 0,09–0,11 ms, en dos corridas y
+con las dos señales (ruido y música)
+([datos/20/hp-o16-medidores-corrida-1.txt](datos/20/hp-o16-medidores-corrida-1.txt),
+[datos/20/hp-o16-medidores-corrida-2.txt](datos/20/hp-o16-medidores-corrida-2.txt)). Es veinte
+veces el umbral de 0,05 ms, así que se portó. El docstring de `quality.py` decía 0,28 ms con la
+entrada y 3 parlantes, medido en el Mac. En `HP-O16` cuesta más: 0,64 ms con 4 parlantes.
+
+**Qué se portó.** El trabajo del medidor que toca las muestras: el pico verdadero (4×, solo en las
+posiciones cerca del pico del bloque) y la energía K-ponderada de cada paso de 100 ms, que es una FFT
+de 4800 puntos por canal y su espectro de potencia por `|K(f)|²`. Va en el objeto Rust
+`aurasync_engine.LoudnessMeter`, que la clase numpy posee cuando el motor es Rust. El diseño (el paso,
+`_k_power`, los pesos y los núcleos) llega desde numpy. Las lecturas (momentánea, de corto plazo,
+integrada, PSR) siguen en Python: son sumas de hasta 30 números, y se calculan al leerlas.
+`GatedIntegrator` también sigue en Python: corre en su propio hilo, un paso a la vez.
+
+**Golden (MEDIDO):** `host/tests/test_loudness_rust.py` (29 tests) compara los dos motores ≤ 1e-9
+bloque a bloque, en todas las lecturas: momentánea, de corto plazo, integrada, pico verdadero total y
+de los últimos 3 s, PSR, la cantidad de pasos y sus energías. Las señales son las de
+`test_loudness.py` (seno estéreo, ruido rosa, la señal parecida a música), ruido a plena escala y un
+tramo bajo, fuerte y en silencio, con y sin historia. Los bloques: de 4800, impares y de 1 muestra,
+aleatorios, de varios pasos a la vez. También otros pesos con 3 canales a 44,1 kHz, un seno a fs/4
+con el pico entre muestras, las funciones `integrated_lufs` y `true_peak_dbtp`, un NaN (da los mismos
+NaN que numpy) y el resumen de `QualityMeter`. **La mayor diferencia real**, en las lecturas de
+`QualityMeter` con 8 parlantes sobre la música, bloque a bloque, **es 5,54e-13** (MEDIDO, igual en las
+dos corridas de la sonda). Además:
+- el cambio de motor entre bloques, a mitad de un paso, no cambia ninguna lectura, en los dos
+  sentidos;
+- el estado (`context` y `pending`) va y vuelve exacto;
+- `engine/crates/aurasync-dsp/tests/loudness.rs` comprueba que el corte en bloques no cambia ni los
+  pasos ni el pico, que con una ponderación plana cada paso es su suma de cuadrados (Parseval) y que
+  `push` no asigna memoria en caliente.
+
+**Una falla de Rust no deja al medidor callado.** Un medidor no suena, así que no entra en el
+silencio hasta el fondo del corte, como las otras etapas: mide en numpy desde el bloque que falló.
+Arranca con un contexto en cero y un paso pendiente de ceros **del mismo largo** que el perdido
+(`_total % _step_n`). Así los pasos siguen en la misma grilla que los de los demás medidores, que
+`QualityMeter` suma paso a paso. Lo único que se pierde es ese paso. Pasados 3 s, las lecturas sin
+historia son otra vez las de numpy exactas (test). La integrada de un medidor con historia guarda ese
+paso para siempre. Un pánico al cargar el estado de numpy en un objeto Rust nuevo deja seguir a numpy
+desde su propio estado: lo de numpy contra numpy es idéntico.
+
+### 13.1 Resultado (ms por bloque; mediana y p95; corrida 1 / corrida 2)
+
+| señal | caso | numpy med | numpy p95 | Rust med | Rust p95 | numpy / Rust |
+|---|---|---|---|---|---|---|
+| ruido | uno | 0,102 / 0,096 | 0,124 / 0,113 | 0,046 / 0,045 | 0,056 / 0,053 | 2,2 / 2,1 |
+| ruido | calidad 4 | 0,672 / 0,701 | 0,954 / 0,996 | 0,296 / 0,305 | 0,377 / 0,431 | 2,3 / 2,3 |
+| ruido | calidad 8 | 1,106 / 1,162 | 1,411 / 1,827 | 0,487 / 0,554 | 0,634 / 0,775 | 2,3 / 2,1 |
+| ruido | monitor mix | 0,282 / 0,286 | 0,340 / 0,397 | 0,195 / 0,210 | 0,214 / 0,246 | 1,4 / 1,4 |
+| música | uno | 0,098 / 0,106 | 0,126 / 0,209 | 0,065 / 0,046 | 0,088 / 0,060 | 1,5 / 2,3 |
+| música | calidad 4 | 0,667 / 0,744 | 0,882 / 1,119 | 0,310 / 0,304 | 0,475 / 0,474 | 2,2 / 2,4 |
+| música | calidad 8 | 1,123 / 1,193 | 1,541 / 1,599 | 0,508 / 0,525 | 0,612 / 0,735 | 2,2 / 2,3 |
+| música | monitor mix | 0,283 / 0,284 | 0,367 / 0,362 | 0,203 / 0,206 | 0,243 / 0,262 | 1,4 / 1,4 |
+
+`uno` es un medidor mono solo; `calidad N` es `QualityMeter.push` con la entrada y N parlantes (2 + N
+medidores); `monitor mix` son los dos medidores estéreo del monitor con las lecturas que hace en cada
+bloque. Entorno de §12, carga 3,2–3,4. Datos crudos:
+[datos/20/hp-o16-medidores-rust-corrida-1.txt](datos/20/hp-o16-medidores-rust-corrida-1.txt) y
+[datos/20/hp-o16-medidores-rust-corrida-2.txt](datos/20/hp-o16-medidores-rust-corrida-2.txt).
+
+**Qué dice:**
+- **Con Rust los medidores cuestan menos de la mitad**: `QualityMeter` con 8 parlantes baja de
+  1,11–1,19 a 0,49–0,55 ms por bloque, y con 4 de 0,67–0,74 a 0,30–0,31 ms (2,1–2,4×). Es la misma
+  razón en las dos señales y en las dos corridas.
+- **El monitor gana menos (1,4×):** lee la momentánea y la de corto plazo en cada bloque, en Python,
+  y su entrada estéreo pasa por una transpuesta antes de cruzar.
+- El 1,5 de `uno` con música en la corrida 1 no se repite en la corrida 2 (2,3). Es el equipo en uso.
+- **Dónde queda el tiempo de Rust**, en una medición suelta cuyos números no se guardaron (los
+  tiempos variaron con la carga): un bloque de silencio, que hace la FFT y las copias pero no
+  interpola, costó ~0,02 ms de los ~0,045 de un bloque de ruido. Lo demás es el pico verdadero: 3
+  productos de 24 coeficientes en cada posición cerca del pico. En el ruido gaussiano serían unas 600
+  posiciones de las 4097 (INFERIDO, por la distribución; no se contaron).
+- **Cómo se llegó al producto en cuatro carriles.** La primera versión sumaba cada producto en una
+  sola cadena, que espera cada suma, y daba 0,052–0,053 ms por medidor y 0,59–0,60 ms con 8
+  parlantes. Fue **una sola corrida, sin repetir**: una referencia, no una medición que pase el filtro
+  de la repetición
+  ([datos/20/hp-o16-medidores-rust-producto-en-cadena.txt](datos/20/hp-o16-medidores-rust-producto-en-cadena.txt)).
+  Cuatro sumas parciales independientes, como las que el procesador puede solapar, lo bajaron a lo de
+  la tabla. Cambia el orden de la suma y no da los mismos bits. No importa: numpy lo hace con BLAS, en
+  su propio orden, y la diferencia queda en 5,54e-13.
+
+### 13.2 Cómo reproducirlo
+
+```bash
+cd host && nice -n 19 hatch test tests/test_loudness_rust.py tests/test_loudness.py tests/test_quality.py
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_medidores.py               # numpy solo
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_medidores.py --motores numpy rust
+```
+
+## 14 · Soltar el GIL en las llamadas por bloque: lo que cuesta (MEDIDO, 2026-10-09)
+
+Desde el 2026-10-09 el puente suelta el GIL (`Python::detach`, PyO3 0.29.3) en cada llamada por
+bloque: `Reader.read`, los `process` de `StreamingFIR`, `PartitionedFIR`, `SpatialUpmix`,
+`AmbienceExtractor`, `VirtualBass` y `TruePeakLimiter`, y `LoudnessMeter.push`. Antes, mientras el
+motor procesaba un bloque en Rust, los demás hilos de Python del servicio (el servidor HTTP, los
+eventos del panel) esperaban el GIL. Lo pidió el usuario, y era el experimento §B.14 de
+[research/15](../15-rust-idiomatico-y-buenas-practicas.md). Mientras el GIL está suelto otro hilo
+podría escribir el arreglo numpy, así que la entrada se copia antes a un búfer de Rust (32 KiB por
+bloque de 4096). Las salidas son búferes de Rust que numpy recibe sin copiar (`from_vec`), también
+la del upmix, que antes escribía directo en dos arreglos numpy. La construcción, el estado y la
+configuración siguen con el GIL tomado: no son por bloque.
+
+**Que suelta el GIL (MEDIDO):** `host/tests/test_engine_gil.py` corre cada una de las 8 llamadas
+sobre un bloque largo (2²¹ muestras, decenas de milisegundos), mientras otro hilo despierta cada
+milisegundo y anota la hora. Tiene que haber corrido en la mitad central de la llamada. Que el test
+distingue se comprobó: con el `process` de `StreamingFIR` sin `detach` falla ("no tick in the middle
+of 236 ms").
+
+**Lo que cuesta (MEDIDO):** la sonda `probes/20-costo-sinc-rust/costo_soltar_gil.py` corre lo mismo
+contra dos extensiones: la de siempre y una compilada sin `detach` ni la copia. La segunda es el
+código anterior a este cambio, armado en una carpeta temporal fuera del repositorio con `maturin
+build --release`. Mide lo que el motor llama por bloque con 8 parlantes: el EQ, el limitador, los 10
+medidores, la lectura sinc, un `StreamingFIR` de un coeficiente y una llamada casi vacía. En
+`HP-O16`, `nice -n 19`, con otros procesos pesados en el equipo (carga 10–11).
+
+| caso | con detach med | sin detach med |
+|---|---|---|
+| eq ×8 | 0,316 / 0,339 | 0,314 / 0,348 |
+| limitador ×8 | 0,981 / 1,020 | 0,954 / 1,048 |
+| medidores ×10 | 0,511 / 0,546 | 0,499 / 0,551 |
+| lectura ×8 | 4,070 / 4,211 | 4,180 / 4,222 |
+| FIR de 1 coeficiente ×8 | 0,155 / 0,170 | 0,162 / 0,174 |
+| llamada vacía ×8 | 0,022 / 0,024 | 0,024 / 0,023 |
+
+(ms por bloque, mediana de 500; corrida 1 / corrida 2, alternando las dos extensiones. Datos crudos:
+`datos/20/hp-o16-soltar-gil-con-detach-corrida-{1,2}.txt` y
+`datos/20/hp-o16-soltar-gil-sin-detach-corrida-{1,2}.txt`.)
+
+**Qué dice:**
+- **Soltar el GIL no cuesta nada que se pueda medir aquí.** La diferencia entre las dos extensiones
+  va en los dos sentidos según el caso y la corrida, y es menor que la diferencia entre las dos
+  corridas de una misma extensión. La copia de la entrada y el soltar y retomar el GIL quedan dentro
+  del ruido de un equipo cargado.
+- Una tanda anterior, con carga 13–16, dio la extensión con `detach` entre 0 y 10 % más lenta en
+  cada caso. Se hizo con la sonda antes de agregarle la llamada vacía, y sus archivos se reemplazaron
+  con los de esta: no cuenta como medición (sin datos crudos), pero dice que con mucha carga el costo
+  puede asomar.
+- **Una llamada casi vacía al puente cuesta 0,003 ms** (0,022–0,024 ms las 8), con o sin `detach`.
+  Es la cota del costo fijo por llamada que usa §12.
+
+### 14.1 Cómo reproducirlo
+
+```bash
+cd host && nice -n 19 hatch test tests/test_engine_gil.py
+nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_soltar_gil.py
+# sin detach: el árbol anterior de engine/crates/aurasync-engine/src (git show HEAD:…) en una copia de engine/,
+# `maturin build --release`, la rueda descomprimida delante en PYTHONPATH
+PYTHONPATH=<rueda sin detach> nice -n 19 $(hatch env find hatch-test.py3.12)/bin/python ../probes/20-costo-sinc-rust/costo_soltar_gil.py
+```

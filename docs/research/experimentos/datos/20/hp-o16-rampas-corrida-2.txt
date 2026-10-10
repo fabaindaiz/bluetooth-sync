@@ -1,0 +1,14 @@
+uptime antes: 16:08:48 up  6:04,  1 user,  load average: 2,90, 3,23, 3,28
+load1 antes: 2.90
+equipo HP-O16, Linux-7.2.9-1-cachyos-x86_64-with-glibc2.44, x86_64
+python 3.12.12, numpy 2.5.3, cpus 12
+bloque 4096 muestras = 85.3 ms; motor numpy (las rampas no tienen port)
+ escenario  parlantes   llamadas     np med     np p95
+    reposo          4         17     0.0051     0.0053
+    reposo          8         29     0.0046     0.0050
+  moviendo          4         17     0.1738     0.1977
+  moviendo          8         29     0.3129     0.4210
+deslizando          4         17     0.1090     0.1640
+deslizando          8         29     0.1926     0.3362
+uptime despues: 16:08:49 up  6:04,  1 user,  load average: 2,90, 3,23, 3,28
+load1 despues: 2.90
